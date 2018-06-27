@@ -1,1 +1,3 @@
-# BA_Thesis
+# Bachelor thesis
+
+organize code, tex-files and notes for BA-thesis
