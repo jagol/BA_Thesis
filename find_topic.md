@@ -39,7 +39,7 @@ Idea: Create a domain neutral ontology integration tool. Use [NodeToVec](https:/
 
 Focus on: How much does NodeToVec help in matching concepts/nodes from two ontologies.
 
-Possible structure: 
+Possible procedure: 
 * normalize all labels in both ontologies (stemming, ...)
 * add to all labels an identifier to identify which ontology it belongs to
 * find one to one matches in the labels
@@ -61,11 +61,11 @@ Other resources:
 * https://pdfs.semanticscholar.org/32f3/fc09c880448e1688dc269d03c399cf4f5c55.pdf
 
 Addition: Is also axiom matching possible using embeddings?
-Idea: Find axioms of both ontologies that have the same logic structure. Then use word embeddings to determine the similarity between the concepts is high enough. Maybe a combinded similarity of the whole axiom by adding/multplying the similarity of the concepts can be used.
+Idea: Find axioms of both ontologies that have the same logic structure. Then use word embeddings to determine the similarity between the concepts is high enough. Maybe a combined similarity of the whole axiom by adding/multplying the similarity of the concepts can be used.
 
 ### Ever expanding ontology
 
-For a very specific domain, that's for example regurarly in the news (example ISIS) create an ontology pipeline that constantly scrapes the web for news and updates and evaluates the ontology automatic. 
+For a very specific domain, that's for example regurarly in the news (example ISIS) create an ontology pipeline that constantly scrapes the web for news and updates and evaluates the ontology automatically. 
 
 Expansion: automatically identify topics in the news and decide if an ontology should be created for them. Then continiously update the ontology when news about the topic appears.
 
