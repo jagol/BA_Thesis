@@ -59,6 +59,7 @@ https://jbiomedsem.biomedcentral.com/track/pdf/10.1186/2041-1480-5-21
 Other resources:
 * https://www.sciencedirect.com/science/article/pii/S0957417414005144
 * https://pdfs.semanticscholar.org/32f3/fc09c880448e1688dc269d03c399cf4f5c55.pdf
+* Node2Vec-implementation in python: https://github.com/aditya-grover/node2vec
 
 Addition: Is also axiom matching possible using embeddings?
 Idea: Find axioms of both ontologies that have the same logic structure. Then use word embeddings to determine the similarity between the concepts is high enough. Maybe a combined similarity of the whole axiom by adding/multplying the similarity of the concepts can be used.
