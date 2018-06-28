@@ -35,7 +35,7 @@ How would a relation extraction method for ternary relations look like? Try to c
 
 ### NodeToVec for Ontology Matching
 
-Idea: Create a domain neutral ontology integration tool. Use [NodeToVec](https://cs.stanford.edu/~jure/pubs/node2vec-kdd16.pdf) as a way to match concepts/nodes in the ontologies. Combine this tecnique with other methods such as Leveshtein, PathSimilarity???, etc. 
+Idea: Create a domain neutral ontology integration tool. Use [NodeToVec](https://cs.stanford.edu/~jure/pubs/node2vec-kdd16.pdf) as a way to match concepts/nodes in the ontologies. Combine this technique with other methods such as Leveshtein, PathSimilarity???, etc. 
 
 Focus on: How much does NodeToVec help in matching concepts/nodes from two ontologies.
 
@@ -75,7 +75,7 @@ parts for the expanded version:
 * topic modelling
 * classifier to decide if topic should get an ontology
 * ontology learning pipeline
-* update mechanism
+* update mechanism using confidence values
 * automatic quality evaluation
 
 Resources: No recources???
