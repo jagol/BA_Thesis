@@ -79,3 +79,24 @@ parts for the expanded version:
 * automatic quality evaluation
 
 Resources: No recources???
+
+### Proposal: Unsupervised OL-Pipeline for n-ary relation extraction
+
+build pipeline, that is:
+- unsupervised, meaning only verctors (and features derived from them) as features
+- extract not only binary but n-ary relations, (paper: https://arxiv.org/pdf/1708.03743.pdf -> but where is an implementation of that? Do I need an implementation?) 
+- For what domain? Can it be domain neutral?
+  - interesting domain: economics, map relations of peaple and organizations in business and government? -> what corpus? 
+   - take the business corpus from here: http://catalog.elra.info/en-us/repository/browse/wolverhampton-business-english-corpus/27ca822ca9db11e7a093ac9e1701ca023f771747e03c49b9b7f21c37fe62cc71/
+- How to describe n-ary relations in the ontology?
+- How to evaluate the ontology?
+ - if domain neutral pipeline: use corpora with known ontologies, create own onotlogy from corpus and compare
+ - else: for intrinsic evaluation: extract a set of random term and relation examples and manually evaluate true/false to get accuracy. But how to get recall?
+- Pipeline steps:
+ - Term extraction: find a spacial vector pattern that connects all domain terms?
+ - Taxonomic relation extraction: find typical spacial relations between hypernyms
+ - Nontaxonomic relation extraction: simply use dependency trees and try to filter out idiosyncratic relations
+ 
+Has this already been done? 
+- Automatic OL using Embeddings: https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=7838131
+- Automatic Taxonomy Inudction using Embeddings: http://users.jyu.fi/~miselico/papers/distributional-semantics-taxonomy.pdf
