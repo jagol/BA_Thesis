@@ -1,0 +1,73 @@
+
+\newchap{Results}
+\label{chap:5_results}
+
+\section{BLEU Scores}
+\label{sec:5_bleuscores}
+
+Table \ref{bleuresults} shows how to use the predefined tab command to have it listed.
+%\tab{#1: label}{#2: long caption}{#3: the table content}{#4: short caption}
+\tab{bleuresults}{BLEU scores of different MT systems}
+{\begin{tabular}{ll|ccc|c}
+language pair		& ABC	& YYY	\\
+\hline
+EN$\rightarrow$DE	& 20.56	& 32.53 \\
+DE$\rightarrow$EN	& 43.35	& 52.53 \\
+\hline
+\end{tabular}
+}{ABC BLEU scores}
+
+And we can reference the large table in the appendix as Table \ref{appendixTable}
+
+\section{Evaluation}
+\label{sec:5_evaluation}
+We saw in section \ref{sec:5_bleuscores} 
+
+We will see in subsection \ref{subsec:5_moreeval} some more evaluations.
+
+\subsection{More evaluation}
+\label{subsec:5_moreeval}
+
+
+\section{Citations}
+Although BLEU scores should be taken with caution (see \citet{Callison-Burch2006})
+or if you prefer to cite like this: \citep{Callison-Burch2006} \ldots
+
+to cite: \cite[30-31]{Koehn2005} \\
+to cite within parentheses/brackets: \citep{Koehn2005}, \citep[30-32]{Koehn2005}\\ %\usepackage[square]{natbib} => square brackets
+
+to cite within the text: \citet{Koehn2005}, \citet[37]{Koehn2005}\\
+only the author(s): \citeauthor{Callison-Burch2006}\\
+only the year: \citeyear{Callison-Burch2006}\\
+
+\section{Graphics}
+
+To include a graphic that appears in the list of figures, use the predefined fig command:\\
+%\fig{#1: filename}{#2: label}{#3: long caption}{#4: width}{#5: short caption}
+\fig{images/Rosetta_Stone.jpg}{fig:rosetta}{The Rosetta Stone}{10}{Rosetta}
+
+%\reffig{#1: label}
+And then reference it as \reffig{fig:rosetta} is easy.
+
+\section{Some Linguistics}
+
+(With the package 'covington')\\
+
+Gloss:
+
+\begin{examples}
+ \item \gll The cat sits on the table.
+	    die Katze sitzt auf dem Tisch
+	\glt 'Die Katze sitzt auf dem Tisch.'
+    \glend
+\end{examples}
+
+Gloss with morphology:
+
+\begin{examples}
+ \item \gll La gata duerm -e en la cama.
+	    Art.Fem.Sg Katze schlaf -3.Sg in Art.Fem.Sg Bett
+	\glt 'Die Katze schl\"aft im Bett.'
+    \glend
+\end{examples}
+
