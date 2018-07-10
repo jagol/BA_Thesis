@@ -20,7 +20,7 @@
 - Term Extraction: TF-IDF, c-value-Method. Enhance recall by using euclidian and jaccard/manhattan distance.
 - Taxonomic Relation Extraction: Hearst Patterns, find patterns in vectorspace.
 - Taxonomy Construction: use hierarchical clustering and/or minimum cost flow approach.
-- Non-Taxonomic Relations Extraction
+- Non-Taxonomic Relations Extraction: use dependency parser to extract triples (-> StanfordCoreNLP?) and filter for relevance
 
 ##### Evaluation:
 - calculate class richness and class inheritance 
