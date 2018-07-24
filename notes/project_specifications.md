@@ -38,10 +38,10 @@
   - calculate accuary and f1-score
 
 ### Top-Level-Ontology Candidates
-- https://www.w3.org/TR/vocab-org/
+- https://www.w3.org/TR/vocab-org/ <-
 - http://epimorphics.com/public/vocabulary/org.html
 
 ### Corpus Candidates
-- http://www.statmt.org/europarl/
+- http://www.statmt.org/europarl/ <-
 - https://www.gpo.gov/fdsys/bulkdata
 - https://corpus.byu.edu/wikipedia.asp create virtual corpus on topic economics/government/eu to extract more abstract concepts
