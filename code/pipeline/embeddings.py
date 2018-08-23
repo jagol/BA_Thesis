@@ -2,9 +2,6 @@ from typing import *
 import torch
 from allennlp.modules.elmo import Elmo, batch_to_ids
 from allennlp.modules.similarity_functions.cosine import CosineSimilarity
-options_file = "/home/pogo/Dropbox/UZH/BA_Thesis/code/other_scripts/test_elmo/elmo_2x4096_512_2048cnn_2xhighway_5.5B_options.json"
-weight_file = "/home/pogo/Dropbox/UZH/BA_Thesis/code/other_scripts/test_elmo/elmo_2x4096_512_2048cnn_2xhighway_5.5B_weights.hdf5"
-elmo = Elmo(options_file, weight_file, 2, dropout=0.5)
 
 
 class Embeddings:
@@ -17,9 +14,10 @@ class Embeddings:
 class ElmoE(Embeddings):
 
     def __init__(self):
-        self._options_file = "./elmo_2x4096_512_2048cnn_2xhighway_5.5B_options.json"
-        self._weight_file = "./elmo_2x4096_512_2048cnn_2xhighway_5.5B_weights.hdf5"
-        self._elmo = Elmo(self._options_file, self._weight_file, 2, dropout=0.5)
+        self._options = 'elmo_2x4096_512_2048cnn_2xhighway_5.5B_options.json'
+        self._weights = 'elmo_2x4096_512_2048cnn_2xhighway_5.5B_weights.hdf5'
+        self._elmo = Elmo(
+            self._options, self._weights, 2, dropout=0.5)
 
     def get_embeddings(self, sent: List[str]) -> List[torch.Tensor]:
         """Get embeddings for all tokens in <sent>.
@@ -35,7 +33,7 @@ class ElmoE(Embeddings):
         layer2 = embeddings['elmo_representations'][1][0]
         concatenation = [torch.cat((tpl[0], tpl[1]), 0)
                          for tpl in zip(layer1, layer2)]
-        return  concatenation
+        return concatenation
 
 
 class GloveE(Embeddings):
@@ -57,7 +55,8 @@ if __name__ == '__main__':
     man_embedding = elmo.get_embeddings(['This', 'is', 'a', 'man', '.'])[3]
     woman_embedding = elmo.get_embeddings(['This', 'is', 'a', 'woman', '.'])[3]
     sim_man_woman = CosineSimilarity().forward(man_embedding, woman_embedding)
-    sim_this_woman = CosineSimilarity().forward(this_embedding, woman_embedding)
+    sim_this_woman = CosineSimilarity().forward(
+        this_embedding, woman_embedding)
     sim_is_woman = CosineSimilarity().forward(is_embedding, woman_embedding)
     sim_this_is = CosineSimilarity().forward(this_embedding, is_embedding)
     print('man vs woman:', sim_man_woman)
@@ -70,8 +69,7 @@ if __name__ == '__main__':
     cat_embedding = elmo.get_embeddings(['This', 'is', 'a', 'cat', '.'])[3]
     dog_embedding = elmo.get_embeddings(['This', 'is', 'a', 'dog', '.'])[3]
     sim_cat_dog = CosineSimilarity().forward(cat_embedding, dog_embedding)
-    sim_this_dog = CosineSimilarity().forward(this_embedding,
-                                                dog_embedding)
+    sim_this_dog = CosineSimilarity().forward(this_embedding, dog_embedding)
     sim_is_dog = CosineSimilarity().forward(is_embedding, dog_embedding)
     print('cat vs dog:', sim_cat_dog)
     print('this vs dog:', sim_this_dog)
