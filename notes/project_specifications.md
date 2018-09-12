@@ -35,6 +35,10 @@
   - randomly select relations from the text and check if they are present in the ontology
   - calculate precision (use samplesize to get a confidence value)
   - calculate estimated accuracy and f1-score (and calculate confidence given the confidence values of recall and precision)
+  - As gold standart resources for testing relation extraction use:
+    - http://cs.iit.edu/%7Eculotta/data/wikipedia.html
+    - https://github.com/davidsbatista/Annotated-Semantic-Relationships-Datasets
+    - https://competitions.codalab.org/competitions/17422#learn_the_details-get-the-data
 - extrinsic evaluation:
   - use library to build a parser from natural language query to sparql query
   - find resources with lots of queries about relations between organizations
