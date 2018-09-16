@@ -1,10 +1,10 @@
 import os
 import json
 import subprocess
+from typing import *
 import spacy
 
-PATH_IN = './raw_corpus/europarl-v7.de-en.en'
-# PATH_IN = './raw_corpus/'
+PATH_IN = './raw_corpus/europarl_documents/'
 PATH_OUT = './preprocessed_corpus/'
 ENCODING = 'utf8'
 
@@ -13,134 +13,115 @@ class Preprocessor:
     """Class to preprocess a corpus.
 
     Handle tokenization, pos-tagging and lemmatization of a corpus.
-    The corpus is assumed to contain textfile(s) with one sentence
-    per line.
+    The corpus is assumed to be a folder containing documents (textfiles)
+    with one sentence per line.
     """
 
-    def __init__(self, path_in, path_out, encoding, spf=2000, stop=None):
+    def __init__(self, path_in: str, path_out: str, encoding: str, max_files: int = None):
         """Initialize Preprocessor.
 
-        :param path_in: string, path to corpus, can be file or directory
-        :param path_out: string, path to output directory
-        :param encoding: string, encoding of the text files
-        :param spf: int, number of Sentences Per File written to output.
-                Example: For an inputfile with 5000 sentences and
-                sents_out set to 2000, three output files
-                (spf 2000, 2000 and 1000 lines) will be created.
-        :param stop: int or None, set upper boundary for number of
-                sentences to be processed
+        Args:
+            path_in: path to corpus, can be file or directory
+            path_out: path to output directory
+            encoding: encoding of the text files
+            max_files: max number of files to be processed
         """
         self.path_in = path_in
         self.path_out = path_out
         self.encoding = encoding
-        self._dir = os.path.isdir(self.path_in)
-        self._spf = spf
-        self._stop = stop
+        self._max_files = max_files
         self._nlp = spacy.load('en_core_web_sm')
         self._files_processed = 0
         self._sents_processed = 0
-        self._num_sents = 0
-
-        if os.path.isdir(self.path_in):
-            self._fnames = [fname for fname in os.listdir(self.path_in)
-                        if os.path.isfile(os.path.join(self.path_in, fname))]
-        else:
-            self._fnames = [self.path_in.split('/')[-1]]
-            self.path_in = '/'.join(self.path_in.split('/')[:-1])
-
+        self._fnames = [fname for fname in os.listdir(self.path_in)
+                    if os.path.isfile(os.path.join(self.path_in, fname))]
         self._fnames.sort()
         self._num_files = len(self._fnames)
+        self._upper_bound = 0
 
         if not os.path.isdir(self.path_out):
             os.makedirs(self.path_out)
 
-    def _write_json(self, annotated_sents):
+    def _write_json(self, annotated_sents: List[List[Tuple[str, str, str, bool]]]):
         """Write annotated_sents to a file in json.
 
         Json is formatted as follows:
         {
             1: [
-                [token1, tag1, lemma1], ...
+                [token1, tag1, lemma1, is_stop1], ...
             ],
             2: [
-                [token1, tag1, lemma1], ...
+                [token1, tag1, lemma1, is_stop1], ...
             ]
         }
 
-        :param annotated_sents: list[list[tuple(string, string, string)]]
-                list of sentences, each sentence is a list of tokens,
-                each token is a tuple if the form (token, tag, lemma)
+        Args:
+            annotated_sents: list of sentences, each sentence is a list
+            of tokens, each token is a tuple if the form
+            (token, tag, lemma, is_stop_word)
         """
-        fname = str(self._sents_processed) + '.json'
-        with open(self.path_out + fname, 'w', encoding=self.encoding) as f:
+        fpath = os.path.join(self.path_out, str(self._files_processed)+'.json')
+        with open(fpath, 'w', encoding=self.encoding) as f:
             json.dump(dict(enumerate(annotated_sents)), f, ensure_ascii=False)
 
-    def process_corpus(self):
-        """Tokenize, pos-tag and lemmatize corpus.
+    def process_corpus(self) -> None:
+        """Tokenize, pos-tag and lemmatize corpus. Mark stop words.
 
         Write annotated text files as json into path_out.
         """
-        if self._dir:
-            for i in range(self._num_files):
-                self._files_processed += 1
-                fname = self._fnames[i]
-                self._process_file(os.path.join(self.path_in, fname))
-        else:
+        print(10*'-'+' preprocessing corpus '+10*'-')
+        print('Input taken from: {}'.format(self.path_in))
+
+        self._upper_bound = min(len(self._fnames), self._max_files)
+        for i in range(self._upper_bound):
             self._files_processed += 1
-            self._process_file(os.path.join(self.path_in, self._fnames[0]))
+            self._process_file(self._fnames[i])
 
-    def _get_upper_bound(self):
-        """Get the number of sentences that will be processed from file.
+        print('Output written to: {}'.format(self.path_out))
+        print(42*'-')
 
-        If there is a stop smaller than the number of sentences in the
-        file, the stop becomes the upper bound. Else the number of
-        sentences in the file become the upper bound.
-        """
-        if self._stop:
-            return min(self._stop, self._num_sents)
-        else:
-            return self._num_sents
-
-    def _process_file(self, fpath):
-        """Tokenize, pos-tag and lemmatize sentences of a file.
+    def _process_file(self, fname: str) -> None:
+        """Tokenize, pos-tag, lemmatize and mark stop words for a file.
 
         Write annotated text file as json into path_out.
-
-        :param fpath: string, path to file
         """
+        self._sents_processed = 0
+        fpath = os.path.join(self.path_in, fname)
+        self._get_file_length(fpath)
         annotated_sents = []
+        with open(fpath, 'r', encoding=self.encoding) as f:
+            for sent in f:
+                sent = sent.strip('\n')
+                nlp_sent = self._nlp(sent)
+                annotated_sent = [(token.text, token.tag_, token.lemma_,
+                                   token.is_stop) for token in nlp_sent]
+                annotated_sents.append(annotated_sent)
+                self._sents_processed += 1
+                self._update_cmd()
+
+        self._write_json(annotated_sents)
+
+    def _get_file_length(self, fpath: str) -> None:
         cmd = ['wc', fpath]
         out = subprocess.Popen(
             cmd, stdout=subprocess.PIPE).communicate()[0].decode('utf8')
-
         self._num_sents = int(out.strip(' ').split(' ')[0])
-        upper_bound = self._get_upper_bound()
-        with open(fpath, 'r', encoding=self.encoding) as f:
-            for sent in f:
-                self._sents_processed += 1
-                nlp_sent = self._nlp(sent)
-                annotated_sents.append([(token.text, token.tag_, token.lemma_)
-                                        for token in nlp_sent])
 
-                if self._sents_processed % self._spf == 0:
-                    self._write_json(annotated_sents)
-                    annotated_sents = []
-
-                if self._sents_processed == upper_bound:
-                    msg = 'Processing: sentence {} of {}\tfile {} of {}'
-                    print(msg.format(self._sents_processed, upper_bound,
-                                     self._files_processed, self._num_files))
-                    break
-
-                else:
-                    msg = 'Processing: sentence {} of {}\tfile {} of {}\r'
-                    print(msg.format(self._sents_processed, upper_bound,
-                                     self._files_processed, self._num_files),
-                          end='\r')
-
-        self._sents_processed = 0
+    def _update_cmd(self) -> None:
+        """Update the information on the command line."""
+        final_msg = False
+        if self._files_processed == self._upper_bound:
+            if self._sents_processed == self._num_sents:
+                msg = 'Processing: sentence {}, file {} of {}'
+                print(msg.format(self._sents_processed, self._files_processed,
+                                 self._num_files))
+                final_msg = True
+        if not final_msg:
+            msg = 'Processing: sentence {}, file {} of {}\r'
+            print(msg.format(self._sents_processed, self._files_processed,
+                            self._num_files) , end='\r')
 
 
 if __name__ == '__main__':
-    pp = Preprocessor(PATH_IN, PATH_OUT, ENCODING, spf=100, stop=300)
+    pp = Preprocessor(PATH_IN, PATH_OUT, ENCODING, max_files=2)
     pp.process_corpus()
