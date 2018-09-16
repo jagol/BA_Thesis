@@ -90,7 +90,23 @@ class TermExractor:
         return math.log(n/df)
 
     def _calc_cval(self) -> None:
-        pass
+        self.extract_term_candidates()
+        term_counts = self.count_term_candidates() # {(term, count): frequency}
+        max_len_candidates = self._get_max_len_candidates()
+
+        cval_dict = {}  # {(a, term): cval}
+        for a in max_len_candidates:
+            cval = math.log2(len(c))*term_counts[a] # C-Value = log2(|a|)*f(a)
+            cval_dict[a] = cval
+            substrings = self._get_substrings(a)
+            substr_triples = self._get_triples(substrings) # (f(b), t(b), c(b))
+            for t in substr_triples:
+                pass
+
+    def get_triples(self, substrings):
+        # (f(b), t(b), c(b))
+        for substr in substrings:
+            yield (self._get_freq(substr), self._get_freq(substr), 1)
 
     def _find_most_important(self):
         pass
@@ -99,7 +115,7 @@ class TermExractor:
         """Get a list of the most important terms in the corpus."""
         self._count_words()
         self._calc_tfidf()
-        self._calc_cval()
+        # self._calc_cval()
         self._find_most_important()
 
 
