@@ -18,7 +18,13 @@
 ### Methodology
 ##### Ontology-Learning pipeline in steps:
 - Term Extraction: TF-IDF, c-value-Method. Enhance recall by using euclidian and jaccard/manhattan distance.
-- Taxonomic Relation Extraction: find patterns in vectorspace, vector offset, linear projections (http://ir.hit.edu.cn/~car/papers/acl14embedding.pdf) (could also be used for Tax. Const.)
+- Taxonomic Relation Extraction: 
+  - just do hierarchical clustering with http://scikit-learn.org/stable/auto_examples/cluster/plot_ward_structured_vs_unstructured.html ?
+  - linear projections (http://ir.hit.edu.cn/~car/papers/acl14embedding.pdf)
+  - http://users.jyu.fi/~miselico/papers/distributional-semantics-taxonomy.pdf
+  - https://nlp.stanford.edu/pubs/semtax_acl06.pdf
+  - https://www.cs.cmu.edu/~callan/Papers/acl09-huiyang.pdf
+  - https://pdfs.semanticscholar.org/13e2/b11c1c453ed71378783782ec4dca7a7ce34e.pdf
 - Taxonomy Construction: use hierarchical clustering and/or minimum cost flow approach.
 - Non-Taxonomic Relations Extraction: use dependency parser to extract triples (-> OpenIE?) and filter for relevance, Relation Extraction with Matrix Factorization (https://www.aclweb.org/anthology/N13-1008)
 
@@ -30,6 +36,10 @@
   - randomly select relations from the text and check if they are present in the ontology
   - calculate precision (use samplesize to get a confidence value)
   - calculate estimated accuracy and f1-score (and calculate confidence given the confidence values of recall and precision)
+  - As gold standart resources for testing relation extraction use:
+    - http://cs.iit.edu/%7Eculotta/data/wikipedia.html
+    - https://github.com/davidsbatista/Annotated-Semantic-Relationships-Datasets
+    - https://competitions.codalab.org/competitions/17422#learn_the_details-get-the-data
 - extrinsic evaluation:
   - use library to build a parser from natural language query to sparql query
   - find resources with lots of queries about relations between organizations
