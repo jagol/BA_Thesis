@@ -18,9 +18,9 @@
 ### Methodology
 ##### Ontology-Learning pipeline in steps:
 - Term Extraction: TF-IDF, c-value-Method. Enhance recall by using euclidian and jaccard/manhattan distance.
-- Taxonomic Relation Extraction: Hearst Patterns, find patterns in vectorspace, vector offset
+- Taxonomic Relation Extraction: find patterns in vectorspace, vector offset, linear projections (http://ir.hit.edu.cn/~car/papers/acl14embedding.pdf) (could also be used for Tax. Const.)
 - Taxonomy Construction: use hierarchical clustering and/or minimum cost flow approach.
-- Non-Taxonomic Relations Extraction: use dependency parser to extract triples (-> StanfordCoreNLP?) and filter for relevance
+- Non-Taxonomic Relations Extraction: use dependency parser to extract triples (-> OpenIE?) and filter for relevance, Relation Extraction with Matrix Factorization (https://www.aclweb.org/anthology/N13-1008)
 
 ##### Evaluation:
 - calculate class richness and class inheritance 
