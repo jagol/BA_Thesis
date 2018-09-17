@@ -90,8 +90,9 @@ class TermExractor:
         return math.log(n/df)
 
     def _calc_cval(self) -> None:
-        self.extract_term_candidates()
-        term_counts = self.count_term_candidates() # {(term, count): frequency}
+        self._extract_term_candidates()
+        term_counts = self._count_term_candidates() # {(term, count): frequency}
+        self._build_subseq_index(term_counts)
         max_len_candidates = self._get_max_len_candidates()
 
         cval_dict = {}  # {(a, term): cval}
@@ -102,6 +103,74 @@ class TermExractor:
             substr_triples = self._get_triples(substrings) # (f(b), t(b), c(b))
             for t in substr_triples:
                 pass
+
+    def _extract_term_candidates(self):
+        pass
+
+    def _count_term_candidates(self) -> Dict[Tuple[str], int]:
+        """Count how many times each term appears in the corpus.
+
+        Use term_candidates.json as input file. The json file is a
+        list of lists of strings which can be seen as a list of
+        candidate terms.
+        """
+        with open('term_candidates.json', 'r', encoding='utf8') as f:
+            term_candidates = json.load(f)
+
+        # format term candidates to list of lists: [[cand, 1], [cand,  2], ...]
+        candidate_freqs = {}
+        for tc in term_candidates:
+            if tc in term_candidates:
+                candidate_freqs[tc] += 1
+            else:
+                candidate_freqs[tc] = 1
+
+        return candidate_freqs
+
+    def _build_subseq_index(self, term_counts: Dict[Tuple[str], int]) -> None:
+        """Use term_counts to build an index of subsequences of the form:
+
+        Args:
+            term_counts: a dict that maps terms onto their frequency in
+                in the corpus.
+        Output:
+            A json file that maps a term id to a list containing:
+                the term, a list of subsequences, a triple containing
+                (f(b), t(b), c(b))
+            {
+                '1': [['the', 'term'], ['a', 'list']]
+            }
+        """
+        substr_index = {}
+
+        i = 0
+        for term in term_counts:
+            subsequences = self._get_subsequences(term)
+            triples = self._get_triples(subsequences)
+            substr_index[i] = [term, subsequences, triples, []]
+            i += 1
+
+        # find subsequences
+        for i in substr_index:
+            term = substr_index[i][0]
+            for j in substr_index:
+                subsequences = substr_index[j][1]
+                if term in subsequences:
+                    substr_index[j][3].append(i)
+
+        with open('subseq_index', 'w', encoding='utf8') as f:
+            json.dump(substr_index, f)
+
+    @staticmethod
+    def _get_subsequences(term):
+        """Get all subsequences of the input tuple. Return list of tuples."""
+        subsequences = []
+        for i in range(len(term) + 1):
+            for j in range(i + 1, len(term) + 1):
+                sub = term[i:j]
+                subsequences.append(sub)
+        subsequences.remove(term)
+        return subsequences
 
     def get_triples(self, substrings):
         # (f(b), t(b), c(b))
@@ -115,7 +184,7 @@ class TermExractor:
         """Get a list of the most important terms in the corpus."""
         self._count_words()
         self._calc_tfidf()
-        # self._calc_cval()
+        self._calc_cval()
         self._find_most_important()
 
 
@@ -123,4 +192,5 @@ if __name__ == '__main__':
     path_in = './preprocessed_corpus/'
     path_out = './preprocessed_corpus/'
     te = TermExractor(path_in, path_out, 2)
+    te.get_triples('he')
     te.extract_important_terms()
