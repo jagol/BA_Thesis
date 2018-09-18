@@ -1,4 +1,5 @@
 import json
+import re
 import os
 import math
 from typing import *
@@ -97,15 +98,74 @@ class TermExractor:
 
         cval_dict = {}  # {(a, term): cval}
         for a in max_len_candidates:
-            cval = math.log2(len(c))*term_counts[a] # C-Value = log2(|a|)*f(a)
+            cval = math.log2(len(a))*term_counts[a] # C-Value = log2(|a|)*f(a)
             cval_dict[a] = cval
             substrings = self._get_substrings(a)
             substr_triples = self._get_triples(substrings) # (f(b), t(b), c(b))
             for t in substr_triples:
                 pass
 
-    def _extract_term_candidates(self):
-        pass
+    def _extract_term_candidates(self) -> None:
+        """Extract NP-variations as term candidates.
+
+        For each sentence:
+            - get all postags and concatenate by space
+            - perform a regex search looking for NP patterns
+                - use re.search to get a match obj with start/end
+                - since only first match is returned, remove match
+                and search again until no match is found
+        Write found terms to json file in the format:
+        {
+            1: ['first', 'candidate', 'term'],
+            2: ['second', 'candidate', 'term'],
+            ...
+        }
+        """
+        extracted_terms = []
+        for fname in self._fnames:
+            fpath = os.path.join(self.path_in, fname)
+            with open(fpath, 'r', encoding='utf8') as f:
+                sents = json.load(f)
+                print(sents['0'])
+            for id_, sent in sents.items():
+                # construct pos tag string
+                poses = ''
+                for i in range(len(sent)):
+                    word = sent[i]
+                    pos = word[1]
+                    poses += pos+str(i)+' '
+                poses = poses.strip(' ')
+                # search string for patterns
+                # 1. pattern: sequence of Nouns
+                # pattern1 = re.compile(r'((NN[PS]{0,2}) ?)+')
+                # 2. pattern: adjective-noun sequence
+                pattern2 = re.compile(r'((NN[PS]{0,2}\d|JJ[RS]?\d) )+NN[PS]{0,2}\d')
+                # matches1 = re.search(pattern1, poses)
+                # only use the second pattern for more recall
+                # (but probably lower precision)
+                match = True    # starting value of match can be anything
+                                # that evalutates to True if used as a bool
+                # look for matches and then remove them until no matches are found
+                matches = []
+                while match:
+                    match = re.search(pattern2, poses)
+                    if match:
+                        matches.append(match.group())
+                        # remove the matched pos-tags from poses string
+                        poses = poses[:match.start()]+poses[match.end():]
+
+                # find the lemmas corresponding to the matched pos tags
+                for pos_seq in matches:
+                    lemmas = []
+                    pos_list = pos_seq.split(' ')
+                    for pos in pos_list:
+                        pos_id = int(pos[-1])
+                        word = sent[pos_id]
+                        lemmas.append(word[2]) # append the lemmma
+                    extracted_terms.append(lemmas)
+
+        with open('term_candidates.json', 'w', encoding='utf8') as f:
+            json.dump(dict(enumerate(extracted_terms)), f)
 
     def _count_term_candidates(self) -> Dict[Tuple[str], int]:
         """Count how many times each term appears in the corpus.
@@ -120,7 +180,7 @@ class TermExractor:
         # format term candidates to list of lists: [[cand, 1], [cand,  2], ...]
         candidate_freqs = {}
         for tc in term_candidates:
-            if tc in term_candidates:
+            if tc in candidate_freqs:
                 candidate_freqs[tc] += 1
             else:
                 candidate_freqs[tc] = 1
