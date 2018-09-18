@@ -176,8 +176,9 @@ class TermExractor:
         """
         with open('term_candidates.json', 'r', encoding='utf8') as f:
             term_candidates = json.load(f)
-
         # format term candidates to list of lists: [[cand, 1], [cand,  2], ...]
+        term_candidates = [tuple(tc) for id_, tc in term_candidates.items()]
+
         candidate_freqs = {}
         for tc in term_candidates:
             if tc in candidate_freqs:
@@ -232,10 +233,12 @@ class TermExractor:
         subsequences.remove(term)
         return subsequences
 
-    def get_triples(self, substrings):
+    def _get_triples(self, substrings):
         # (f(b), t(b), c(b))
+        triples = []
         for substr in substrings:
-            yield (self._get_freq(substr), self._get_freq(substr), 1)
+            triples.append((self._get_freq(substr), self._get_freq(substr), 1))
+        return triples
 
     def _find_most_important(self):
         pass
@@ -252,5 +255,4 @@ if __name__ == '__main__':
     path_in = './preprocessed_corpus/'
     path_out = './preprocessed_corpus/'
     te = TermExractor(path_in, path_out, 2)
-    te.get_triples('he')
     te.extract_important_terms()
