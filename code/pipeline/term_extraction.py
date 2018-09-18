@@ -95,15 +95,19 @@ class TermExractor:
         term_counts = self._count_term_candidates() # {(term, count): frequency}
         self._build_subseq_index(term_counts)
         max_len_candidates = self._get_max_len_candidates()
-
+        # print(max_len_candidates)
         cval_dict = {}  # {(a, term): cval}
         for a in max_len_candidates:
+            a = tuple(a)
             cval = math.log2(len(a))*term_counts[a] # C-Value = log2(|a|)*f(a)
             cval_dict[a] = cval
             substrings = self._get_substrings(a)
             substr_triples = self._get_triples(substrings) # (f(b), t(b), c(b))
             for t in substr_triples:
                 pass
+
+    def _get_substrings(self, a):
+        pass
 
     def _extract_term_candidates(self) -> None:
         """Extract NP-variations as term candidates.
@@ -126,7 +130,6 @@ class TermExractor:
             fpath = os.path.join(self.path_in, fname)
             with open(fpath, 'r', encoding='utf8') as f:
                 sents = json.load(f)
-                print(sents['0'])
             for id_, sent in sents.items():
                 # construct pos tag string
                 poses = ''
@@ -218,8 +221,7 @@ class TermExractor:
                 subsequences = substr_index[j][1]
                 if term in subsequences:
                     substr_index[j][3].append(i)
-
-        with open('subseq_index', 'w', encoding='utf8') as f:
+        with open('subseq_index.json', 'w', encoding='utf8') as f:
             json.dump(substr_index, f)
 
     @staticmethod
@@ -240,6 +242,20 @@ class TermExractor:
             triples.append((self._get_freq(substr), self._get_freq(substr), 1))
         return triples
 
+    def _get_freq(self, substr: str) -> int:
+        pass
+
+    def _get_max_len_candidates(self) -> List[List[str]]:
+        with open('subseq_index.json', 'r', encoding='utf8') as f:
+            term_candidates = json.loads(f.read())
+        term_candidates = term_candidates.items()
+        max_len = max([len(tc[0]) for id_, tc in term_candidates])
+        max_len_candidates = []
+        for id_, tc in term_candidates:
+            if len(tc[0]) == max_len:
+                max_len_candidates.append(tc)
+        return max_len_candidates
+
     def _find_most_important(self):
         pass
 
@@ -249,7 +265,6 @@ class TermExractor:
         self._calc_tfidf()
         self._calc_cval()
         self._find_most_important()
-
 
 if __name__ == '__main__':
     path_in = './preprocessed_corpus/'
