@@ -31,8 +31,8 @@ class TermExractor:
     def __init__(self,
                  path_in: str,
                  path_out: str,
-                 threshhold_tfidf: float=0.8,
-                 threshhold_cvalue: float=0.8,
+                 threshhold_tfidf: float=0.0,
+                 threshhold_cvalue: float=0.0,
                  max_files: Union[int, None]=None
                  ) -> None:
         self.path_in = path_in
@@ -44,6 +44,7 @@ class TermExractor:
         self.threshhold_tfidf = threshhold_tfidf
         self.threshhold_cvalue = threshhold_cvalue
         self._max_files = max_files
+        self.triples = {}  # {term: {'f_b': m, 't_b': n, 'c_b': o}}
 
     def _count_words(self) -> None:
         """Count words occurences per document.
@@ -91,22 +92,86 @@ class TermExractor:
         return math.log(n/df)
 
     def _calc_cval(self) -> None:
+        print('extract term candidates...')
         self._extract_term_candidates()
-        term_counts = self._count_term_candidates() # {(term, count): frequency}
-        self._build_subseq_index(term_counts)
-        max_len_candidates = self._get_max_len_candidates()
-        # print(max_len_candidates)
-        cval_dict = {}  # {(a, term): cval}
+        print('collect information on candidate terms...')
+        self._build_term_info()
+        print('get max length...')
+        length = self._get_max_len()
+        print('get candidates of maximum length {}'.format(length))
+        max_len_candidates = self._get_candidates_len_n(length)
+        cval_dict = {}                              # {(a, term): cval}
+        print('start c_val calculations for max length terms')
         for a in max_len_candidates:
-            a = tuple(a)
-            cval = math.log2(len(a))*term_counts[a] # C-Value = log2(|a|)*f(a)
-            cval_dict[a] = cval
-            substrings = self._get_substrings(a)
-            substr_triples = self._get_triples(substrings) # (f(b), t(b), c(b))
-            for t in substr_triples:
-                pass
+            term_a = a['term'].split(';')
+            f_a = a['freq']
+            cval = math.log2(len(term_a))*f_a       # C-Value = log2(|a|)*f(a)
+            if cval > self.threshhold_cvalue:       # check if bigger than threshhold
+                cval_dict[a['term']] = cval         # add term to output dict
+                # substr_triples = self._get_triples(substrings) # (f(b), t(b), c(b))
+                for b in a['subseqs']:
+                    b = ';'.join(b)
+                    f_b = self._get_freq(b)
+                    t_b = f_a
+                    c_b = 1
+                    self.triples[b] = [f_b, t_b, c_b]
+
+        length -= 1     # all term of max_len are processed, so reduce
+                        # by one to go to the next shorter terms
+
+        # process all shorter terms in descending order
+        while length != 1:
+            print('start cval calculations for terms of length {}'.format(length))
+            for a in self._get_candidates_len_n(length):
+                term_a = a['term']
+                f_a = a['freq']
+                if term_a not in self.triples:   # if a appears for first time
+                    cval = math.log2(len(term_a.split(';'))) * f_a
+                else:
+                    triple = self.triples[term_a]
+                    t_a = triple[1]
+                    c_a = triple[2]
+                    cval = math.log2(len(term_a.split(';'))) * f_a - (1/c_a)*t_a
+
+                if cval > self.threshhold_cvalue:
+                    cval_dict[term_a] = cval
+                    for b in a['subseqs']:
+                        b = ';'.join(b)
+                        if b in self.triples:
+                            self.triples[b][1] += f_a   # increase t(b)
+                            self.triples[b][2] += 1     # increase c(b)
+                        else:
+                            # if substr not known, create new triple
+                            f_b = self._get_freq(b)
+                            t_b = f_a
+                            c_b = 1
+                            self.triples[b] = [f_b, t_b, c_b]
+
+
+            length -= 1
+
+        with open('cval.json', 'w', encoding='utf8') as f:
+            json.dump(cval_dict, f, ensure_ascii=False)
+
+    def _get_max_len(self) -> int:
+        with open('term_info.json', 'r', encoding='utf8') as f:
+            term_info = json.load(f)
+        max_len = max([len(t['term'].split(';')) for id, t in term_info.items()])
+        return max_len
+
+    def _get_candidates_len_n(self, n) -> None:
+        """Return all candidate terms of length n"""
+        with open('term_info.json', 'r', encoding='utf8') as f:
+            term_info = json.load(f)
+        terms_len_n = []
+        for i in term_info:
+            term = term_info[i]
+            if term['length'] == n:
+                terms_len_n.append(term)
+        return terms_len_n
 
     def _get_substrings(self, a):
+        """"""
         pass
 
     def _extract_term_candidates(self) -> None:
@@ -168,30 +233,83 @@ class TermExractor:
                     extracted_terms.append(lemmas)
 
         with open('term_candidates.json', 'w', encoding='utf8') as f:
-            json.dump(dict(enumerate(extracted_terms)), f)
+            json.dump(dict(enumerate(extracted_terms)), f, ensure_ascii=False)
 
-    def _count_term_candidates(self) -> Dict[Tuple[str], int]:
+    def _add_term_count(self) -> None:
         """Count how many times each term appears in the corpus.
 
         Use term_candidates.json as input file. The json file is a
         list of lists of strings which can be seen as a list of
         candidate terms.
+
+        Format:
+        {
+            '1': {
+                'term': ['a', 'term'],
+                'freq': n
+                }
+        }
         """
         with open('term_candidates.json', 'r', encoding='utf8') as f:
             term_candidates = json.load(f)
-        # format term candidates to list of lists: [[cand, 1], [cand,  2], ...]
-        term_candidates = [tuple(tc) for id_, tc in term_candidates.items()]
+
+        term_candidates = [';'.join(tc) for id_, tc in term_candidates.items()]
 
         candidate_freqs = {}
+        i = 0
         for tc in term_candidates:
             if tc in candidate_freqs:
-                candidate_freqs[tc] += 1
+                candidate_freqs[i]['freq'] += 1
             else:
-                candidate_freqs[tc] = 1
+                candidate_freqs[i] = {}
+                candidate_freqs[i]['term'] = tc
+                candidate_freqs[i]['freq'] = 1
+            i += 1
 
-        return candidate_freqs
+        with open('term_info.json', 'w', encoding='utf8') as f:
+            json.dump(candidate_freqs, f, ensure_ascii=False)
 
-    def _build_subseq_index(self, term_counts: Dict[Tuple[str], int]) -> None:
+    def _build_term_info(self) -> None:
+        """Gather all information for a term necessary to calc c-value.
+
+        Create a json file, which contains for each term:
+        - an id
+        - a list of all subsequences of a term
+        - the length of the term
+        - the frequency of the term
+        - the triple (f(b), t(b), c(b))
+
+        form:
+        {
+            id: {
+                'term': 'the;term',
+                'length': n,
+                'subseqs': ['list', 'of', 'subseqs'],
+                'f': k,
+                't': l,
+                'c': i
+            }, ...
+        }
+        """
+        print('count candidate terms...')
+        self._add_term_count()
+        print('build subseq index...')
+        self._add_subseq_index()
+        print('calculate term lengths')
+        self._add_term_lengths()
+
+    def _add_term_lengths(self) -> None:
+        with open('term_info.json', 'r', encoding='utf8') as f:
+            term_info = json.load(f)
+
+        for i in term_info:
+            term = term_info[i]['term']
+            term_info[i]['length'] = len(term.split(';'))
+
+        with open('term_info.json', 'w', encoding='utf8') as f:
+            json.dump(term_info, f)
+
+    def _add_subseq_index(self) -> None:
         """Use term_counts to build an index of subsequences of the form:
 
         Args:
@@ -199,30 +317,30 @@ class TermExractor:
                 in the corpus.
         Output:
             A json file that maps a term id to a list containing:
-                the term, a list of subsequences, a triple containing
-                (f(b), t(b), c(b))
+                the term, a list of subsequences
             {
-                '1': [['the', 'term'], ['a', 'list']]
+                '1': ['the;term', ['a', 'list']]
             }
         """
-        substr_index = {}
-
-        i = 0
-        for term in term_counts:
-            subsequences = self._get_subsequences(term)
-            triples = self._get_triples(subsequences)
-            substr_index[i] = [term, subsequences, triples, []]
-            i += 1
+        with open('term_info.json', 'r', encoding='utf8') as f:
+            term_info = json.load(f) # term_counts: Dict[Tuple[str], int]
 
         # find subsequences
-        for i in substr_index:
-            term = substr_index[i][0]
-            for j in substr_index:
-                subsequences = substr_index[j][1]
-                if term in subsequences:
-                    substr_index[j][3].append(i)
-        with open('subseq_index.json', 'w', encoding='utf8') as f:
-            json.dump(substr_index, f)
+        for i in term_info:
+            term = term_info[i]['term'].split(';')
+            term_info[i]['subseqs'] = self._get_subsequences(term)
+
+        # build index for subsequences
+        for i in term_info:
+            for j in term_info:
+                subseqs_i = term_info[i]['subseqs']
+                term_info[i]['subseq_index'] = []
+                term_j = term_info[j]['term'].split(';')
+                if term_j in subseqs_i:
+                    term_info[i]['subseq_index'].append(j)
+
+        with open('term_info.json', 'w', encoding='utf8') as f:
+            json.dump(term_info, f, ensure_ascii=False)
 
     @staticmethod
     def _get_subsequences(term):
@@ -243,28 +361,21 @@ class TermExractor:
         return triples
 
     def _get_freq(self, substr: str) -> int:
-        pass
+        """"""
+        with open('term_candidates.json', 'r', encoding='utf8') as f:
+            term_candidates = json.load(f)
 
-    def _get_max_len_candidates(self) -> List[List[str]]:
-        with open('subseq_index.json', 'r', encoding='utf8') as f:
-            term_candidates = json.loads(f.read())
-        term_candidates = term_candidates.items()
-        max_len = max([len(tc[0]) for id_, tc in term_candidates])
-        max_len_candidates = []
-        for id_, tc in term_candidates:
-            if len(tc[0]) == max_len:
-                max_len_candidates.append(tc)
-        return max_len_candidates
-
-    def _find_most_important(self):
-        pass
+        count = 0
+        for i in term_candidates:
+            if substr == term_candidates[i]:
+                count += 1
+        return count
 
     def extract_important_terms(self) -> None:
         """Get a list of the most important terms in the corpus."""
-        self._count_words()
-        self._calc_tfidf()
+        # self._count_words()
+        # self._calc_tfidf()
         self._calc_cval()
-        self._find_most_important()
 
 if __name__ == '__main__':
     path_in = './preprocessed_corpus/'
