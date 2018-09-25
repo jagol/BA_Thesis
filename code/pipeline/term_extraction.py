@@ -11,18 +11,8 @@ class TermExractor:
     To determine relevancy, use a combination of TFIDF and
     C-Value-Method.
 
-    A tokenized, tagged and lemmatized corpus as json-file is expected
-    as input.
-
-    The Extractor splits the corpus into parts (documents) to calculate
-    a TFIDF-value. It operates under the assumption that important
-    content words appear concentrated in one place of the corpus
-    (because the word belongs to a topic talked about) whereas
-    non-topic words appear everywhere in the corpus and are thus get a
-    low TFIDF-value.
-
-    Nested Terms or multiword terms are not captured by TFIDF but should
-    get a high number in the c-value.
+    A tokenized, tagged and lemmatized corpus as a collection of json-file
+    is expected as input.
 
     For a term to be 'important' and thus get extracted it is enough to
     have a high TFIDF or a high c-value.
@@ -36,15 +26,19 @@ class TermExractor:
                  max_files: Union[int, None]=None
                  ) -> None:
         self.path_in = path_in
+        self.path_out = path_out
+        self.threshhold_tfidf = threshhold_tfidf
+        self.threshhold_cvalue = threshhold_cvalue
         self._fnames = [fname for fname in os.listdir(self.path_in)
                         if os.path.isfile(os.path.join(self.path_in, fname))]
         self._fnames.sort()
         self._num_files = len(self._fnames)
-        self.path_out = path_out
-        self.threshhold_tfidf = threshhold_tfidf
-        self.threshhold_cvalue = threshhold_cvalue
+        self._path_temp = './temp/'
+        if not os.path.isdir(self._path_temp):
+            os.mkdir(self._path_temp)
         self._max_files = max_files
-        self.triples = {}  # {term: {'f_b': m, 't_b': n, 'c_b': o}}
+        self._triples = {}  # {term: {'f_b': m, 't_b': n, 'c_b': o}}
+        self._term_candidates = []
 
     # --------------- TFIDF Methods ---------------
 
@@ -75,7 +69,8 @@ class TermExractor:
                                 word_counts[lemma] = [0]*self._num_files
                             word_counts[lemma][i] += 1
 
-        with open('word_counts.json', 'w', encoding='utf8') as f:
+        path = os.path.join(self._path_temp, 'word_counts.json')
+        with open(path, 'w', encoding='utf8') as f:
             json.dump(word_counts, f, ensure_ascii=False)
 
     def _calc_idf(self, frequencies: List[int]) -> float:
@@ -85,27 +80,32 @@ class TermExractor:
 
     def _calc_tfidf(self) -> None:
         tfidf = {}
-        with open('word_counts.json', 'r', encoding='utf8') as f:
+        path = os.path.join(self._path_temp, 'word_counts.json')
+        with open(path, 'r', encoding='utf8') as f:
             word_counts = json.load(f)
         for word in word_counts:
             idf = self._calc_idf(word_counts[word])
             tfidf[word] = [tf*idf for tf in word_counts[word]]
-        with open('tfidf.json', 'w', encoding='utf8') as f:
+        path = os.path.join(self.path_out, 'tfidf.json')
+        with open(path, 'w', encoding='utf8') as f:
             json.dump(tfidf, f, ensure_ascii=False)
 
     # --------------- C-Value Methods ---------------
 
     def _calc_cval(self) -> None:
-        # print('extract term candidates...')
-        # self._extract_term_candidates()
-        print('collect information on candidate terms...')
+        """Calculate the c-value for candidate terms.
+
+        Write results to json files of the form:
+        {
+            'candidate;term'<str>: c-value<int>
+        }
+        """
+        self._extract_term_candidates()
         self._build_term_info()
-        print('get max length...')
         length = self._get_max_len()
-        print('get candidates of maximum length {}'.format(length))
         max_len_candidates = self._get_candidates_len_n(length)
         cval_dict = {}                              # {(a, term): cval}
-        print('start c_val calculations for max length terms...')
+        print('start c_val calculations for terms of length {}...'.format(length))
         for a in max_len_candidates:
             term_a = a.split(';')
             f_a = max_len_candidates[a]['freq']
@@ -117,25 +117,22 @@ class TermExractor:
                     f_b = self._get_freq(b)
                     t_b = f_a
                     c_b = 1
-                    self.triples[b] = [f_b, t_b, c_b]
+                    self._triples[b] = [f_b, t_b, c_b]
 
         length -= 1     # all term of max_len are processed, so reduce
                         # by one to go to the next shorter terms
 
         # process all shorter terms in descending order
-        while length != 2:
+        while length != 0:
             print('start cval calculations for terms of length {}'.format(length))
             cand_len_n = self._get_candidates_len_n(length)
             for term_a in cand_len_n:
                 f_a = cand_len_n[term_a]['freq']
-                if term_a not in self.triples:   # if a appears for first time
+                if term_a not in self._triples:   # if a appears for first time
                     length_a = len(term_a.split(';'))
                     cval = math.log2(length_a) * f_a
-                    if f_a > 2:
-                        print('{}: {}={}*{}'.format(term_a, cval,
-                                                math.log2(len(term_a.split(';'))), f_a))
                 else:
-                    triple = self.triples[term_a]
+                    triple = self._triples[term_a]
                     t_a = triple[1]
                     c_a = triple[2]
                     cval = math.log2(len(term_a.split(';'))) * f_a - (1/c_a)*t_a
@@ -144,22 +141,24 @@ class TermExractor:
                     cval_dict[term_a] = cval
                     for b in cand_len_n[term_a]['subseqs']:
                         b = ';'.join(b)
-                        if b in self.triples:
-                            self.triples[b][1] += f_a   # increase t(b)
-                            self.triples[b][2] += 1     # increase c(b)
+                        if b in self._triples:
+                            self._triples[b][1] += f_a   # increase t(b)
+                            self._triples[b][2] += 1     # increase c(b)
                         else:
                             # if substr not known, create new triple
                             f_b = self._get_freq(b)
                             t_b = f_a
                             c_b = 1
-                            self.triples[b] = [f_b, t_b, c_b]
+                            self._triples[b] = [f_b, t_b, c_b]
 
             length -= 1
 
-        with open('triples.json', 'w', encoding='utf8') as f:
-            json.dump(self.triples, f, ensure_ascii=False)
+        path = os.path.join(self._path_temp, 'triples.json')
+        with open(path, 'w', encoding='utf8') as f:
+            json.dump(self._triples, f, ensure_ascii=False)
 
-        with open('cval.json', 'w', encoding='utf8') as f:
+        path = os.path.join(self.path_out, 'cval.json')
+        with open(path, 'w', encoding='utf8') as f:
             json.dump(cval_dict, f, ensure_ascii=False)
 
     def _extract_term_candidates(self) -> None:
@@ -171,14 +170,10 @@ class TermExractor:
                 - use re.search to get a match obj with start/end
                 - since only first match is returned, remove match
                 and search again until no match is found
-        Write found terms to json file in the format:
-        {
-            1: ['first', 'candidate', 'term'],
-            2: ['second', 'candidate', 'term'],
-            ...
-        }
+
+        Store extracted terms in self._term_candidates.
         """
-        extracted_terms = []
+        print('extract term candidates...')
         for fname in self._fnames:
             fpath = os.path.join(self.path_in, fname)
             with open(fpath, 'r', encoding='utf8') as f:
@@ -218,30 +213,18 @@ class TermExractor:
                         pos_id = int(pos[-1])
                         word = sent[pos_id]
                         lemmas.append(word[2]) # append the lemmma
-                    extracted_terms.append(lemmas)
-
-        with open('term_candidates.json', 'w', encoding='utf8') as f:
-            json.dump(dict(enumerate(extracted_terms)), f, ensure_ascii=False)
+                    lemmatized_term = ';'.join(lemmas)
+                    self._term_candidates.append(lemmatized_term)
 
     def _build_term_info(self) -> None:
         """Gather all information for a term necessary to calc c-value.
 
-        Create a json file, which contains for each term:
-        - an id
-        - a list of all subsequences of a term
-        - the length of the term
-        - the frequency of the term
-        - the triple (f(b), t(b), c(b))
-
-        form:
+        Write the information into a json file of the form:
         {
-            id: {
-                'term': 'the;term',
+            'the;term': {
                 'length': n,
-                'subseqs': ['list', 'of', 'subseqs'],
-                'f': k,
-                't': l,
-                'c': i
+                'subseqs': ['list;of', 'subseqs', ...],
+                'freq': m
             }, ...
         }
         """
@@ -259,19 +242,9 @@ class TermExractor:
         list of lists of strings which can be seen as a list of
         candidate terms.
 
-        Format:
-        {
-            '1': {
-                'term': ['a', 'term'],
-                'freq': n
-                }
-        }
+        Write the candidate term frequencies into term_infos.json.
         """
-        with open('term_candidates.json', 'r', encoding='utf8') as f:
-            term_candidates = json.load(f)
-
-        term_candidates = [';'.join(tc) for id_, tc in term_candidates.items()]
-
+        term_candidates = [tc for tc in self._term_candidates]
         candidate_freqs = {}
         i = 0
         for tc in term_candidates:
@@ -279,21 +252,23 @@ class TermExractor:
                 candidate_freqs[tc]['freq'] += 1
             else:
                 candidate_freqs[tc] = {}
-                candidate_freqs[tc]['term'] = tc
+                # candidate_freqs[tc]['term'] = tc
                 candidate_freqs[tc]['freq'] = 1
             i += 1
 
-        with open('term_info.json', 'w', encoding='utf8') as f:
+        path = os.path.join(self._path_temp, 'term_info.json')
+        with open(path, 'w', encoding='utf8') as f:
             json.dump(candidate_freqs, f, ensure_ascii=False)
 
     def _add_term_lengths(self) -> None:
-        with open('term_info.json', 'r', encoding='utf8') as f:
+        path = os.path.join(self._path_temp, 'term_info.json')
+        with open(path, 'r', encoding='utf8') as f:
             term_info = json.load(f)
 
         for term in term_info:
             term_info[term]['length'] = len(term.split(';'))
 
-        with open('term_info.json', 'w', encoding='utf8') as f:
+        with open(path, 'w', encoding='utf8') as f:
             json.dump(term_info, f)
 
     def _add_subseq_index(self) -> None:
@@ -309,16 +284,16 @@ class TermExractor:
                 '1': ['the;term', ['a', 'list']]
             }
         """
-        with open('term_info.json', 'r', encoding='utf8') as f:
+        path = os.path.join(self._path_temp, 'term_info.json')
+        with open(path, 'r', encoding='utf8') as f:
             term_info = json.load(f) # term_counts: Dict[Tuple[str], int]
 
         # find subsequences
         for term in term_info:
-            # term = term_info[i]['term'].split(';')
             term_list = term.split(';')
             term_info[term]['subseqs'] = self._get_subsequences(term_list)
 
-        with open('term_info.json', 'w', encoding='utf8') as f:
+        with open(path, 'w', encoding='utf8') as f:
             json.dump(term_info, f, ensure_ascii=False)
 
     @staticmethod
@@ -333,14 +308,18 @@ class TermExractor:
         return subsequences
 
     def _get_max_len(self) -> int:
-        with open('term_info.json', 'r', encoding='utf8') as f:
+        """Get the lenght of the longest term."""
+        print('get max length...')
+        path = os.path.join(self._path_temp, 'term_info.json')
+        with open(path, 'r', encoding='utf8') as f:
             term_info = json.load(f)
         max_len = max([len(t.split(';')) for t in term_info])
         return max_len
 
     def _get_candidates_len_n(self, n) -> None:
-        """Return all candidate terms of length n"""
-        with open('term_info.json', 'r', encoding='utf8') as f:
+        """Get all candidate terms of length n."""
+        path = os.path.join(self._path_temp, 'term_info.json')
+        with open(path, 'r', encoding='utf8') as f:
             term_info = json.load(f)
         terms_len_n = {}
         for term in term_info:
@@ -348,32 +327,22 @@ class TermExractor:
                 terms_len_n[term] = term_info[term]
         return terms_len_n
 
-    def _get_triples(self, substrings):
-        # (f(b), t(b), c(b))
-        triples = []
-        for substr in substrings:
-            triples.append((self._get_freq(substr), self._get_freq(substr), 1))
-        return triples
-
-    def _get_freq(self, substr: str) -> int:
-        """"""
-        with open('term_candidates.json', 'r', encoding='utf8') as f:
-            term_candidates = json.load(f)
-
+    def _get_freq(self, term: str) -> int:
+        """Get the frequency of a given string in the corpus."""
         count = 0
-        for i in term_candidates:
-            if substr == term_candidates[i]:
+        for term_b in self._term_candidates:
+            if term == term_b:
                 count += 1
         return count
 
     def extract_important_terms(self) -> None:
         """Get a list of the most important terms in the corpus."""
-        # self._count_words()
-        # self._calc_tfidf()
+        self._count_words()
+        self._calc_tfidf()
         self._calc_cval()
 
 if __name__ == '__main__':
     path_in = './preprocessed_corpus/'
-    path_out = './preprocessed_corpus/'
+    path_out = '.'
     te = TermExractor(path_in, path_out, 2)
     te.extract_important_terms()
