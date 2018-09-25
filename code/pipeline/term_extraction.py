@@ -55,6 +55,7 @@ class TermExractor:
         }
         In the case of europarl n = 8367.
         """
+        print('Counting word occurences per file...')
         word_counts = {}
         for i in range(len(self._fnames)):
             fpath = os.path.join(self.path_in, self._fnames[i])
@@ -79,6 +80,7 @@ class TermExractor:
         return math.log(n/df)
 
     def _calc_tfidf(self) -> None:
+        print('Calculating tfidf...')
         tfidf = {}
         path = os.path.join(self._path_temp, 'word_counts.json')
         with open(path, 'r', encoding='utf8') as f:
@@ -86,7 +88,7 @@ class TermExractor:
         for word in word_counts:
             idf = self._calc_idf(word_counts[word])
             tfidf[word] = [tf*idf for tf in word_counts[word]]
-        path = os.path.join(self.path_out, 'tfidf.json')
+        path = os.path.join(self._path_temp, 'tfidf.json')
         with open(path, 'w', encoding='utf8') as f:
             json.dump(tfidf, f, ensure_ascii=False)
 
@@ -157,7 +159,7 @@ class TermExractor:
         with open(path, 'w', encoding='utf8') as f:
             json.dump(self._triples, f, ensure_ascii=False)
 
-        path = os.path.join(self.path_out, 'cval.json')
+        path = os.path.join(self._path_temp, 'cval.json')
         with open(path, 'w', encoding='utf8') as f:
             json.dump(cval_dict, f, ensure_ascii=False)
 
@@ -252,7 +254,6 @@ class TermExractor:
                 candidate_freqs[tc]['freq'] += 1
             else:
                 candidate_freqs[tc] = {}
-                # candidate_freqs[tc]['term'] = tc
                 candidate_freqs[tc]['freq'] = 1
             i += 1
 
@@ -335,14 +336,51 @@ class TermExractor:
                 count += 1
         return count
 
+    def _filter_terms(self) -> None:
+        """Use tfidf and c-value to filter the candidate terms.
+
+        Write the resulting terms into a json file 'onto_terms.json' of
+        the form:
+        ['term;one', 'term;two', ...]
+        """
+        # load candidate terms
+        path_cval = os.path.join(self._path_temp, 'cval.json')
+        with open(path_cval, 'r', encoding='utf8') as f:
+            c_values = json.load(f)
+        path_tfidf = os.path.join(self._path_temp, 'tfidf.json')
+        with open(path_tfidf, 'r', encoding='utf8') as f:
+            tfidf_values = json.load(f)
+
+        onto_terms = []
+        for term in c_values:
+            if c_values[term] > 5:
+                onto_terms.append(term)
+
+        for term in tfidf_values:
+            max_val = max(tfidf_values[term])
+            if max_val > 12:
+                onto_terms.append(term)
+            elif max_val > 6:
+                try:
+                    if c_values[term] > 3:
+                        onto_terms.append(term)
+                except KeyError:
+                    pass
+
+        print(onto_terms)
+        path_onto_terms = os.path.join(self._path_temp, 'onto_terms.json')
+        with open(path_onto_terms, 'w', encoding='utf8') as f:
+            json.dump(onto_terms, f, ensure_ascii=False)
+
     def extract_important_terms(self) -> None:
         """Get a list of the most important terms in the corpus."""
         self._count_words()
         self._calc_tfidf()
         self._calc_cval()
+        self._filter_terms()
 
 if __name__ == '__main__':
     path_in = './preprocessed_corpus/'
     path_out = '.'
-    te = TermExractor(path_in, path_out, 2)
+    te = TermExractor(path_in, path_out)
     te.extract_important_terms()
