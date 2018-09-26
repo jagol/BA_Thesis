@@ -382,7 +382,7 @@ class TermExractor:
 if __name__ == '__main__':
     with open('configs.json', 'r', encoding='utf8') as f:
         configs = json.load(f)
-        path_in = configs['path_in']
-        path_out = configs['path_out']
+        path_in = configs['term_extraction']['path_in']
+        path_out = configs['term_extraction']['path_out']
     te = TermExractor(path_in, path_out)
     te.extract_important_terms()
