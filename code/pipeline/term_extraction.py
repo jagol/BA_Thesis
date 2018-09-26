@@ -5,7 +5,7 @@ import math
 from typing import *
 
 
-class TermExractor:
+class TermExtractor:
     """Class to extract relevant terms from a corpus.
 
     To determine relevancy, use a combination of TFIDF and
@@ -380,9 +380,24 @@ class TermExractor:
         self._filter_terms()
 
 if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '-s',
+        '--server',
+        help="indicate if local paths or server paths should be used",
+        action='store_true')
+    args = parser.parse_args()
     with open('configs.json', 'r', encoding='utf8') as f:
         configs = json.load(f)
-        path_in = configs['term_extraction']['path_in']
-        path_out = configs['term_extraction']['path_out']
-    te = TermExractor(path_in, path_out)
+        if args.server:
+            configs_server_te = configs['server']['term_extraction']
+            path_in = configs_server_te['path_in']
+            path_out = configs_server_te['path_out']
+        else:
+            configs_local_te = configs['local']['term_extraction']
+            path_in = configs_local_te['path_in']
+            path_out = configs_local_te['path_out']
+
+    te = TermExtractor(path_in, path_out)
     te.extract_important_terms()
