@@ -4,10 +4,6 @@ import subprocess
 from typing import *
 import spacy
 
-PATH_IN = './raw_corpus/europarl_documents/'
-PATH_OUT = './preprocessed_corpus/'
-ENCODING = 'utf8'
-
 
 class Preprocessor:
     """Class to preprocess a corpus.
@@ -17,12 +13,14 @@ class Preprocessor:
     with one sentence per line.
     """
 
-    def __init__(self, path_in: str, path_out: str, encoding: str, max_files: int = None):
+    def __init__(self, path_in: str, path_out: str, path_lang_model: str,
+                 encoding: str, max_files: int = None):
         """Initialize Preprocessor.
 
         Args:
             path_in: path to corpus, can be file or directory
             path_out: path to output directory
+            path_lang_model: path to the spacy language model
             encoding: encoding of the text files
             max_files: max number of files to be processed
         """
@@ -30,7 +28,7 @@ class Preprocessor:
         self.path_out = path_out
         self.encoding = encoding
         self._max_files = max_files
-        self._nlp = spacy.load('en_core_web_sm')
+        self._nlp = spacy.load(path_lang_model)
         self._files_processed = 0
         self._sents_processed = 0
         self._fnames = [fname for fname in os.listdir(self.path_in)
@@ -71,8 +69,11 @@ class Preprocessor:
         """
         print(10*'-'+' preprocessing corpus '+10*'-')
         print('Input taken from: {}'.format(self.path_in))
+        if self._max_files:
+            self._upper_bound = min(len(self._fnames), self._max_files)
+        else:
+            self._upper_bound = len(self._fnames)
 
-        self._upper_bound = min(len(self._fnames), self._max_files)
         for i in range(self._upper_bound):
             self._files_processed += 1
             self._process_file(self._fnames[i])
@@ -123,5 +124,11 @@ class Preprocessor:
 
 
 if __name__ == '__main__':
-    pp = Preprocessor(PATH_IN, PATH_OUT, ENCODING, max_files=2)
+    with open('configs.json', 'r', encoding='utf8') as f:
+        configs = json.load(f)
+        path_in = configs['preprocessing']['path_in']
+        path_out = configs['preprocessing']['path_out']
+        spacy_lang_model = configs['preprocessing']['spacy_lang_model']
+        encoding = configs['preprocessing']['encoding']
+    pp = Preprocessor(path_in, path_in, spacy_lang_model, encoding)
     pp.process_corpus()
