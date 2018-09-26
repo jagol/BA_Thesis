@@ -317,7 +317,7 @@ class TermExtractor:
         max_len = max([len(t.split(';')) for t in term_info])
         return max_len
 
-    def _get_candidates_len_n(self, n) -> None:
+    def _get_candidates_len_n(self, n: int) -> None:
         """Get all candidate terms of length n."""
         path = os.path.join(self._path_temp, 'term_info.json')
         with open(path, 'r', encoding='utf8') as f:
