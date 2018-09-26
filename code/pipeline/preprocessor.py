@@ -124,11 +124,28 @@ class Preprocessor:
 
 
 if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '-s',
+        '--server',
+        help="indicate if local paths or server paths should be used",
+        action='store_true')
+    args = parser.parse_args()
     with open('configs.json', 'r', encoding='utf8') as f:
         configs = json.load(f)
-        path_in = configs['preprocessing']['path_in']
-        path_out = configs['preprocessing']['path_out']
-        spacy_lang_model = configs['preprocessing']['spacy_lang_model']
-        encoding = configs['preprocessing']['encoding']
-    pp = Preprocessor(path_in, path_in, spacy_lang_model, encoding)
+        if args.server:
+            configs_server_pp = configs['server']['preprocessing']
+            path_in = configs_server_pp['path_in']
+            path_out = configs_server_pp['path_out']
+            spacy_model = configs_server_pp['spacy_model']
+            encoding = configs_server_pp['encoding']
+        else:
+            configs_local_pp = configs['local']['preprocessing']
+            path_in = configs_local_pp['path_in']
+            path_out = configs_local_pp['path_out']
+            spacy_model = configs_local_pp['spacy_model']
+            encoding = configs_local_pp['encoding']
+
+    pp = Preprocessor(path_in, path_in, spacy_model, encoding)
     pp.process_corpus()
