@@ -353,16 +353,16 @@ class TermExractor:
 
         onto_terms = []
         for term in c_values:
-            if c_values[term] > 5:
+            if c_values[term] > 8:
                 onto_terms.append(term)
 
         for term in tfidf_values:
             max_val = max(tfidf_values[term])
-            if max_val > 12:
+            if max_val > 17:
                 onto_terms.append(term)
-            elif max_val > 6:
+            elif max_val > 11:
                 try:
-                    if c_values[term] > 3:
+                    if c_values[term] > 6:
                         onto_terms.append(term)
                 except KeyError:
                     pass
@@ -380,7 +380,9 @@ class TermExractor:
         self._filter_terms()
 
 if __name__ == '__main__':
-    path_in = './preprocessed_corpus/'
-    path_out = '.'
+    with open('configs.json', 'r', encoding='utf8') as f:
+        configs = json.load(f)
+        path_in = configs['path_in']
+        path_out = configs['path_out']
     te = TermExractor(path_in, path_out)
     te.extract_important_terms()
