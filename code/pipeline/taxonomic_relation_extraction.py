@@ -28,7 +28,9 @@ class HypernymExtractor(TextProcessingUnit):
 
 class HearstHypernymExtractor(HypernymExtractor):
 
-    def __init__(self, path_in: str, path_out: str, max_files: int = None
+    def __init__(self, path_in: str,
+                 path_out: str,
+                 max_files: int = None
                  ) -> None:
         np = r'((JJ[RS]{0,2}\d+ )|(NN[PS]{0,2}\d+ ))*NN[PS]{0,2}\d+'
         # To also match all/some: |(P?DT\d+ )
