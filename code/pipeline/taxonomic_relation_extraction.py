@@ -2,9 +2,10 @@ import os
 import json
 import re
 from typing import *
+from text_processing_unit import TextProcessingUnit
 
 
-class HypernymExtractor:
+class HypernymExtractor(TextProcessingUnit):
 
     def __init__(self, path_in: str, path_out: str, max_files: int = None
                  ) -> None:
@@ -15,27 +16,8 @@ class HypernymExtractor:
             path_out: path to output directory
             max_files: max number of files to be processed
         """
-        self.path_in = path_in
-        self.path_out = path_out
-        self._max_files = max_files
-        self._files_processed = 0
-        self._sents_processed = 0
-        self._fnames = [fname for fname in os.listdir(self.path_in)
-                        if os.path.isfile(os.path.join(self.path_in, fname))]
-        self._fnames.sort()
-        self._num_files = len(self._fnames)
-        self._num_sents = 0
-        self._max_files = max_files
-        self._upper_bound = self._get_upper_bound()
         self._hypernyms = {}  # {Tuple(str, str): Dict[str, List[int]]}
-
-        if not os.path.isdir(self.path_out):
-            os.makedirs(self.path_out)
-
-    def _get_upper_bound(self) -> int:
-        if self._max_files:
-            return min(self._max_files, self._num_files)
-        return self._num_files
+        super().__init__(path_in, path_out, max_files)
 
     def extract_hypernyms(self):
         raise NotImplementedError
@@ -191,20 +173,6 @@ class HearstHypernymExtractor(HypernymExtractor):
                 indices.append(index)
         return indices
 
-    def _update_cmd(self) -> None:
-        """Update the information on the command line."""
-        final_msg = False
-        if self._files_processed == self._upper_bound:
-            if self._sents_processed == self._num_sents:
-                msg = 'Processing: sentence {}, file {} of {}'
-                print(msg.format(self._sents_processed, self._files_processed,
-                                 self._num_files))
-                final_msg = True
-        if not final_msg:
-            msg = 'Processing: sentence {}, file {} of {}\r'
-            print(msg.format(self._sents_processed, self._files_processed,
-                             self._num_files), end='\r')
-
 
 def test() -> None:
     """Needs lemmas for test to work."""
@@ -230,29 +198,8 @@ def test() -> None:
         print(30 * '-')
 
 
-def main():
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        '-s',
-        '--server',
-        help="indicate if local paths or server paths should be used",
-        action='store_true')
-    args = parser.parse_args()
-    with open('configs.json', 'r', encoding='utf8') as f:
-        configs = json.load(f)
-        if args.server:
-            configs_server_te = configs['server']['tax_relation_extraction']
-            path_in = configs_server_te['path_in']
-            path_out = configs_server_te['path_out']
-        else:
-            configs_local_te = configs['local']['tax_relation_extraction']
-            path_in = configs_local_te['path_in']
-            path_out = configs_local_te['path_out']
-
-    he = HearstHypernymExtractor(path_in, path_out)
-    he.extract_hypernyms()
-    # print(he._num_files)
-
 if __name__ == '__main__':
-    main()
+    from utility_functions import get_config
+    config = get_config('tax_relation_extraction')
+    he = HearstHypernymExtractor(**config)
+    he.extract_hypernyms()
