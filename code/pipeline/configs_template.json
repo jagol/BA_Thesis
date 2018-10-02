@@ -3,7 +3,7 @@
     "preprocessing": {
       "path_in": "",
       "path_out": "",
-      "spacy_model": "",
+      "path_lang_model": "",
       "encoding": "utf8"
     },
     "term_extraction": {
@@ -19,7 +19,7 @@
     "preprocessing": {
       "path_in": "./raw_corpus/",
       "path_out": "./preprocessed_corpus/",
-      "spacy_model": "en_core_web_sm",
+      "path_lang_model": "en_core_web_sm",
       "encoding": "utf8"
     },
     "term_extraction": {
