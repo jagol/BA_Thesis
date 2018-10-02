@@ -24,9 +24,10 @@ class HypernymExtractor:
                         if os.path.isfile(os.path.join(self.path_in, fname))]
         self._fnames.sort()
         self._num_files = len(self._fnames)
+        self._num_sents = 0
         self._max_files = max_files
         self._upper_bound = self._get_upper_bound()
-        self._hypernyms = {}    # {Tuple(str, str): Dict[str, List[int]]}
+        self._hypernyms = {}  # {Tuple(str, str): Dict[str, List[int]]}
 
         if not os.path.isdir(self.path_out):
             os.makedirs(self.path_out)
@@ -74,7 +75,7 @@ class HearstHypernymExtractor(HypernymExtractor):
 
         super().__init__(path_in, path_out, max_files)
 
-    def extract_hypernyms(self):
+    def extract_hypernyms(self) -> None:
         """Extract all hypernym-relations using Hearst Patterns.
 
         For all extracted relations store all their mentions as in
@@ -89,6 +90,10 @@ class HearstHypernymExtractor(HypernymExtractor):
             fpath = os.path.join(self.path_in, fname)
             with open(fpath, 'r', encoding='utf8') as f:
                 sentences = json.load(f)
+
+            self._files_processed += 1
+            self._num_sents = len([i for i in sentences])-1
+
             for i in sentences:
                 sent = sentences[i]
                 hyper_rels = self._get_hypernyms(sent)
@@ -99,17 +104,16 @@ class HearstHypernymExtractor(HypernymExtractor):
                     else:
                         self._hypernyms[hyper] = [hypo]
 
+                self._sents_processed += 1
+                self._update_cmd()
+
+            self._sents_processed = 0
+
         with open('./temp/hypernyms_hearst.json', 'w', encoding='utf8') as f:
             json.dump(self._hypernyms, f)
 
-        # for pattern in self._patterns:
-        #     match = re.search(pattern, poses_words)
-        #     if match:
-        #         print(pattern)
-        #         print(match.groupdict())
-
     @staticmethod
-    def _get_poses_words(sent: List[Tuple[Union[str, None]]]) -> str:
+    def _get_poses_words(sent: List[List[Union[str, None]]]) -> str:
         """Merge the token and pos level for Hearst Patters.
 
         Args:
@@ -129,8 +133,8 @@ class HearstHypernymExtractor(HypernymExtractor):
         poses_words = ' '.join(poses_words)
         return poses_words
 
-    def _get_hypernyms(self, sent: List[Tuple[Union[str, bool]]]
-                       ) -> List[Tuple[str]]:
+    def _get_hypernyms(self, sent: List[List[Union[str, bool]]]
+                       ) -> List[Tuple[str, str]]:
         """Extract hypernym relations from a given sentence.
 
         Args:
@@ -150,51 +154,61 @@ class HearstHypernymExtractor(HypernymExtractor):
                         hyp_rels.append(rel)
         return hyp_rels
 
-    def _get_matches(self, sent: List[Tuple[Union[str, bool]]], match: Tuple[str])-> Tuple[str]:
+    def _get_matches(self,
+                     sent: List[List[Union[str, bool]]],
+                     match: Dict[str, str]
+                     ) -> List[Tuple[str, str]]:
         """Use the result of re.findall to extract matches."""
-        hyper_poses = match['hyper'].split(' ')
-        pattern = re.compile(r'(\w+)(\d+)')
-        hyper_indices = []
-        for pos in hyper_poses:
-            index = int(re.search(pattern, pos).group(2))
-            hyper_indices.append(index)
-        hypo_indices = []
-        for pos in match['hypo'].split(' '):
-            index = int(re.search(pattern, pos).group(2))
-            hypo_indices.append(index)
-
-        hypos_indices = []
         if match['hypos']:
-            for hypo in match['hypos'].split(' '):
-                l = []
-                if len(hypo) > 2:
-                    if hypo[-1].isdigit():
-                        index = int(re.search(pattern, hypo).group(2))
-                        l.append(index)
-                    hypos_indices.append(l)
-
-        matches = [[hyper_indices, hypo_indices]]
-
-        for hypo_ind in hypos_indices:
-            matches.append([hyper_indices, hypo_ind])
+            hypos_matches = re.split(r',\d+', match['hypos'])
+        else:
+            hypos_matches = []
+        hyper_indices = self._get_hyp_indices(match['hyper'])
+        hypos_indices = [self._get_hyp_indices(match['hypo'])]
+        hypos_indices.extend([self._get_hyp_indices(m) for m in hypos_matches])
+        rel_inds = []
+        for hypo_inds in hypos_indices:
+            rel_inds.append([hyper_indices, hypo_inds])
 
         results = []
-        for match in matches:
-            i0 = match[0]
-            i1 = match[1]
-            hyper = ' '.join([sent[i][0] for i in i0])
-            hypo = ' '.join([sent[i][0] for i in i1])
+        for reli in rel_inds:
+            i0 = reli[0]
+            i1 = reli[1]
+            hyper = ' '.join([sent[i][2] for i in i0])
+            hypo = ' '.join([sent[i][2] for i in i1])
             results.append((hyper, hypo))
 
         return results
 
+    @staticmethod
+    def _get_hyp_indices(match: str) -> List[int]:
+        """Get the indices of one match."""
+        pattern = re.compile(r'(\w+?)(\d+)')
+        indices = []
+        for pos in match.split(' '):
+            if pos and pos[-1].isdigit():
+                index = int(re.search(pattern, pos).group(2))
+                indices.append(index)
+        return indices
+
+    def _update_cmd(self) -> None:
+        """Update the information on the command line."""
+        final_msg = False
+        if self._files_processed == self._upper_bound:
+            if self._sents_processed == self._num_sents:
+                msg = 'Processing: sentence {}, file {} of {}'
+                print(msg.format(self._sents_processed, self._files_processed,
+                                 self._num_files))
+                final_msg = True
+        if not final_msg:
+            msg = 'Processing: sentence {}, file {} of {}\r'
+            print(msg.format(self._sents_processed, self._files_processed,
+                             self._num_files), end='\r')
 
 
-
-if __name__ == '__main__':
-
-    he = HearstHypernymExtractor('./preprocessed_corpus/', './temp/', max_files=2)
-    # he.extract_hypernyms()
+def test() -> None:
+    """Needs lemmas for test to work."""
+    test_he = HearstHypernymExtractor('.', '.')
 
     sent1 = [['Works', 'NN'], ['such', 'G'], ['as', 'G'], ['Brennan', 'NNP'],
              [',', ','], ['Joyce', 'NNP'], ['or', 'G'], ['Galandi', 'NNP']]
@@ -209,12 +223,36 @@ if __name__ == '__main__':
              ['and', 'G'], ['Canada', 'NNP']]
 
     sents = [sent1, sent2, sent3_4, sent5]
-    poses_words1 = he._get_poses_words(sent1)
-    poses_words2 = he._get_poses_words(sent2)
-    poses_words3_4 = he._get_poses_words(sent3_4)
-    poses_words5 = he._get_poses_words(sent5)
 
     for i in range(len(sents)):
         print(sents[i])
-        print(he._get_hypernyms(sents[i]))
-        print(30*'-')
+        print(test_he._get_hypernyms(sents[i]))
+        print(30 * '-')
+
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '-s',
+        '--server',
+        help="indicate if local paths or server paths should be used",
+        action='store_true')
+    args = parser.parse_args()
+    with open('configs.json', 'r', encoding='utf8') as f:
+        configs = json.load(f)
+        if args.server:
+            configs_server_te = configs['server']['tax_relation_extraction']
+            path_in = configs_server_te['path_in']
+            path_out = configs_server_te['path_out']
+        else:
+            configs_local_te = configs['local']['tax_relation_extraction']
+            path_in = configs_local_te['path_in']
+            path_out = configs_local_te['path_out']
+
+    he = HearstHypernymExtractor(path_in, path_out)
+    he.extract_hypernyms()
+    # print(he._num_files)
+
+if __name__ == '__main__':
+    main()
