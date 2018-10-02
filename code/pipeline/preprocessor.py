@@ -19,7 +19,8 @@ class Preprocessor(TextProcessingUnit):
                  path_out: str,
                  path_lang_model: str,
                  encoding: str,
-                 max_files: int = None):
+                 max_files: int = None
+                 ) -> None:
         """Initialize Preprocessor.
 
         Args:
