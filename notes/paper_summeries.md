@@ -28,6 +28,7 @@ paper: https://arxiv.org/abs/1802.05365
 paper: https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=7838131&tag=1
 ##### Goal
 - ontology learning pipeline using embeddings
+
 ##### Method
 - Concept and Taxonomy Identification
   - Extract NPs
@@ -45,9 +46,54 @@ paper: https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=7838131&tag=1
   - Second approach:
   - using embeddings: bi-partite matching of two concept-clusters (but has exponential time complexity)
   - not clear how that helps to identify Attributes/Relations! ???
-### Results
+
+#### Results
 -> look up yahoo finance dataset, has gold standart
 - precision and recall below 0.66/0.8
+
+### CRIM at SemEval-2018 Task 9: A Hybrid Approach to Hypernym Discovery
+paper: http://aclweb.org/anthology/S18-1116
+
+##### Goal
+- create model to predict if a term is a hypernym for a given query (concept os NE)
+
+##### Data
+- a raw corpus
+- small training set of query and its hypernyms
+
+##### Method
+- hybrid method using Hearst patterns and projections in Vector Space
+- First method: 
+  - Hearst pattern based, 
+  - Problem: low recall (lots of relations don't occur in the same sentence)
+  - Thus: find for each query cohyponyms using patterns and add these to the query
+  - Additionally: find hypernyms through multi-word-expressions, take prevailing head-modifier relation as hypernymy
+  - Create scores for cohyponyms by multiplying their frequency with their embedding cosine similarity to the original query
+  - Use these scores to create score and rank the final hypernym-candidates
+- Second Method:
+  - supervised learning approach based on word embeddings
+  - learn function that takes as input the embedding of a query and a hypernym candidate and output the probability that the candidate is a hypernym (posed as a regression problem, not as a classification problem)
+  - how the probabilty is calculated:
+    - previous work proposed learning a projection, such that the projection of the embedding of the query is close to the embedding of the hypernym
+    - newer version (and used here) learn projection matrices for multiple senses of hypernym relation (get multiple senses by clustering the given query-hyper-pairs based on their vector offset -> learn projection matrik for each cluster)
+    - use soft clustering 
+- Data augmentation: use given data to generate more training data
+
+##### Results
+- first place at SemEval 2019
+- up to 40% Mean Average Precision
+
+
+### Relation Extraction with Matrix Factorization and Universal Schemas
+Paper: https://aclanthology.coli.uni-saarland.de/papers/N13-1008/n13-1008
+##### Goal
+- supervised RE needs labeled data and has a fixed number of relations
+- OpenIE has unlimited number of relations but does not generalize well 
+(because surface structure = relation)
+- thus find method, that has a unlimited number of relations, but also generalizes (and does not need labeled data)
+##### Method
+- use universal schema: union of all source schemas (= union(surface pattern variants, preexisting relation schemas))
+- focus on learning asymmetric implicature
 
 
 ### Cross Sentence N-ary Relation Extraction with Graph LSTMs
