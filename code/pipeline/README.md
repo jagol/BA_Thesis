@@ -5,6 +5,7 @@ This is a pipeline to extract an ontology from raw text.
 Until now the pipeline requires the additional python3 packages:
 - spacy (including a language model for english which has to be downloaded seperately)
 
+How to run the pipeline:
 
 1. For the europarl corpus: Use the bash command `csplit --prefix=europarl_ europarl-v7.de-en.en /^$/ {*}` to split the europarl corpus into documents and move the documents into a separate folder. 
 For other corpora: Split the corpus into documents (if it not already is). Move those documents into a separate folder. The input files should contain one sentence per line.
@@ -13,3 +14,4 @@ For other corpora: Split the corpus into documents (if it not already is). Move 
 
 3. Call `preprocessor.py` if you want to use the local paths or `preprocessor.py -s` if you want to use the server paths.
 4. Call `term_extractor.py` if you want to use the local paths or `term_extractor.py -s` if you want to use the server paths.
+5. Call `taxonomic_relation_extraction.py` if you want to use the local paths or `taxonomic_relation_extraction.py -s` if you want to use the server paths.
