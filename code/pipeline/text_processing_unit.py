@@ -3,7 +3,11 @@ from typing import *
 
 class TextProcessingUnit:
 
-    def __init__(self, path_in: str, path_out: str, max_files: Union[int, None] = None):
+    def __init__(self,
+                 path_in: str,
+                 path_out: str,
+                 max_files: Union[int, None] = None
+                 ) -> None:
         """Initialize a text processing unit.
 
         Args:

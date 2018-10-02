@@ -7,7 +7,10 @@ from text_processing_unit import TextProcessingUnit
 
 class HypernymExtractor(TextProcessingUnit):
 
-    def __init__(self, path_in: str, path_out: str, max_files: int = None
+    def __init__(self,
+                 path_in: str,
+                 path_out: str,
+                 max_files: int = None
                  ) -> None:
         """Initialize Hypernym Extractor.
 
