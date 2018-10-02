@@ -3,9 +3,10 @@ import re
 import os
 import math
 from typing import *
+from text_processing_unit import TextProcessingUnit
 
 
-class TermExtractor:
+class TermExtractor(TextProcessingUnit):
     """Class to extract relevant terms from a corpus.
 
     To determine relevancy, use a combination of TFIDF and
@@ -25,20 +26,14 @@ class TermExtractor:
                  threshhold_cvalue: float=0.0,
                  max_files: Union[int, None]=None
                  ) -> None:
-        self.path_in = path_in
-        self.path_out = path_out
         self.threshhold_tfidf = threshhold_tfidf
         self.threshhold_cvalue = threshhold_cvalue
-        self._fnames = [fname for fname in os.listdir(self.path_in)
-                        if os.path.isfile(os.path.join(self.path_in, fname))]
-        self._fnames.sort()
-        self._num_files = len(self._fnames)
         self._path_temp = './temp/'
         if not os.path.isdir(self._path_temp):
             os.mkdir(self._path_temp)
-        self._max_files = max_files
         self._triples = {}  # {term: {'f_b': m, 't_b': n, 'c_b': o}}
         self._term_candidates = []
+        super().__init__(path_in, path_out, max_files)
 
     # --------------- TFIDF Methods ---------------
 
@@ -107,7 +102,7 @@ class TermExtractor:
         length = self._get_max_len()
         max_len_candidates = self._get_candidates_len_n(length)
         cval_dict = {}                              # {(a, term): cval}
-        print('start c_val calculations for terms of length {}...'.format(length))
+        print('start cval calculations for terms of length {}...'.format(length))
         for a in max_len_candidates:
             term_a = a.split(';')
             f_a = max_len_candidates[a]['freq']
@@ -126,7 +121,7 @@ class TermExtractor:
 
         # process all shorter terms in descending order
         while length != 0:
-            print('start cval calculations for terms of length {}'.format(length))
+            print('start cval calculations for terms of length {}...'.format(length))
             cand_len_n = self._get_candidates_len_n(length)
             for term_a in cand_len_n:
                 f_a = cand_len_n[term_a]['freq']
@@ -234,7 +229,7 @@ class TermExtractor:
         self._add_term_count()
         print('build subseq index...')
         self._add_subseq_index()
-        print('calculate term lengths')
+        print('calculate term lengths...')
         self._add_term_lengths()
 
     def _add_term_count(self) -> None:
@@ -317,7 +312,7 @@ class TermExtractor:
         max_len = max([len(t.split(';')) for t in term_info])
         return max_len
 
-    def _get_candidates_len_n(self, n: int) -> None:
+    def _get_candidates_len_n(self, n: int) -> Dict[str, str]:
         """Get all candidate terms of length n."""
         path = os.path.join(self._path_temp, 'term_info.json')
         with open(path, 'r', encoding='utf8') as f:
@@ -367,7 +362,6 @@ class TermExtractor:
                 except KeyError:
                     pass
 
-        print(onto_terms)
         path_onto_terms = os.path.join(self._path_temp, 'onto_terms.json')
         with open(path_onto_terms, 'w', encoding='utf8') as f:
             json.dump(onto_terms, f, ensure_ascii=False)
@@ -379,25 +373,9 @@ class TermExtractor:
         self._calc_cval()
         self._filter_terms()
 
-if __name__ == '__main__':
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        '-s',
-        '--server',
-        help="indicate if local paths or server paths should be used",
-        action='store_true')
-    args = parser.parse_args()
-    with open('configs.json', 'r', encoding='utf8') as f:
-        configs = json.load(f)
-        if args.server:
-            configs_server_te = configs['server']['term_extraction']
-            path_in = configs_server_te['path_in']
-            path_out = configs_server_te['path_out']
-        else:
-            configs_local_te = configs['local']['term_extraction']
-            path_in = configs_local_te['path_in']
-            path_out = configs_local_te['path_out']
 
-    te = TermExtractor(path_in, path_out)
+if __name__ == '__main__':
+    from utility_functions import get_config
+    config = get_config('term_extraction')
+    te = TermExtractor(**config)
     te.extract_important_terms()
