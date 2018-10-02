@@ -9,6 +9,10 @@
     "term_extraction": {
       "path_in": "",
       "path_out": ""
+    },
+    "tax_relation_extraction": {
+      "path_in": "",
+      "path_out": ""
     }
   },
   "local": {
@@ -19,6 +23,10 @@
       "encoding": "utf8"
     },
     "term_extraction": {
+      "path_in": "./preprocessed_corpus/",
+      "path_out": "."
+    },
+    "tax_relation_extraction": {
       "path_in": "./preprocessed_corpus/",
       "path_out": "."
     }
