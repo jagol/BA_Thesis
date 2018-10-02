@@ -14,8 +14,12 @@ class Preprocessor(TextProcessingUnit):
     with one sentence per line.
     """
 
-    def __init__(self, path_in: str, path_out: str, path_lang_model: str,
-                 encoding: str, max_files: int = None):
+    def __init__(self,
+                 path_in: str,
+                 path_out: str,
+                 path_lang_model: str,
+                 encoding: str,
+                 max_files: int = None):
         """Initialize Preprocessor.
 
         Args:
