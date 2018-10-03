@@ -85,7 +85,7 @@ paper: http://aclweb.org/anthology/S18-1116
 
 
 ### Do Supervised Distributional Methods Really Learn Lexical Inference Relations?
-paper: https://www.aclweb.org/anthology/N15-1098
+paper: https://www.aclweb.org/anthology/N15-1098 2015
 
 ##### Goal
 - Find out if actual relations like hypernymity or causality are learned. Thesis: It is only learned if a wordpair is a "prototypical hypernym"
@@ -104,10 +104,26 @@ paper: https://www.aclweb.org/anthology/N15-1098
 - check the results of the classifier
 
 ##### Results
-  - classifiers learn memorize words, that appear typically as hypernyms instead of learning the relation between x and y
-  - the performance of only y was compared with concatenation/offset and was found to be almost as good as if x was included -> x's information seems to be almost irrelevant for the classifier
+- classifiers learn memorize words, that appear typically as hypernyms instead of learning the relation between x and y
+- the performance of only y was compared with concatenation/offset and was found to be almost as good as if x was included -> x's information seems to be almost irrelevant for the classifier
 - many features of the classifiers turned out to be dataspecific
 -> these methods for lexical inference only appear to be learning if y is a prototypical hypernym
+
+### Distributional Hypernym Generation by Jointly Learning Clusters and Projections
+paper: https://www.aclweb.org/anthology/C16-1176 2016
+
+##### Goal
+- Build a hypernym generation model (instead of a classification model) that jointly learns clusters of hypernymrelations and projections from hyponyms to hypernyms
+- thus do not classify if a given pair of terms has a hypernymrelation, instead find a hypernym for a given hyponym
+- find different hypernym-relation types through clustering
+
+##### Method
+- divide relations into more and more clusters during training
+- for each pair, find a cluster and update it's projection matrix according to the cluster
+
+##### Results
+- Not so high scores for hypernym generation (MRR = 0.343)
+- High scores for hypernym classification (F1 = 0.766 vs state of the art F1 = 0.802)
 
 
 ### Relation Extraction with Matrix Factorization and Universal Schemas
