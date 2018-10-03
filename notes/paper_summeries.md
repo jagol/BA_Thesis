@@ -84,6 +84,32 @@ paper: http://aclweb.org/anthology/S18-1116
 - up to 40% Mean Average Precision
 
 
+### Do Supervised Distributional Methods Really Learn Lexical Inference Relations?
+paper: https://www.aclweb.org/anthology/N15-1098
+
+##### Goal
+- Find out if actual relations like hypernymity or causality are learned. Thesis: It is only learned if a wordpair is a "prototypical hypernym"
+
+##### Method 
+- 3 repr Models are testet: SkipGram, PPMI and SVD
+- 3 Context Types are testet: window 5 bag of words, positional 2 token window, window defined over syntactic dependency
+- For testing 5 labeled datasets are used, that store for a word pair if x entails y
+- but some pairs label hypernymy while others label causality
+- for compositional methods for entailment are tested:
+  - vector concatenation
+  - vector difference (offset)
+  - only x
+  - only y
+- train two classifiers: logistic regression and SVM on dataset
+- check the results of the classifier
+
+##### Results
+  - classifiers learn memorize words, that appear typically as hypernyms instead of learning the relation between x and y
+  - the performance of only y was compared with concatenation/offset and was found to be almost as good as if x was included -> x's information seems to be almost irrelevant for the classifier
+- many features of the classifiers turned out to be dataspecific
+-> these methods for lexical inference only appear to be learning if y is a prototypical hypernym
+
+
 ### Relation Extraction with Matrix Factorization and Universal Schemas
 Paper: https://aclanthology.coli.uni-saarland.de/papers/N13-1008/n13-1008
 ##### Goal
@@ -102,7 +128,9 @@ Paper: https://arxiv.org/abs/1708.03743
 - extract n-ary relations
 - relations can either be intra- or inter-sentential
 - incorporate sequential, syntactic and discourse relations
+
 ##### Methods
 - use graph based LSTM
   - subsumes chain and tree based LSTMs
+
 ##### Results
