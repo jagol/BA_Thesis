@@ -1,8 +1,12 @@
 import os
+import re
 import json
+import gzip
 import subprocess
 from typing import *
+
 import spacy
+
 from text_processing_unit import TextProcessingUnit
 
 
@@ -10,8 +14,6 @@ class Preprocessor(TextProcessingUnit):
     """Class to preprocess a corpus.
 
     Handle tokenization, pos-tagging and lemmatization of a corpus.
-    The corpus is assumed to be a folder containing documents (textfiles)
-    with one sentence per line.
     """
 
     def __init__(self,
@@ -35,6 +37,17 @@ class Preprocessor(TextProcessingUnit):
         self.encoding = encoding
         self._nlp = spacy.load(path_lang_model)
         super().__init__(path_in, path_out, max_files)
+
+    def preprocess_corpus(self):
+        raise NotImplementedError
+        
+
+class EUPRLPreprocessor(Preprocessor):
+    """Class to preprocess the Europarl corpus.
+
+    Handle tokenization, pos-tagging and lemmatization of the english
+    part of the europarl corpus.
+    """
 
     def _write_json(self,
                     annotated_sents: List[List[Tuple[str, str, str, bool]]]
@@ -60,7 +73,7 @@ class Preprocessor(TextProcessingUnit):
         with open(fpath, 'w', encoding=self.encoding) as f:
             json.dump(dict(enumerate(annotated_sents)), f, ensure_ascii=False)
 
-    def process_corpus(self) -> None:
+    def preprocess_corpus(self) -> None:
         """Tokenize, pos-tag and lemmatize corpus. Mark stop words.
 
         Write annotated text files as json into path_out.
@@ -102,8 +115,70 @@ class Preprocessor(TextProcessingUnit):
         self._num_sents = int(out.strip(' ').split(' ')[0])
 
 
+class DBLPPreprocessor(Preprocessor):
+    """Class to preprocess the dblp corpus.
+
+    Handle tokenization, pos-tagging and lemmatization of the dblp corpus.
+    Only the paper titles are considered as part of the corpus and are
+    extracted. The full text is not available in mark up. All other information
+    like author, year etc is discarded.
+    """
+
+    def __init__(self,
+                 path_in: str,
+                 path_out: str,
+                 path_lang_model: str,
+                 encoding: str,
+                 max_files: int = None
+                 ) -> None:
+
+        super().__init__(path_in, path_out, path_lang_model, encoding,
+                        max_files)
+
+    def preprocess_corpus(self):
+        annotated_titles = {}
+        pattern = re.compile(r'<(\w+)>(.*)</\w+>')
+        fpath = os.path.join(self.path_in, self._fnames[0])
+        with gzip.open(fpath, 'r') as f:
+            self._num_sents = 4189903
+            j = 0
+            self._files_processed = 1
+            for line in f:
+                line = line.decode('utf8')
+                match = re.search(pattern, line)
+                if match:
+                    tag, content = match.groups()
+                    if tag == 'title' and content != 'Home Page':
+                        nlp_title = self._nlp(content)
+                        ant_title = [
+                            (token.text, token.tag_, token.lemma_,
+                             token.is_stop) for token in nlp_title]
+                        annotated_titles[self._sents_processed] = ant_title
+                        self._sents_processed += 1
+                        self._update_cmd()
+                        if self._sents_processed % 10000 == 0:
+                            self._write_json(annotated_titles, j)
+                            j += 1
+                            annotated_titles = {}
+            else:
+                self._write_json(annotated_titles, j)
+                j += 1
+
+    def _write_json(self,
+                    annotated_titles: Dict[int, Tuple[Union[str, bool]]],
+                    j: int
+                    ) -> None:
+        f_out = os.path.join(self.path_out, str(j) + '.json')
+        with open(f_out, 'w', encoding='utf8') as f:
+            json.dump(annotated_titles, f)
+
+
 if __name__ == '__main__':
-    from utility_functions import get_config
-    config = get_config('preprocessing')
-    pp = Preprocessor(**config)
-    pp.process_corpus()
+    from utility_functions import get_corpus_config
+    corpus, config = get_corpus_config('preprocessing')
+    if corpus == 'dblp':
+        dp = DBLPPreprocessor(**config)
+        dp.preprocess_corpus()
+    elif corpus == 'europarl':
+        ep = EUPRLPreprocessor(**config)
+        ep.preprocess_corpus()
