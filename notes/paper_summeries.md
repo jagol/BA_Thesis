@@ -125,6 +125,46 @@ paper: https://www.aclweb.org/anthology/C16-1176 2016
 - Not so high scores for hypernym generation (MRR = 0.343)
 - High scores for hypernym classification (F1 = 0.766 vs state of the art F1 = 0.802)
 
+### Learning Semantic Hierarchies via Word Embeddings
+paper: http://ir.hit.edu.cn/~jguo/papers/acl2014-hypernym.pdf 2014
+
+##### Goal
+- Create classifier for hypernym relations with word embeddings
+
+##### Method
+- piece wise linear projection, by first clustering the relations, classify a pair using the projection
+- naive assumption: words can be projected to their hypernyms using a universal transition matrix
+- Currently at 3.3.1
+
+### TaxoGen: Unsupervised Topic Taxonomy Construction by Adaptive Term Embedding and Clustering
+paper: http://www.kdd.org/kdd2018/accepted-papers/view/taxogen-constructing-topical-concept-taxonomy-by-adaptive-term-embedding-an
+
+##### Goal
+- learn a topic taxonomy in an unsupervised way
+- topic taxonomy: a taxonomy that doesn't use the actual words as nodes in the taxonomy but finds similar words/synonyms and clusters those into a 'topic'. Each node of the taxonomy represents a topic.
+
+##### Method
+- initialize root node containing all terms
+- generate topics by spherical clustering
+- for each cluster:
+  - recognize the most representitive terms for the cluster (by popularity and concentration)
+  - all terms over a threshhold, push it to the general terms, remove from cluster
+- for lower levels in the taxonomy:
+  - train new local embeddings only using the documents belonging to the given topic
+  - then do the above calculations
+
+##### Results
+- Relation accuracy (True positive parent-child-relations) of 0.775/0.520 
+
+
+What I could do:
+- divisive clustering on top level
+- match HE examples to clusters
+- train classifier using clusterhyponyms and their HE extracted Hypernyms
+- predict Hypernyms for all clusters that don't have a Hypernym
+- train embeddings for lower clusters etc 
+
+
 
 ### Relation Extraction with Matrix Factorization and Universal Schemas
 Paper: https://aclanthology.coli.uni-saarland.de/papers/N13-1008/n13-1008
