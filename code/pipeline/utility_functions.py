@@ -29,10 +29,13 @@ def get_corpus_config(unit: str) -> Tuple[str, corpus_config]:
 
         dblp = 'dblp'
         euprl = 'europarl'
+        sp = 'sp'
 
         if args.corpus == dblp:
             return dblp, configs[location][dblp][unit]
         elif args.corpus == euprl:
             return euprl, configs[location][euprl][unit]
+        elif args.corpus == sp:
+            return sp, configs[location][sp][unit]
         else:
             raise Exception('Error! Corpus not known.')
