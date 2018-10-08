@@ -124,17 +124,6 @@ class DBLPPreprocessor(Preprocessor):
     like author, year etc is discarded.
     """
 
-    def __init__(self,
-                 path_in: str,
-                 path_out: str,
-                 path_lang_model: str,
-                 encoding: str,
-                 max_files: int = None
-                 ) -> None:
-
-        super().__init__(path_in, path_out, path_lang_model, encoding,
-                        max_files)
-
     def preprocess_corpus(self):
         annotated_titles = {}
         pattern = re.compile(r'<(\w+)>(.*)</\w+>')
@@ -173,6 +162,65 @@ class DBLPPreprocessor(Preprocessor):
             json.dump(annotated_titles, f)
 
 
+class SPPreprocessor(Preprocessor):
+    """Class to preprocess the dblp corpus.
+
+    Handle tokenization, pos-tagging and lemmatization of the sp corpus.
+    The corpus is a collection of paperabstract and stored in one file
+    with a newline as separator.
+    """
+    def __init__(self,
+                 path_in: str,
+                 path_out: str,
+                 path_lang_model: str,
+                 encoding: str,
+                 max_files: int = None
+                 ) -> None:
+
+        self._num_summaries = 94476
+        self._summaries = {}
+        # Dict[int, Dict[int, List[List[Union[str, bool]]]]]
+        self._sum_processed = 0
+        super().__init__(path_in, path_out, path_lang_model, encoding,
+                         max_files)
+
+    def preprocess_corpus(self) -> None:
+        """Preprocess the SP-corpus. Write output to json file."""
+        fpath = os.path.join(self.path_in, self._fnames[0])
+        with open(fpath, 'r', encoding=self.encoding) as f:
+            for line in f:
+                nlp_summary = self._nlp(line.strip('\n'))
+                self._summaries[self._sum_processed] = {}
+                self._add_sents(nlp_summary)
+                self._sum_processed += 1
+                self._update_cmd()
+                if self._sum_processed >= 40:
+                    break
+
+        self._write_json(self._summaries)
+
+    def _add_sents(self, nlp_summary: spacy.tokens.doc.Doc) -> None:
+        for i, sent in enumerate(nlp_summary.sents):
+            nlp_sent = [(token.text, token.tag_, token.lemma_, token.is_stop)
+                 for token in sent]
+            self._summaries[self._sum_processed][i] = nlp_sent
+
+    def _write_json(self, summaries: Dict[int, Dict[int, str]]) -> None:
+        f_out = os.path.join(self.path_out, 'sp.json')
+        with open(f_out, 'w', encoding='utf8') as f:
+            json.dump(summaries, f)
+
+    def _update_cmd(self) -> None:
+        """Update the information on the command line."""
+        if self._sum_processed == self._num_summaries:
+            msg = 'Processing: summary {} of {}'
+            print(msg.format(self._sum_processed, self._num_summaries))
+        else:
+            msg = 'Processing: summary {} of {}\r'
+            print(msg.format(self._sum_processed, self._num_summaries),
+                  end='\r')
+
+
 if __name__ == '__main__':
     from utility_functions import get_corpus_config
     corpus, config = get_corpus_config('preprocessing')
@@ -182,3 +230,6 @@ if __name__ == '__main__':
     elif corpus == 'europarl':
         ep = EUPRLPreprocessor(**config)
         ep.preprocess_corpus()
+    elif corpus == 'sp':
+        sp = SPPreprocessor(**config)
+        sp.preprocess_corpus()
