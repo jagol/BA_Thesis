@@ -34,6 +34,13 @@ class TermExtractor(TextProcessingUnit):
         self._triples = {}  # {term: {'f_b': m, 't_b': n, 'c_b': o}}
         self._term_candidates = []
         super().__init__(path_in, path_out, max_files)
+        self._num_docs = self._get_num_docs()
+
+    def _get_documents(self) -> Iterator[str]:
+        raise NotImplementedError
+
+    def _get_num_docs(self) -> int:
+        raise NotImplementedError
 
     # --------------- TFIDF Methods ---------------
 
@@ -52,25 +59,22 @@ class TermExtractor(TextProcessingUnit):
         """
         print('Counting word occurences per file...')
         word_counts = {}
-        for i in range(len(self._fnames)):
-            fpath = os.path.join(self.path_in, self._fnames[i])
-            with open(fpath, 'r', encoding='utf8') as f:
-                sent_dict = json.load(f)
-                for key in sent_dict:
-                    sent = sent_dict[key]
-                    for word in sent:
-                        if word[1].startswith('N'):
-                            lemma = word[2]
-                            if lemma not in word_counts:
-                                word_counts[lemma] = [0]*self._num_files
-                            word_counts[lemma][i] += 1
+        for i, doc in enumerate(self._get_documents()):
+            for key in doc:
+                sent = doc[key]
+                for word in sent:
+                    if word[1].startswith('N'):
+                        lemma = word[2]
+                        if lemma not in word_counts:
+                            word_counts[lemma] = [0]*self._num_docs
+                        word_counts[lemma][i] += 1
 
         path = os.path.join(self._path_temp, 'word_counts.json')
         with open(path, 'w', encoding='utf8') as f:
             json.dump(word_counts, f, ensure_ascii=False)
 
     def _calc_idf(self, frequencies: List[int]) -> float:
-        n = self._num_files
+        n = self._num_docs
         df = len([c for c in frequencies if c != 0])
         return math.log(n/df)
 
@@ -83,6 +87,7 @@ class TermExtractor(TextProcessingUnit):
         for word in word_counts:
             idf = self._calc_idf(word_counts[word])
             tfidf[word] = [tf*idf for tf in word_counts[word]]
+        print(tfidf)
         path = os.path.join(self._path_temp, 'tfidf.json')
         with open(path, 'w', encoding='utf8') as f:
             json.dump(tfidf, f, ensure_ascii=False)
@@ -94,7 +99,7 @@ class TermExtractor(TextProcessingUnit):
 
         Write results to json files of the form:
         {
-            'candidate;term'<str>: c-value<int>
+            'candidate_term'<str>: c-value<int>
         }
         """
         self._extract_term_candidates()
@@ -104,13 +109,13 @@ class TermExtractor(TextProcessingUnit):
         cval_dict = {}                              # {(a, term): cval}
         print('start cval calculations for terms of length {}...'.format(length))
         for a in max_len_candidates:
-            term_a = a.split(';')
+            term_a = a.split('_')
             f_a = max_len_candidates[a]['freq']
-            cval = math.log2(len(term_a))*f_a       # C-Value = log2(|a|)*f(a)
-            if cval > self.threshhold_cvalue:       # check if bigger than threshhold
-                cval_dict[a] = cval         # add term to output dict
+            cval = math.log2(len(term_a))*f_a # C-Value = log2(|a|)*f(a)
+            if cval > self.threshhold_cvalue: # check if bigger than threshhold
+                cval_dict[a] = cval           # add term to output dict
                 for b in max_len_candidates[a]['subseqs']:
-                    b = ';'.join(b)
+                    b = '_'.join(b)
                     f_b = self._get_freq(b)
                     t_b = f_a
                     c_b = 1
@@ -126,18 +131,18 @@ class TermExtractor(TextProcessingUnit):
             for term_a in cand_len_n:
                 f_a = cand_len_n[term_a]['freq']
                 if term_a not in self._triples:   # if a appears for first time
-                    length_a = len(term_a.split(';'))
+                    length_a = len(term_a.split('_'))
                     cval = math.log2(length_a) * f_a
                 else:
                     triple = self._triples[term_a]
                     t_a = triple[1]
                     c_a = triple[2]
-                    cval = math.log2(len(term_a.split(';'))) * f_a - (1/c_a)*t_a
+                    cval = math.log2(len(term_a.split('_'))) * f_a - (1/c_a)*t_a
 
                 if cval > self.threshhold_cvalue:
                     cval_dict[term_a] = cval
                     for b in cand_len_n[term_a]['subseqs']:
-                        b = ';'.join(b)
+                        b = '_'.join(b)
                         if b in self._triples:
                             self._triples[b][1] += f_a   # increase t(b)
                             self._triples[b][2] += 1     # increase c(b)
@@ -171,11 +176,8 @@ class TermExtractor(TextProcessingUnit):
         Store extracted terms in self._term_candidates.
         """
         print('extract term candidates...')
-        for fname in self._fnames:
-            fpath = os.path.join(self.path_in, fname)
-            with open(fpath, 'r', encoding='utf8') as f:
-                sents = json.load(f)
-            for id_, sent in sents.items():
+        for doc in self._get_documents():
+            for id_, sent in doc.items():
                 # construct pos tag string
                 poses = ''
                 for i in range(len(sent)):
@@ -209,8 +211,8 @@ class TermExtractor(TextProcessingUnit):
                     for pos in pos_list:
                         pos_id = int(pos[-1])
                         word = sent[pos_id]
-                        lemmas.append(word[2]) # append the lemmma
-                    lemmatized_term = ';'.join(lemmas)
+                        lemmas.append(word[2])  # append the lemmma
+                    lemmatized_term = '_'.join(lemmas)
                     self._term_candidates.append(lemmatized_term)
 
     def _build_term_info(self) -> None:
@@ -218,9 +220,9 @@ class TermExtractor(TextProcessingUnit):
 
         Write the information into a json file of the form:
         {
-            'the;term': {
+            'the_term': {
                 'length': n,
-                'subseqs': ['list;of', 'subseqs', ...],
+                'subseqs': ['list_of', 'subseqs', ...],
                 'freq': m
             }, ...
         }
@@ -262,7 +264,7 @@ class TermExtractor(TextProcessingUnit):
             term_info = json.load(f)
 
         for term in term_info:
-            term_info[term]['length'] = len(term.split(';'))
+            term_info[term]['length'] = len(term.split('_'))
 
         with open(path, 'w', encoding='utf8') as f:
             json.dump(term_info, f)
@@ -270,23 +272,20 @@ class TermExtractor(TextProcessingUnit):
     def _add_subseq_index(self) -> None:
         """Use term_counts to build an index of subsequences of the form:
 
-        Args:
-            term_counts: a dict that maps terms onto their frequency in
-                in the corpus.
         Output:
             A json file that maps a term id to a list containing:
                 the term, a list of subsequences
             {
-                '1': ['the;term', ['a', 'list']]
+                '1': ['the_term', ['a', 'list']]
             }
         """
         path = os.path.join(self._path_temp, 'term_info.json')
         with open(path, 'r', encoding='utf8') as f:
-            term_info = json.load(f) # term_counts: Dict[Tuple[str], int]
+            term_info = json.load(f)  # term_counts: Dict[Tuple[str], int]
 
         # find subsequences
         for term in term_info:
-            term_list = term.split(';')
+            term_list = term.split('_')
             term_info[term]['subseqs'] = self._get_subsequences(term_list)
 
         with open(path, 'w', encoding='utf8') as f:
@@ -309,7 +308,7 @@ class TermExtractor(TextProcessingUnit):
         path = os.path.join(self._path_temp, 'term_info.json')
         with open(path, 'r', encoding='utf8') as f:
             term_info = json.load(f)
-        max_len = max([len(t.split(';')) for t in term_info])
+        max_len = max([len(t.split('_')) for t in term_info])
         return max_len
 
     def _get_candidates_len_n(self, n: int) -> Dict[str, str]:
@@ -336,7 +335,7 @@ class TermExtractor(TextProcessingUnit):
 
         Write the resulting terms into a json file 'onto_terms.json' of
         the form:
-        ['term;one', 'term;two', ...]
+        ['term_one', 'term_two', ...]
         """
         # load candidate terms
         path_cval = os.path.join(self._path_temp, 'cval.json')
@@ -345,7 +344,7 @@ class TermExtractor(TextProcessingUnit):
         path_tfidf = os.path.join(self._path_temp, 'tfidf.json')
         with open(path_tfidf, 'r', encoding='utf8') as f:
             tfidf_values = json.load(f)
-
+        print(c_values)
         onto_terms = []
         for term in c_values:
             if c_values[term] > 8:
@@ -374,8 +373,70 @@ class TermExtractor(TextProcessingUnit):
         self._filter_terms()
 
 
+doc_type = Dict[int, List[List[Union[str, bool]]]]
+
+
+class EUPRLTermExtractor(TermExtractor):
+
+    def _get_num_docs(self) -> int:
+        return len(self._fnames)
+
+    def _get_documents(self) -> Iterator[doc_type]:
+        for fname in self._fnames:
+            fpath = os.path.join(self.path_in, fname)
+            with open(fpath, 'r', encoding='utf8') as f:
+                yield json.load(f)
+
+
+class DBLPTermExtractor(TermExtractor):
+
+    def _get_num_docs(self) -> int:
+        count = 0
+        for fname in self._fnames:
+            fpath = os.path.join(self.path_in, fname)
+            with open(fpath, 'r', encoding='utf8') as f:
+                titles = json.load(f)
+                count += len(titles)
+        return count
+
+    def _get_documents(self) -> Iterator[doc_type]:
+        for fname in self._fnames:
+            fpath = os.path.join(self.path_in, fname)
+            with open(fpath, 'r', encoding='utf8') as f:
+                titles = json.load(f)
+                for i in titles:
+                    yield titles[i]
+
+
+class SPTermExtractor(TermExtractor):
+
+    def _get_num_docs(self) -> int:
+        count = 0
+        for fname in self._fnames:
+            fpath = os.path.join(self.path_in, fname)
+            with open(fpath, 'r', encoding='utf8') as f:
+                summaries = json.load(f)
+                count += len(summaries)
+        return count
+
+    def _get_documents(self) -> Iterator[doc_type]:
+        for fname in self._fnames:
+            fpath = os.path.join(self.path_in, fname)
+            with open(fpath, 'r', encoding='utf8') as f:
+                summaries = json.load(f)
+                for i in summaries:
+                    yield summaries[i]
+
+
 if __name__ == '__main__':
-    from utility_functions import get_config
-    config = get_config('term_extraction')
-    te = TermExtractor(**config)
-    te.extract_important_terms()
+    from utility_functions import get_corpus_config
+    corpus, config = get_corpus_config('term_extraction')
+    if corpus == 'dblp':
+        dp = DBLPTermExtractor(**config)
+        dp.extract_important_terms()
+    elif corpus == 'europarl':
+        ep = EUPRLTermExtractor(**config)
+        ep.extract_important_terms()
+    elif corpus == 'sp':
+        sp = SPTermExtractor(**config)
+        sp.extract_important_terms()
