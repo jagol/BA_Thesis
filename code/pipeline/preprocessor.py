@@ -40,7 +40,7 @@ class Preprocessor(TextProcessingUnit):
 
     def preprocess_corpus(self):
         raise NotImplementedError
-        
+
 
 class EUPRLPreprocessor(Preprocessor):
     """Class to preprocess the Europarl corpus.
@@ -50,7 +50,7 @@ class EUPRLPreprocessor(Preprocessor):
     """
 
     def _write_json(self,
-                    annotated_sents: List[List[Tuple[str, str, str, bool]]]
+                    annotated_sents: List[List[Tuple[Union[str, bool]]]]
                     ) -> None:
         """Write annotated_sents to a file in json.
 
@@ -69,7 +69,8 @@ class EUPRLPreprocessor(Preprocessor):
             of tokens, each token is a tuple if the form
             (token, tag, lemma, is_stop_word)
         """
-        fpath = os.path.join(self.path_out, str(self._files_processed)+'.json')
+        fpath = os.path.join(self.path_out,
+                             str(self._files_processed) + '.json')
         with open(fpath, 'w', encoding=self.encoding) as f:
             json.dump(dict(enumerate(annotated_sents)), f, ensure_ascii=False)
 
@@ -78,14 +79,14 @@ class EUPRLPreprocessor(Preprocessor):
 
         Write annotated text files as json into path_out.
         """
-        print(10*'-'+' preprocessing corpus '+10*'-')
+        print(10 * '-' + ' preprocessing corpus ' + 10 * '-')
         print('Input taken from: {}'.format(self.path_in))
         for i in range(self._upper_bound):
             self._files_processed += 1
             self._process_file(self._fnames[i])
 
         print('Output written to: {}'.format(self.path_out))
-        print(42*'-')
+        print(42 * '-')
 
     def _process_file(self, fname: str) -> None:
         """Tokenize, pos-tag, lemmatize and mark stop words for a file.
@@ -124,13 +125,28 @@ class DBLPPreprocessor(Preprocessor):
     like author, year etc is discarded.
     """
 
+    def __init__(self,
+                 path_in: str,
+                 path_out: str,
+                 path_lang_model: str,
+                 encoding: str,
+                 max_files: int = None
+                 ) -> None:
+
+        self._num_titles = 94476
+        self._titles = {}
+        # Dict[int, Dict[int, List[List[Union[str, bool]]]]]
+        self._titles_proc = 0
+        super().__init__(path_in, path_out, path_lang_model, encoding,
+                         max_files)
+
     def preprocess_corpus(self):
         annotated_titles = {}
         pattern = re.compile(r'<(\w+)>(.*)</\w+>')
         fpath = os.path.join(self.path_in, self._fnames[0])
         with gzip.open(fpath, 'r') as f:
             self._num_sents = 4189903
-            j = 0
+            out_file_num = 0
             self._files_processed = 1
             for line in f:
                 line = line.decode('utf8')
@@ -139,27 +155,39 @@ class DBLPPreprocessor(Preprocessor):
                     tag, content = match.groups()
                     if tag == 'title' and content != 'Home Page':
                         nlp_title = self._nlp(content)
-                        ant_title = [
-                            (token.text, token.tag_, token.lemma_,
-                             token.is_stop) for token in nlp_title]
-                        annotated_titles[self._sents_processed] = ant_title
-                        self._sents_processed += 1
+                        annotated_titles[self._titles_proc] = {}
+                        for i, sent in enumerate(nlp_title.sents):
+                            nlp_sent = [(token.text, token.tag_, token.lemma_,
+                                         token.is_stop)
+                                        for token in sent]
+                            annotated_titles[self._titles_proc][i] = nlp_sent
+                        self._titles_proc += 1
                         self._update_cmd()
-                        if self._sents_processed % 10000 == 0:
-                            self._write_json(annotated_titles, j)
-                            j += 1
+                        if self._titles_proc % 10000 == 0:
+                            self._write_json(annotated_titles, out_file_num)
+                            out_file_num += 1
                             annotated_titles = {}
             else:
-                self._write_json(annotated_titles, j)
-                j += 1
+                self._write_json(annotated_titles, out_file_num)
+                out_file_num += 1
 
     def _write_json(self,
                     annotated_titles: Dict[int, Tuple[Union[str, bool]]],
-                    j: int
+                    out_file_num: int
                     ) -> None:
-        f_out = os.path.join(self.path_out, str(j) + '.json')
+        f_out = os.path.join(self.path_out, str(out_file_num) + '.json')
         with open(f_out, 'w', encoding='utf8') as f:
             json.dump(annotated_titles, f)
+
+    def _update_cmd(self) -> None:
+        """Update the information on the command line."""
+        if self._titles_proc == self._num_titles:
+            msg = 'Processing: title {} of {}'
+            print(msg.format(self._titles_proc, self._num_titles))
+        else:
+            msg = 'Processing: title {} of {}\r'
+            print(msg.format(self._titles_proc, self._num_titles),
+                  end='\r')
 
 
 class SPPreprocessor(Preprocessor):
@@ -169,6 +197,7 @@ class SPPreprocessor(Preprocessor):
     The corpus is a collection of paperabstract and stored in one file
     with a newline as separator.
     """
+
     def __init__(self,
                  path_in: str,
                  path_out: str,
@@ -202,7 +231,7 @@ class SPPreprocessor(Preprocessor):
     def _add_sents(self, nlp_summary: spacy.tokens.doc.Doc) -> None:
         for i, sent in enumerate(nlp_summary.sents):
             nlp_sent = [(token.text, token.tag_, token.lemma_, token.is_stop)
-                 for token in sent]
+                        for token in sent]
             self._summaries[self._sum_processed][i] = nlp_sent
 
     def _write_json(self, summaries: Dict[int, Dict[int, str]]) -> None:
