@@ -267,7 +267,7 @@ class TermExtractor(TextProcessingUnit):
             term_info[term]['length'] = len(term.split('_'))
 
         with open(path, 'w', encoding='utf8') as f:
-            json.dump(term_info, f)
+            json.dump(term_info, f, ensure_ascii=False)
 
     def _add_subseq_index(self) -> None:
         """Use term_counts to build an index of subsequences of the form:
