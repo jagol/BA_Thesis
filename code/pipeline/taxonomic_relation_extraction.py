@@ -27,6 +27,7 @@ class HypernymExtractor(TextProcessingUnit):
 
 
 class HearstHypernymExtractor(HypernymExtractor):
+    """Extract hypernym-relations using Hearst Patterns."""
 
     def __init__(self, path_in: str,
                  path_out: str,
@@ -97,7 +98,7 @@ class HearstHypernymExtractor(HypernymExtractor):
             self._sents_processed = 0
 
         with open('./temp/hypernyms_hearst.json', 'w', encoding='utf8') as f:
-            json.dump(self._hypernyms, f)
+            json.dump(self._hypernyms, f, ensure_ascii=False)
 
     @staticmethod
     def _get_poses_words(sent: List[List[Union[str, None]]]) -> str:
@@ -201,6 +202,22 @@ def test() -> None:
         print(sents[i])
         print(test_he._get_hypernyms(sents[i]))
         print(30 * '-')
+
+rels_type = Dict[str, List[str]]
+
+class DivClustHypernymExtractor(HypernymExtractor):
+    """Extract hypernym-relations using hierarchical clustering."""
+
+    def extract_hypernyms(self):
+        """Wrapper method to extract the hypernym-relations.
+
+        Before this method can be called, there must be examples for
+        hypernym-relations to train the classifier.
+        """
+        rels = {} # rels_type
+
+        with open(fpath, 'w', encoding='utf8') as f:
+            json.dump(rels, f, ensure_ascii=False)
 
 
 if __name__ == '__main__':
