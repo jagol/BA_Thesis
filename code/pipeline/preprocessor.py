@@ -133,7 +133,7 @@ class DBLPPreprocessor(Preprocessor):
                  max_files: int = None
                  ) -> None:
 
-        self._num_titles = 94476
+        self._num_titles = 4327497
         self._titles = {}
         # Dict[int, Dict[int, List[List[Union[str, bool]]]]]
         self._titles_proc = 0
@@ -163,7 +163,7 @@ class DBLPPreprocessor(Preprocessor):
                             annotated_titles[self._titles_proc][i] = nlp_sent
                         self._titles_proc += 1
                         self._update_cmd()
-                        if self._titles_proc % 10000 == 0:
+                        if self._titles_proc % 100000 == 0:
                             self._write_json(annotated_titles, out_file_num)
                             out_file_num += 1
                             annotated_titles = {}
@@ -223,8 +223,9 @@ class SPPreprocessor(Preprocessor):
                 self._add_sents(nlp_summary)
                 self._sum_processed += 1
                 self._update_cmd()
-                if self._sum_processed >= 40:
-                    break
+                if self._sum_processed % 10000 == 0:
+                    self._write_json(self._summaries)
+                    self._summaries = {}
 
         self._write_json(self._summaries)
 
@@ -235,7 +236,8 @@ class SPPreprocessor(Preprocessor):
             self._summaries[self._sum_processed][i] = nlp_sent
 
     def _write_json(self, summaries: Dict[int, Dict[int, str]]) -> None:
-        f_out = os.path.join(self.path_out, 'sp.json')
+        fname = '{}.json'.format(self._sum_processed)
+        f_out = os.path.join(self.path_out, fname)
         with open(f_out, 'w', encoding='utf8') as f:
             json.dump(summaries, f)
 
