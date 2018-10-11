@@ -69,7 +69,7 @@ class TermExtractor(TextProcessingUnit):
                             word_counts[lemma] = [0]*self._num_docs
                         word_counts[lemma][i] += 1
 
-        path = os.path.join(self._path_temp, 'word_counts.json')
+        path = os.path.join(self._pat_out, 'word_counts.json')
         with open(path, 'w', encoding='utf8') as f:
             json.dump(word_counts, f, ensure_ascii=False)
 
@@ -81,13 +81,13 @@ class TermExtractor(TextProcessingUnit):
     def _calc_tfidf(self) -> None:
         print('Calculating tfidf...')
         tfidf = {}
-        path = os.path.join(self._path_temp, 'word_counts.json')
+        path = os.path.join(self._path_out, 'word_counts.json')
         with open(path, 'r', encoding='utf8') as f:
             word_counts = json.load(f)
         for word in word_counts:
             idf = self._calc_idf(word_counts[word])
             tfidf[word] = [tf*idf for tf in word_counts[word]]
-        path = os.path.join(self._path_temp, 'tfidf.json')
+        path = os.path.join(self._path_out, 'tfidf.json')
         with open(path, 'w', encoding='utf8') as f:
             json.dump(tfidf, f, ensure_ascii=False)
 
@@ -154,11 +154,11 @@ class TermExtractor(TextProcessingUnit):
 
             length -= 1
 
-        path = os.path.join(self._path_temp, 'triples.json')
+        path = os.path.join(self._path_out, 'triples.json')
         with open(path, 'w', encoding='utf8') as f:
             json.dump(self._triples, f, ensure_ascii=False)
 
-        path = os.path.join(self._path_temp, 'cval.json')
+        path = os.path.join(self._path_out, 'cval.json')
         with open(path, 'w', encoding='utf8') as f:
             json.dump(cval_dict, f, ensure_ascii=False)
 
@@ -212,7 +212,7 @@ class TermExtractor(TextProcessingUnit):
             index = int(match.group(1))
             return sent[index]
         else:
-            raise Exception('Error! Pos has no id.')
+            raise Exception('Error! Pos has no index.')
 
     def _build_term_info(self) -> None:
         """Gather all information for a term necessary to calc c-value.
@@ -253,12 +253,12 @@ class TermExtractor(TextProcessingUnit):
                 candidate_freqs[tc]['freq'] = 1
             i += 1
 
-        path = os.path.join(self._path_temp, 'term_info.json')
+        path = os.path.join(self._path_out, 'term_info.json')
         with open(path, 'w', encoding='utf8') as f:
             json.dump(candidate_freqs, f, ensure_ascii=False)
 
     def _add_term_lengths(self) -> None:
-        path = os.path.join(self._path_temp, 'term_info.json')
+        path = os.path.join(self._path_out, 'term_info.json')
         with open(path, 'r', encoding='utf8') as f:
             term_info = json.load(f)
 
@@ -278,7 +278,7 @@ class TermExtractor(TextProcessingUnit):
                 '1': ['the_term', ['a', 'list']]
             }
         """
-        path = os.path.join(self._path_temp, 'term_info.json')
+        path = os.path.join(self._path_out, 'term_info.json')
         with open(path, 'r', encoding='utf8') as f:
             term_info = json.load(f)  # term_counts: Dict[Tuple[str], int]
 
@@ -304,7 +304,7 @@ class TermExtractor(TextProcessingUnit):
     def _get_max_len(self) -> int:
         """Get the lenght of the longest term."""
         print('get max length...')
-        path = os.path.join(self._path_temp, 'term_info.json')
+        path = os.path.join(self._path_out, 'term_info.json')
         with open(path, 'r', encoding='utf8') as f:
             term_info = json.load(f)
         max_len = max([len(t.split('_')) for t in term_info])
@@ -312,7 +312,7 @@ class TermExtractor(TextProcessingUnit):
 
     def _get_candidates_len_n(self, n: int) -> Dict[str, str]:
         """Get all candidate terms of length n."""
-        path = os.path.join(self._path_temp, 'term_info.json')
+        path = os.path.join(self._path_out, 'term_info.json')
         with open(path, 'r', encoding='utf8') as f:
             term_info = json.load(f)
         terms_len_n = {}
@@ -337,10 +337,10 @@ class TermExtractor(TextProcessingUnit):
         ['term_one', 'term_two', ...]
         """
         # load candidate terms
-        path_cval = os.path.join(self._path_temp, 'cval.json')
+        path_cval = os.path.join(self._path_out, 'cval.json')
         with open(path_cval, 'r', encoding='utf8') as f:
             c_values = json.load(f)
-        path_tfidf = os.path.join(self._path_temp, 'tfidf.json')
+        path_tfidf = os.path.join(self._path_out, 'tfidf.json')
         with open(path_tfidf, 'r', encoding='utf8') as f:
             tfidf_values = json.load(f)
         onto_terms = []
@@ -359,7 +359,7 @@ class TermExtractor(TextProcessingUnit):
                 except KeyError:
                     pass
 
-        path_onto_terms = os.path.join(self._path_temp, 'onto_terms.json')
+        path_onto_terms = os.path.join(self._path_out, 'onto_terms.json')
         with open(path_onto_terms, 'w', encoding='utf8') as f:
             json.dump(onto_terms, f, ensure_ascii=False)
 
