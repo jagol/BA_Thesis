@@ -87,7 +87,6 @@ class TermExtractor(TextProcessingUnit):
         for word in word_counts:
             idf = self._calc_idf(word_counts[word])
             tfidf[word] = [tf*idf for tf in word_counts[word]]
-        print(tfidf)
         path = os.path.join(self._path_temp, 'tfidf.json')
         with open(path, 'w', encoding='utf8') as f:
             json.dump(tfidf, f, ensure_ascii=False)
@@ -189,31 +188,31 @@ class TermExtractor(TextProcessingUnit):
                 # 1. pattern: sequence of Nouns
                 # pattern1 = re.compile(r'((NN[PS]{0,2}) ?)+')
                 # 2. pattern: adjective-noun sequence
-                pattern2 = re.compile(r'((NN[PS]{0,2}\d|JJ[RS]?\d) )+NN[PS]{0,2}\d')
-                # matches1 = re.search(pattern1, poses)
+                pattern2 = re.compile(
+                    r'((NN[PS]{0,2}\d+|JJ[RS]?\d+) )+NN[PS]{0,2}\d+')
                 # only use the second pattern for more recall
                 # (but probably lower precision)
-                match = True    # starting value of match can be anything
-                                # that evalutates to True if used as a bool
-                # look for matches and then remove them until no matches are found
-                matches = []
-                while match:
-                    match = re.search(pattern2, poses)
-                    if match:
-                        matches.append(match.group())
-                        # remove the matched pos-tags from poses string
-                        poses = poses[:match.start()]+poses[match.end():]
-
-                # find the lemmas corresponding to the matched pos tags
-                for pos_seq in matches:
+                for match in re.finditer(pattern2, poses):
+                    pos_seq = match.group()
                     lemmas = []
                     pos_list = pos_seq.split(' ')
                     for pos in pos_list:
-                        pos_id = int(pos[-1])
-                        word = sent[pos_id]
-                        lemmas.append(word[2])  # append the lemmma
+                        word = self._get_word_by_pos_index(sent, pos)
+                        lemmas.append(word[2])  # append the lemma
                     lemmatized_term = '_'.join(lemmas)
                     self._term_candidates.append(lemmatized_term)
+
+    def _get_word_by_pos_index(self,
+                               sent: List[List[Union[str, bool]]],
+                               pos: str
+                               ) -> List[Union[str, bool]]:
+        pattern = re.compile(r'\w+?(\d+)')
+        match = re.search(pattern, pos)
+        if match:
+            index = int(match.group(1))
+            return sent[index]
+        else:
+            raise Exception('Error! Pos has no id.')
 
     def _build_term_info(self) -> None:
         """Gather all information for a term necessary to calc c-value.
@@ -344,7 +343,6 @@ class TermExtractor(TextProcessingUnit):
         path_tfidf = os.path.join(self._path_temp, 'tfidf.json')
         with open(path_tfidf, 'r', encoding='utf8') as f:
             tfidf_values = json.load(f)
-        print(c_values)
         onto_terms = []
         for term in c_values:
             if c_values[term] > 8:
