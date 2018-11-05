@@ -50,6 +50,9 @@ class FastTextE(Embeddings):
     def get_embeddings(self, sent: List[str]):
         return [self._model.wv[token] for token in sent]
 
+    def get_embedding(self, word: str):
+        return self._model.wv[token]
+        
 
 class Word2VecE(Embeddings):
 
