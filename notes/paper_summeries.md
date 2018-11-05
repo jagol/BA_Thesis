@@ -3,6 +3,7 @@ paper: https://arxiv.org/abs/1802.05365
 ##### Goal
 - word embeddings that model syntax and semantics
 - account for polysemy
+
 ##### Method
 - the representation of each token is a function of the entire input sentence (how is it in other models?)
 - purely character based input representation
@@ -157,12 +158,52 @@ paper: http://www.kdd.org/kdd2018/accepted-papers/view/taxogen-constructing-topi
 - Relation accuracy (True positive parent-child-relations) of 0.775/0.520 
 
 
+### A Cluster Separation Measure
+Paper: https://www.researchgate.net/publication/224377470_A_Cluster_Separation_Measure
+
+
+### Structured Learning for Taxonomy Induction with Belief Propagation
+Paper: https://pdfs.semanticscholar.org/e219/e935d3e9ed32e084fcbedc7ad8ce57abc5f9.pdf
+
+
+### Cluster merging and splitting in hierarchical clustering algorithms
+Paper: https://pdfs.semanticscholar.org/5199/3ada11bf9ebac936d70e6f65cce33bdacc11.pdf
+Year: 2002
+
+
+### A Divisive Information-Theoretic Feature Clustering Algorithm for Text Classification
+Paper: http://www.jmlr.org/papers/volume3/dhillon03a/dhillon03a.pdf
+Year: 2003
+
+
+### Hierarchical Clustering of Words and Application to NLP Tasks 
+Paper: https://www.aclweb.org/anthology/W96-0103
+
+
+### Comparing conceptual, divisive and agglomerative clustering for learning taxonomies from text
+Paper: https://books.google.ch/books?hl=de&lr=&id=rU_onmzozu0C&oi=fnd&pg=PA435&dq=divisive+clustering+taxonomy&ots=w7lw42V5X7&sig=DZBreE-0UC2uTHPsOLO6Lm4-vPQ#v=onepage&q=divisive%20clustering%20taxonomy&f=false
+Year: 2004
+
+
+### 
+
+### Resources for Hierarchical Clustering
+- https://www.uio.no/studier/emner/matnat/ifi/nedlagte-emner/INF4820/h13/undervisningsmateriale/07_clustering_handout.pdf
+- https://stp.lingfil.uu.se/~santinim/ml/UnsupervisedLearningMagnusRosell_Slides.pdf
+- http://scikit-learn.org/stable/modules/clustering.html#hierarchical-clustering
+
+
+
 What I could do:
 - divisive clustering on top level
 - match HE examples to clusters
 - train classifier using clusterhyponyms and their HE extracted Hypernyms
 - predict Hypernyms for all clusters that don't have a Hypernym
 - train embeddings for lower clusters etc 
+
+- agglomerative clustering
+- agglomerate until a known hyponym is in the same cluster as a known hypernym, take last cluster where this wasn't the case
+- 
 
 
 
