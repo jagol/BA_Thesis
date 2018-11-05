@@ -2,18 +2,58 @@ import os
 import re
 import json
 import gzip
-import subprocess
-from typing import *
+from typing import List, Tuple, Dict
 
 import spacy
 
 from text_processing_unit import TextProcessingUnit
 
+# ----------------------------------------------------------------------
+# type definitions
+
+# Type of hypernym relations with hypernym as key and a list of hyponyms
+# as values.
+rels_type = Dict[str, List[str]]
+# Type of processed sentence. The sentence is a list of words. Each word
+# is a tuple consisting of token, pos-tag, lemma, stop-word.
+nlp_sent_type = List[Tuple[str, str, str, bool]]
+
+# ----------------------------------------------------------------------
+
 
 class Preprocessor(TextProcessingUnit):
-    """Class to preprocess a corpus.
+    """Class to preprocess a corpus for ontology learning.
 
-    Handle tokenization, pos-tagging and lemmatization of a corpus.
+    Handle tokenization, pos-tagging, lemmatization, indexing and
+    implementation of Hearst-Patterns for a corpus.
+
+    For a given corpus the following corpus files are produced:
+        - pp_corpus.txt: the 'normal' string represented corpus
+            processed as described below.
+        - token_idx_corpus.txt: the token index represented corpus
+            processed as described below.
+        - lemma_idx_corpus.txt: the lemma index represented corpus
+            processed as described below.
+
+    In all corpus files the tokens are space separated, there is one
+    sentence per line and an additional newline at the end of the
+    document. In all corpus files multiword expressions deemed as terms
+    are concatenated (by '_') to one word.
+
+    Additional produced files are:
+        - hierarchical_relations.txt: one line per relation, items are
+            space separated. The first item is a hypernym. All the
+            following items are hyponyms.
+        - token_to_idx.txt: The file contains one token per line.
+            Each line is of the form: Token SPACE Index
+        - lemma_to_idx.txt: The file contains one lemma per line.
+            Each line is of the form: Lemma SPACE Index
+
+    All files are written to the specified output directory
+    ('path_out' in __init__).
+
+    NOTE: Formats with hierarchical structures like 'JSON' are avoided
+    in order to avoid having to load an entire file into memory.
     """
 
     def __init__(self,
@@ -36,90 +76,26 @@ class Preprocessor(TextProcessingUnit):
         self.path_out = path_out
         self.encoding = encoding
         self._nlp = spacy.load(path_lang_model)
+        self._token_to_idx = {}   # {token: idx}
+        self._token_idx = 0       # index counter for tokens
+        self._lemma_to_idx = {}   # {lemma: idx}
+        self._lemma_idx = 0       # index counter for lemmas
+        # Pattern to extract sequences of nouns and adjectives ending
+        # with a noun.
+        self._term_pattern = re.compile(
+            r'((JJ[RS]{0,2}\d+ )|(NN[PS]{0,2}\d+ ))*NN[PS]{0,2}\d+')
+        self._pp_corpus = None
+        self._token_idx_corpus = None
+        self._lemma_idx_corpus = None
         super().__init__(path_in, path_out, max_files)
 
     def preprocess_corpus(self):
         raise NotImplementedError
 
 
-class EUPRLPreprocessor(Preprocessor):
-    """Class to preprocess the Europarl corpus.
-
-    Handle tokenization, pos-tagging and lemmatization of the english
-    part of the europarl corpus.
-    """
-
-    def _write_json(self,
-                    annotated_sents: List[List[Tuple[Union[str, bool]]]]
-                    ) -> None:
-        """Write annotated_sents to a file in json.
-
-        Json is formatted as follows:
-        {
-            1: [
-                [token1, tag1, lemma1, is_stop1], ...
-            ],
-            2: [
-                [token1, tag1, lemma1, is_stop1], ...
-            ]
-        }
-
-        Args:
-            annotated_sents: list of sentences, each sentence is a list
-            of tokens, each token is a tuple if the form
-            (token, tag, lemma, is_stop_word)
-        """
-        fpath = os.path.join(self.path_out,
-                             str(self._files_processed) + '.json')
-        with open(fpath, 'w', encoding=self.encoding) as f:
-            json.dump(dict(enumerate(annotated_sents)), f, ensure_ascii=False)
-
-    def preprocess_corpus(self) -> None:
-        """Tokenize, pos-tag and lemmatize corpus. Mark stop words.
-
-        Write annotated text files as json into path_out.
-        """
-        print(10 * '-' + ' preprocessing corpus ' + 10 * '-')
-        print('Input taken from: {}'.format(self.path_in))
-        for i in range(self._upper_bound):
-            self._files_processed += 1
-            self._process_file(self._fnames[i])
-
-        print('Output written to: {}'.format(self.path_out))
-        print(42 * '-')
-
-    def _process_file(self, fname: str) -> None:
-        """Tokenize, pos-tag, lemmatize and mark stop words for a file.
-
-        Write annotated text file as json into path_out.
-        """
-        self._sents_processed = 0
-        fpath = os.path.join(self.path_in, fname)
-        self._get_file_length(fpath)
-        annotated_sents = []
-        with open(fpath, 'r', encoding=self.encoding) as f:
-            for sent in f:
-                sent = sent.strip('\n')
-                nlp_sent = self._nlp(sent)
-                annotated_sent = [(token.text, token.tag_, token.lemma_,
-                                   token.is_stop) for token in nlp_sent]
-                annotated_sents.append(annotated_sent)
-                self._sents_processed += 1
-                self._update_cmd()
-
-        self._write_json(annotated_sents)
-
-    def _get_file_length(self, fpath: str) -> None:
-        cmd = ['wc', fpath]
-        out = subprocess.Popen(
-            cmd, stdout=subprocess.PIPE).communicate()[0].decode('utf8')
-        self._num_sents = int(out.strip(' ').split(' ')[0])
-
-
 class DBLPPreprocessor(Preprocessor):
     """Class to preprocess the dblp corpus.
 
-    Handle tokenization, pos-tagging and lemmatization of the dblp corpus.
     Only the paper titles are considered as part of the corpus and are
     extracted. The full text is not available in mark up. All other information
     like author, year etc is discarded.
@@ -137,10 +113,170 @@ class DBLPPreprocessor(Preprocessor):
         self._titles = {}
         # Dict[int, Dict[int, List[List[Union[str, bool]]]]]
         self._titles_proc = 0
+        self._hyper_hypo_rels = {}  # {hypernym: [hyponym1, hyponym2, ...]}
+        self._title_pattern = re.compile(r'<(\w+)>(.*)</\w+>')
         super().__init__(path_in, path_out, path_lang_model, encoding,
                          max_files)
 
-    def preprocess_corpus(self):
+    def preprocess_corpus(self) -> None:
+        """Preprocess the dblp corpus.
+
+        Preprocessing includes lemmatization and concatenation of
+        term candidates.
+
+        Output: A file containing one sentence per line. After the
+        end of each document there is an additional newline.
+        """
+        # open the three output files
+        path_pp_corpus = os.path.join(self.path_out, 'pp_corpus.txt')
+        self._pp_corpus = open(path_pp_corpus, 'w', encoding='utf8')
+        path_token_idx_corpus = os.path.join(
+            self.path_out, 'token_idx_corpus.txt')
+        self._token_idx_corpus = open(
+            path_token_idx_corpus, 'w', encoding='utf8')
+        path_lemma_idx_corpus = os.path.join(
+            self.path_out, 'lemma_idx_corpus.txt')
+        self._lemma_idx_corpus = open(
+            path_lemma_idx_corpus, 'w', encoding='utf8')
+
+        path_f_in = os.path.join(self.path_in, self._fnames[0])
+        with gzip.open(path_f_in, 'r') as f:
+            self._num_sents = 4189903
+            self._files_processed = 1
+            for line in f:
+                line = line.decode('utf8')
+                match = re.search(self._title_pattern, line)
+                if match:
+                    tag, content = match.groups()
+                    if tag == 'title' and content != 'Home Page':
+                        pp_title, token_idxs, lemma_idxs, rels =\
+                            self._process_title(content)
+                        self._pp_corpus.append(pp_title)
+                        self._token_idx_corpus.append(token_idxs)
+                        self._lemma_idx_corpus.append(lemma_idxs)
+                        self.add_rels(self._hyper_hypo_rels, rels)
+
+
+        pp_corpus.close()
+        token_idx_corpus.close()
+        lemma_idx_corpus.close()
+
+    def _process_title(self,
+                       content: str
+                       ) -> None:
+        nlp_title = self._nlp(content)
+        for sent in nlp_title.sents:
+            nlp_sent = [(token.text, token.tag_, token.lemma_,
+                         token.is_stop)
+                        for token in sent]
+            self._process_sent(nlp_sent)
+
+        # add lemma ids
+        # write lemma_ids_doc
+        self._titles_proc += 1
+        self._update_cmd()
+
+    def _process_sent(self,
+                      nlp_sent: nlp_sent_type
+                      ) -> List[str, List[int], List[int], rels_type]:
+        """Process a sentence.
+
+        For the given sentence, produce a:
+            - token index representation
+            - lemma index representation
+            - a 'normal' string represenation
+        where all tokens are separated by space and all terms are
+        concatenated to one word. A term is defined by
+        'self._term_pattern'. Additionally extract all
+        hypernym-hyponym-relations in the sentence using Hearst-Patterns.
+
+        Args:
+            nlp_sent: see in type definitions
+        Return:
+            A list of consisting of:
+                - the 'normal' string represenation
+                - the token index represenation
+                - the lemma index represenation
+                - a dictionary of extracted hypernym-hyponym-relations
+        """
+        # get token index representation for sentence
+        token_idx_sent = []
+        for word in nlp_sent:
+            token = word[0]
+            if token not in self._token_to_idx:
+                self._token_to_idx_[token] = token_idx
+                self._token_idx += 1
+            token_idx_sent.append(self._token_to_idx[token])
+        token_idx_sent = self._concat_terms(nlp_sent, token_idx_sent)
+
+        # get lemma index representation for sentence
+        lemma_idx_sent = []
+        for word in nlp_sent:
+            lemma = word[2]
+            if lemma not in self._lemma_to_idx:
+                self._lemma_to_idx[lemma] = self._lemma_idx
+                self._lemma_idx += 1
+            lemma_idx_sent.append(self._lemma_to_idx[lemma])
+        lemma_idx_sent = self._concat_terms(nlp_sent, lemma_idx_sent)
+
+        # get relations
+        rels = HearstHypernymExtractor.get_rels(nlp_sent)
+
+        # write sent to pp corpus
+        lemmas = self.lemmatize_sent(nlp_sent)
+        pp_sent = self.concat_nps(lemmas)
+
+        return [pp_sent, token_idx_sent, lemma_idx_sent, rels]
+
+    def _concat_terms(self,
+                      nlp_sent: nlp_sent_type,
+                      idx_sent: List[int],
+                      type: str
+                      ) -> List[str]:
+        """Concatenate the each term in a sentence to one word.
+
+        Args:
+            nlp_sent: see in type definitions
+            idx_sent: an index representation of a sentence
+            type: 'lemma' or 'token', indicate if token indices or lemma
+                indices are used
+        Return:
+            A list of indices making up the sentence. Multiword
+            expressions are represented by concatenating the indices
+            of the words contained in the expression by '_'.
+        """
+        pos_words = []
+        for i in range(len(nlp_sent)):
+            word = sent[i]
+            pos_word = word + str(i)
+            pos_words.append(pos_word)
+        pos_sent = ' '.join(pos_words)
+
+        matches = re.findall(self._term_pattern, pos_sent)
+
+        term_indices = [self._get_indices(match) for match in matches]
+        # Filter out single word expressions .
+        term_indices = [indices for indices in term_indices
+                        if len(indices) > 1]
+        return self._concat_indices(idx_sent, term_indices)
+
+    def _concat_indices(self,
+                        idx_sent: List[int],
+                        term_indices: List[List[int]]
+                        ) -> List[str]:
+        """Concatenate the indices in idx_sent given by term_indices.
+
+        Args:
+            idx_sent: a sentence representation using indices
+            term_indices: a list of indices in the sentence (starting by
+                0 to lengh of the sentence-1) indicating which
+        TODO: problem: if index reprs are strings again, are they
+            actually more efficient???
+        """
+        pass
+
+
+    def preprocess_corpus_old(self):
         annotated_titles = {}
         pattern = re.compile(r'<(\w+)>(.*)</\w+>')
         fpath = os.path.join(self.path_in, self._fnames[0])
