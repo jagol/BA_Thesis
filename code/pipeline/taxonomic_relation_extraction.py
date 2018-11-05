@@ -122,7 +122,8 @@ class HearstHypernymExtractor(HypernymExtractor):
         poses_words = ' '.join(poses_words)
         return poses_words
 
-    def _get_hypernyms(self, sent: List[List[Union[str, bool]]]
+    def _get_hypernyms(self,
+                       sent: List[List[Union[str, bool]]]
                        ) -> List[Tuple[str, str]]:
         """Extract hypernym relations from a given sentence.
 
@@ -211,7 +212,7 @@ rels_type = Dict[str, List[str]]
 class DivClustHypernymExtractor(HypernymExtractor):
     """Extract hypernym-relations using hierarchical clustering."""
 
-    def extract_hypernyms(self):
+    def extract_hypernyms(self) -> None:
         """Wrapper method to extract the hypernym-relations.
 
         Before this method can be called, there must be examples for
