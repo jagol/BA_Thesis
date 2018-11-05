@@ -1,8 +1,12 @@
 import json
 import re
 import os
+import sys
 import math
 from typing import *
+
+import numpy as np
+
 from text_processing_unit import TextProcessingUnit
 
 
@@ -59,15 +63,18 @@ class TermExtractor(TextProcessingUnit):
         """
         print('Counting word occurences per file...')
         word_counts = {}
-        for i, doc in enumerate(self._get_documents()):
+        i = 0
+        for doc in self._get_documents():
             for key in doc:
                 sent = doc[key]
                 for word in sent:
                     if word[1].startswith('N'):
                         lemma = word[2]
                         if lemma not in word_counts:
-                            word_counts[lemma] = [0]*self._num_docs
+                            word_counts[lemma] = np.zeros(
+                                self._num_docs, dtype=int)
                         word_counts[lemma][i] += 1
+            i += 1
 
         path = os.path.join(self._pat_out, 'word_counts.json')
         with open(path, 'w', encoding='utf8') as f:
@@ -424,6 +431,27 @@ class SPTermExtractor(TermExtractor):
                 summaries = json.load(f)
                 for i in summaries:
                     yield summaries[i]
+
+
+def get_size(obj, seen=None):
+    """Recursively finds size of objects"""
+    size = sys.getsizeof(obj)
+    if seen is None:
+        seen = set()
+    obj_id = id(obj)
+    if obj_id in seen:
+        return 0
+    # Important mark as seen *before* entering recursion to gracefully handle
+    # self-referential objects
+    seen.add(obj_id)
+    if isinstance(obj, dict):
+        size += sum([get_size(v, seen) for v in obj.values()])
+        size += sum([get_size(k, seen) for k in obj.keys()])
+    elif hasattr(obj, '__dict__'):
+        size += get_size(obj.__dict__, seen)
+    elif hasattr(obj, '__iter__') and not isinstance(obj, (str, bytes, bytearray)):
+        size += sum([get_size(i, seen) for i in obj])
+    return size
 
 
 if __name__ == '__main__':
