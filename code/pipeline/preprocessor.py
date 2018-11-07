@@ -159,9 +159,13 @@ class DBLPPreprocessor(Preprocessor):
             self._token_idx_corpus, 'token_idx_corpus.txt')
         self._write_idx_corpus_to_file(
             self._lemma_idx_corpus, 'lemma_idx_corpus.txt')
-        with open('token_to_idx.json', 'w', encoding='utf8') as f:
+
+        fpath_token_to_idx = os.path.join(self.path_out, 'token_to_idx.json')
+        with open(fpath_token_to_idx, 'w', encoding='utf8') as f:
             json.dump(self._token_to_idx, f)
-        with open('lemma_to_idx.json', 'w', encoding='utf8') as f:
+
+        fpath_lemma_to_idx = os.path.join(self.path_out, 'lemma_to_idx.json')
+        with open(fpath_lemma_to_idx, 'w', encoding='utf8') as f:
             json.dump(self._lemma_to_idx, f)
 
     def _title_getter(self,
