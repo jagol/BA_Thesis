@@ -6,8 +6,8 @@ from typing import List, Tuple, Dict, Union, BinaryIO
 
 import spacy
 
-from code.pipeline.text_processing_unit import TextProcessingUnit
-from code.pipeline.taxonomic_relation_extraction import HearstHypernymExtractor
+from text_processing_unit import TextProcessingUnit
+from taxonomic_relation_extraction import HearstHypernymExtractor
 
 # ----------------------------------------------------------------------
 # type definitions
@@ -87,7 +87,8 @@ class Preprocessor(TextProcessingUnit):
         # Pattern to extract sequences of nouns and adjectives ending
         # with a noun.
         self._term_pattern = re.compile(
-            r'((JJ[RS]{0,2}\d+ )|(NN[PS]{0,2}\d+ ))*NN[PS]{0,2}\d+')
+            r'(JJ[RS]{0,2}\d+ |NN[PS]{0,2}\d+ )*NN[PS]{0,2}\d+')
+        # self._term_pattern = re.compile('(NN[PS]{0,2}\d+ )+')
         self._pp_corpus = []
         self._token_idx_corpus = []
         self._lemma_idx_corpus = []
@@ -114,6 +115,8 @@ class DBLPPreprocessor(Preprocessor):
                  ) -> None:
 
         self._num_titles = 4327497
+        self._num_sents = 4189903
+        self._files_processed = 1
         self._titles_proc = 0
         self._hyper_hypo_rels = {}  # {hypernym: [hyponym1, hyponym2, ...]}
         self._title_pattern = re.compile(r'<(\w+)>(.*)</\w+>')
@@ -141,10 +144,9 @@ class DBLPPreprocessor(Preprocessor):
         # self._lemma_idx_corpus = open(
         #     path_lemma_idx_corpus, 'w', encoding='utf8')
 
-        path_infile = os.path.join(self.path_in, self._fnames[0])
+        path_infile = os.path.join(self.path_in)  # , self._fnames[0])
         with gzip.open(path_infile, 'r') as f:
-            self._num_sents = 4189903
-            self._files_processed = 1
+            self._files_processed += 1
             for title in self._title_getter(f):
                 self._process_title(title)
 
@@ -157,6 +159,10 @@ class DBLPPreprocessor(Preprocessor):
             self._token_idx_corpus, 'token_idx_corpus.txt')
         self._write_idx_corpus_to_file(
             self._lemma_idx_corpus, 'lemma_idx_corpus.txt')
+        with open('token_to_idx.json', 'w', encoding='utf8') as f:
+            json.dump(self._token_to_idx, f)
+        with open('lemma_to_idx.json', 'w', encoding='utf8') as f:
+            json.dump(self._lemma_to_idx, f)
 
     def _title_getter(self,
                       f: BinaryIO
@@ -212,7 +218,7 @@ class DBLPPreprocessor(Preprocessor):
 
     def _process_sent(self,
                       nlp_sent: nlp_sent_type
-                      ) -> List[str, idx_repr_type, idx_repr_type, rels_type]:
+                      ) -> Tuple[str, idx_repr_type, idx_repr_type, rels_type]:
         """Process a sentence.
 
         For the given sentence, produce a:
@@ -222,7 +228,8 @@ class DBLPPreprocessor(Preprocessor):
         where all tokens are separated by space and all terms are
         concatenated to one word. A term is defined by
         'self._term_pattern'. Additionally extract all
-        hypernym-hyponym-relations in the sentence using Hearst-Patterns.
+        hypernym-hyponym-relations in the sentence using
+        Hearst-Patterns.
 
         Args:
             nlp_sent: see in type definitions
@@ -245,7 +252,6 @@ class DBLPPreprocessor(Preprocessor):
                 self._token_idx += 1
             token_idx_sent.append(self._token_to_idx[token])
         token_idx_sent = self._concat_term_idxs(token_idx_sent, term_indices)
-
         # get lemma index representation for sentence
         lemma_idx_sent = []
         for lemma in lemmas:
@@ -254,14 +260,13 @@ class DBLPPreprocessor(Preprocessor):
                 self._lemma_idx += 1
             lemma_idx_sent.append(self._lemma_to_idx[lemma])
         lemma_idx_sent = self._concat_term_idxs(lemma_idx_sent, term_indices)
-
         # get relations
         rels = HearstHypernymExtractor.get_rels(nlp_sent)
 
         # get lemmatized string sentence with concatenations
         pp_sent = self._concat_terms(lemmas, term_indices)
 
-        return [pp_sent, token_idx_sent, lemma_idx_sent, rels]
+        return pp_sent, token_idx_sent, lemma_idx_sent, rels
 
     # def _concat_term_idxs(self,
     #                   idx_sent: List[int],
@@ -296,8 +301,8 @@ class DBLPPreprocessor(Preprocessor):
             pos_word = word[1] + str(i)
             pos_words.append(pos_word)
         pos_sent = ' '.join(pos_words)
-        matches = re.findall(self._term_pattern, pos_sent)
-        term_indices = [self._get_indices(match) for match in matches]
+        matches = re.finditer(self._term_pattern, pos_sent)
+        term_indices = [self._get_indices(match.group()) for match in matches]
         return [indices for indices in term_indices if len(indices) > 1]
 
     @staticmethod
@@ -398,8 +403,8 @@ class DBLPPreprocessor(Preprocessor):
         corpus_as_str = ''
         for doc in pp_corpus:
             for sent in doc:
-                sent = sent + '\n'
-                corpus_as_str += sent
+                line = sent + '\n'
+                corpus_as_str += line
             corpus_as_str += '\n'
         return corpus_as_str
 
@@ -408,6 +413,7 @@ class DBLPPreprocessor(Preprocessor):
         corpus_as_str = ''
         for doc in idx_corpus:
             for sent in doc:
+                sent = [str(i) for i in sent]
                 line = ' '.join(sent) + '\n'
                 corpus_as_str += line
             corpus_as_str += '\n'
@@ -487,7 +493,7 @@ class SPPreprocessor(Preprocessor):
 
 
 if __name__ == '__main__':
-    from code.pipeline.utility_functions import get_corpus_config
+    from utility_functions import get_corpus_config
     corpus, config = get_corpus_config('preprocessing')
     if corpus == 'dblp':
         dp = DBLPPreprocessor(**config)
