@@ -3,7 +3,7 @@ import json
 import re
 from typing import *
 
-from code.pipeline.text_processing_unit import TextProcessingUnit
+from text_processing_unit import TextProcessingUnit
 
 # ----------------------------------------------------------------------
 # type definitions
@@ -45,39 +45,42 @@ class HypernymExtractor(TextProcessingUnit):
 class HearstHypernymExtractor(HypernymExtractor):
     """Extract hypernym-relations using Hearst Patterns."""
 
+    # np = r'((JJ[RS]{0,2}\d+ )|(NN[PS]{0,2}\d+ ))*NN[PS]{0,2}\d+'
+    np = r'(JJ[RS]{0,2}\d+ |NN[PS]{0,2}\d+ )*NN[PS]{0,2}\d+'
+    # To also match all/some: |(P?DT\d+ )
+    comma = r',\d+'
+    conj = r'(or|and)'
+
+    str1 = (r'(?P<hyper>{NP}) such as (?P<hypos>((({NP}) ({Comma} )?)+)'
+            r'{Conj} )?(?P<hypo>{NP})')
+    str1 = str1.format(NP=np, Comma=comma, Conj=conj)
+
+    str2 = (r'such (?P<hyper>{NP}) as (?P<hypos>({NP} ({Comma} )?)*)'
+            r'({Conj} )?(?P<hypo>{NP})')
+    str2 = str2.format(NP=np, Comma=comma, Conj=conj)
+
+    str3_4 = (r'(?P<hypo>{NP}) ({Comma} (?P<hypos>{NP}))* ({Comma} )?'
+              r'{Conj} other (?P<hyper>{NP})')
+    str3_4 = str3_4.format(NP=np, Comma=comma, Conj=conj)
+
+    str5_6 = (r'(?P<hyper>{NP}) ({Comma} )?(including |especially )'
+              r'(?P<hypos>({NP} ({Comma} )?)*)({Conj} )?(?P<hypo>{NP})')
+    str5_6 = str5_6.format(NP=np, Comma=comma, Conj=conj)
+
+    pattern1 = re.compile(str1)
+    pattern2 = re.compile(str2)
+    pattern3_4 = re.compile(str3_4)
+    pattern5_6 = re.compile(str5_6)
+
+    _patterns = [pattern1, pattern2, pattern3_4, pattern5_6]
+
     def __init__(self,
                  path_in: str,
                  path_out: str,
                  max_files: int = None
                  ) -> None:
-        np = r'((JJ[RS]{0,2}\d+ )|(NN[PS]{0,2}\d+ ))*NN[PS]{0,2}\d+'
-        # To also match all/some: |(P?DT\d+ )
-        comma = r',\d+'
-        conj = r'(or|and)'
-
-        str1 = (r'(?P<hyper>{NP}) such as (?P<hypos>((({NP}) ({Comma} )?)+)'
-                r'{Conj} )?(?P<hypo>{NP})')
-        str1 = str1.format(NP=np, Comma=comma, Conj=conj)
-
-        str2 = (r'such (?P<hyper>{NP}) as (?P<hypos>({NP} ({Comma} )?)*)'
-                r'({Conj} )?(?P<hypo>{NP})')
-        str2 = str2.format(NP=np, Comma=comma, Conj=conj)
-
-        str3_4 = (r'(?P<hypo>{NP}) (?P<hypos>({Comma} {NP})*) ({Comma} )?'
-                  r'{Conj} other (?P<hyper>{NP})')
-        str3_4 = str3_4.format(NP=np, Comma=comma, Conj=conj)
-
-        str5_6 = (r'(?P<hyper>{NP}) ({Comma} )?(including |especially )'
-                  r'(?P<hypos>({NP} ({Comma} )?)*)({Conj} )?(?P<hypo>{NP})')
-        str5_6 = str5_6.format(NP=np, Comma=comma, Conj=conj)
-
-        pattern1 = re.compile(str1)
-        pattern2 = re.compile(str2)
-        pattern3_4 = re.compile(str3_4)
-        pattern5_6 = re.compile(str5_6)
-
-        self._patterns = [pattern1, pattern2, pattern3_4, pattern5_6]
-
+        self._num_sents = 0
+        self._sents_processed = 0
         super().__init__(path_in, path_out, max_files)
 
     @classmethod
@@ -97,7 +100,7 @@ class HearstHypernymExtractor(HypernymExtractor):
         for rel in rels:
             hyper, hypo = rel[0], rel[1]
             if hyper in rel_dict:
-                rel_dict = [hyper].append(hypo)
+                rel_dict[hyper].append(hypo)
             else:
                 rel_dict[hyper] = [hypo]
 
@@ -162,7 +165,8 @@ class HearstHypernymExtractor(HypernymExtractor):
         poses_words = ' '.join(poses_words)
         return poses_words
 
-    def _get_hypernyms(self,
+    @classmethod
+    def _get_hypernyms(cls,
                        sent: nlp_sent_type
                        ) -> List[Tuple[str, str]]:
         """Extract hypernym relations from a given sentence.
@@ -174,17 +178,18 @@ class HearstHypernymExtractor(HypernymExtractor):
             (hypernym at index 0, hyponym at index 1)
         """
         hyp_rels = []
-        pw = self._get_poses_words(sent)
-        for p in self._patterns:
+        pw = cls._get_poses_words(sent)
+        for p in cls._patterns:
             matches = [m.groupdict() for m in re.finditer(p, pw)]
             for match in matches:
                 if match:
-                    rels = self._get_matches(sent, match)
+                    rels = cls._get_matches(sent, match)
                     for rel in rels:
                         hyp_rels.append(rel)
         return hyp_rels
 
-    def _get_matches(self,
+    @classmethod
+    def _get_matches(cls,
                      sent: nlp_sent_type,
                      match: Dict[str, str]
                      ) -> List[Tuple[str, str]]:
@@ -193,9 +198,9 @@ class HearstHypernymExtractor(HypernymExtractor):
             hypos_matches = re.split(r',\d+', match['hypos'])
         else:
             hypos_matches = []
-        hyper_indices = self._get_hyp_indices(match['hyper'])
-        hypos_indices = [self._get_hyp_indices(match['hypo'])]
-        hypos_indices.extend([self._get_hyp_indices(m) for m in hypos_matches])
+        hyper_indices = cls._get_hyp_indices(match['hyper'])
+        hypos_indices = [cls._get_hyp_indices(match['hypo'])]
+        hypos_indices.extend([cls._get_hyp_indices(m) for m in hypos_matches])
         rel_inds = []
         for hypo_inds in hypos_indices:
             rel_inds.append([hyper_indices, hypo_inds])
@@ -261,7 +266,7 @@ class HearstHypernymExtractor(HypernymExtractor):
 
 
 if __name__ == '__main__':
-    from code.pipeline.utility_functions import get_corpus_config
+    from utility_functions import get_corpus_config
     corpus, config = get_corpus_config('tax_relation_extraction')
     he = HearstHypernymExtractor(**config)
     he.extract_hypernyms()
