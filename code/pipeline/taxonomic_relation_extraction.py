@@ -45,7 +45,8 @@ class HypernymExtractor(TextProcessingUnit):
 class HearstHypernymExtractor(HypernymExtractor):
     """Extract hypernym-relations using Hearst Patterns."""
 
-    np = r'((JJ[RS]{0,2}\d+ )|(NN[PS]{0,2}\d+ ))*NN[PS]{0,2}\d+'
+    # np = r'((JJ[RS]{0,2}\d+ )|(NN[PS]{0,2}\d+ ))*NN[PS]{0,2}\d+'
+    np = r'(JJ[RS]{0,2}\d+ |NN[PS]{0,2}\d+ )*NN[PS]{0,2}\d+'
     # To also match all/some: |(P?DT\d+ )
     comma = r',\d+'
     conj = r'(or|and)'
@@ -58,7 +59,7 @@ class HearstHypernymExtractor(HypernymExtractor):
             r'({Conj} )?(?P<hypo>{NP})')
     str2 = str2.format(NP=np, Comma=comma, Conj=conj)
 
-    str3_4 = (r'(?P<hypo>{NP}) (?P<hypos>({Comma} {NP})*) ({Comma} )?'
+    str3_4 = (r'(?P<hypo>{NP}) ({Comma} (?P<hypos>{NP}))* ({Comma} )?'
               r'{Conj} other (?P<hyper>{NP})')
     str3_4 = str3_4.format(NP=np, Comma=comma, Conj=conj)
 
@@ -99,7 +100,7 @@ class HearstHypernymExtractor(HypernymExtractor):
         for rel in rels:
             hyper, hypo = rel[0], rel[1]
             if hyper in rel_dict:
-                rel_dict = [hyper].append(hypo)
+                rel_dict[hyper].append(hypo)
             else:
                 rel_dict[hyper] = [hypo]
 
