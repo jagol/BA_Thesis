@@ -56,6 +56,8 @@ class Preprocessor(TextProcessingUnit):
         - lemma_to_idx.txt: The file contains one lemma per line.
             Each line is of the form: Lemma SPACE Index
             (now as json)
+        - lemma_counts.txt: A mapping of lemma_id to it's number of
+            occurences.
 
     All files are written to the specified output directory
     ('path_out' in __init__).
@@ -116,7 +118,7 @@ class Preprocessor(TextProcessingUnit):
         tfidf = TfidfVectorizer(analyzer='word',
                                 tokenizer=dummy_function,
                                 preprocessor=dummy_function,
-                                token_pattern=None)
+                                token_pattern=r'\S+')
         tfidf_matrix = tfidf.fit_transform(docs).toarray()
         lemma_ids = tfidf.get_feature_names()
         path_out = os.path.join(self.path_out, 'tfidf.txt')
@@ -188,6 +190,10 @@ class DBLPPreprocessor(Preprocessor):
                         self._token_idx_corpus, 'token_idx_corpus.txt')
                     self._write_idx_corpus_to_file(
                         self._lemma_idx_corpus, 'lemma_idx_corpus.txt')
+
+                    self._pp_corpus = []
+                    self._token_idx_corpus = []
+                    self._lemma_idx_corpus = []
 
         self._write_pp_corpus_to_file(self._pp_corpus, 'pp_corpus.txt')
         self._write_idx_corpus_to_file(
