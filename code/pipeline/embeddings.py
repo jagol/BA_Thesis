@@ -1,8 +1,12 @@
 from typing import *
 import torch
-from allennlp.modules.elmo import Elmo, batch_to_ids
+# from allennlp.modules.elmo import Elmo, batch_to_ids
+from allennlp.commands.elmo import ElmoEmbedder
 from allennlp.modules.similarity_functions.cosine import CosineSimilarity
 import gensim
+
+
+embeddings_type = List[Any[float]]
 
 
 class Embeddings:
@@ -15,12 +19,11 @@ class Embeddings:
 class ElmoE(Embeddings):
 
     def __init__(self):
-        self._options = 'elmo_2x4096_512_2048cnn_2xhighway_5.5B_options.json'
-        self._weights = 'elmo_2x4096_512_2048cnn_2xhighway_5.5B_weights.hdf5'
-        self._elmo = Elmo(
-            self._options, self._weights, 2, dropout=0.5)
+        # self._options = 'elmo_2x4096_512_2048cnn_2xhighway_5.5B_options.json'
+        # self._weights = 'elmo_2x4096_512_2048cnn_2xhighway_5.5B_weights.hdf5'
+        self._elmo = ElmoEmbedder()
 
-    def get_embeddings(self, sent: List[str]) -> List[torch.Tensor]:
+    def get_embeddings(self, sent: List[str]) -> embeddings_type:
         """Get embeddings for all tokens in <sent>.
 
         Args:
@@ -28,13 +31,17 @@ class ElmoE(Embeddings):
         Return:
             The concatenation of the two hidden layer embeddings.
         """
-        character_ids = batch_to_ids([sent])
-        embeddings = self._elmo(character_ids)
-        layer1 = embeddings['elmo_representations'][0][0]
-        layer2 = embeddings['elmo_representations'][1][0]
-        concatenation = [torch.cat((tpl[0], tpl[1]), 0)
-                         for tpl in zip(layer1, layer2)]
-        return concatenation
+        # character_ids = batch_to_ids([sent])
+        # embeddings = self._elmo(character_ids)
+        # layer1 = embeddings['elmo_representations'][0][0]
+        # layer2 = embeddings['elmo_representations'][1][0]
+        # concatenation = [torch.cat((tpl[0], tpl[1]), 0)
+        #                  for tpl in zip(layer1, layer2)]
+        # return concatenation
+        embeddings = elmo.embed_sentence(sent)
+        vectors_layer3 = embeddings[2]
+        return vectors_layer3
+
 
 
 class GloveE(Embeddings):
@@ -47,7 +54,7 @@ class FastTextE(Embeddings):
         self._mpath = 'wiki.simple.bin'
         self._model = gensim.models.FastText.load_fasttext_format(self._mpath)
 
-    def get_embeddings(self, sent: List[str]):
+    def get_embeddings(self, sent: List[str]) -> embeddings_type:
         return [self._model.wv[token] for token in sent]
 
     def get_embedding(self, word: str):
@@ -61,9 +68,19 @@ class Word2VecE(Embeddings):
         self._model = gensim.models.KeyedVectors.load_word2vec_format(
             self._mpath, binary=True)
 
-    def get_embeddings(self, sent: List[str]) -> List[float]:
+    def get_embeddings(self, sent: List[str]) -> embeddings_type:
         """Get the word2vec embeddings for all tokens in <sent>."""
         return [self._model.wv[token] for token in sent]
+
+
+class CombinedEmbeddings(Embeddings):
+
+    def __init__(self,
+                 model_types: List[str] = ['fasttext', 'elmo'],
+                 model_paths: List[str] = ['', '']
+                 ) -> None:
+        pass
+
 
 
 if __name__ == '__main__':
