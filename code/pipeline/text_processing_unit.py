@@ -17,8 +17,11 @@ class TextProcessingUnit:
         self.path_in = path_in
         self.path_out = path_out
         self._max_files = max_files
-        self._fnames = [fname for fname in os.listdir(self.path_in)
-                    if os.path.isfile(os.path.join(self.path_in, fname))]
+        if os.path.isdir(self.path_in):
+            self._fnames = [fname for fname in os.listdir(self.path_in)
+                        if os.path.isfile(os.path.join(self.path_in, fname))]
+        elif os.path.isfile(self.path_in):
+            self._fnames = [self.path_in]
         self._fnames.sort()
         self._num_files = len(self._fnames)
         self._upper_bound = self._get_upper_bound()
