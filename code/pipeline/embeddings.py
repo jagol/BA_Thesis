@@ -1,12 +1,14 @@
 from typing import *
 import torch
+import numpy as np
+import fasttext
 # from allennlp.modules.elmo import Elmo, batch_to_ids
 from allennlp.commands.elmo import ElmoEmbedder
 from allennlp.modules.similarity_functions.cosine import CosineSimilarity
 import gensim
 
 
-embeddings_type = List[Any[float]]
+embeddings_type = List[Iterator[float]]
 
 
 class Embeddings:
@@ -21,7 +23,7 @@ class ElmoE(Embeddings):
     def __init__(self):
         # self._options = 'elmo_2x4096_512_2048cnn_2xhighway_5.5B_options.json'
         # self._weights = 'elmo_2x4096_512_2048cnn_2xhighway_5.5B_weights.hdf5'
-        self._elmo = ElmoEmbedder()
+        self.elmo = ElmoEmbedder()
 
     def get_embeddings(self, sent: List[str]) -> embeddings_type:
         """Get embeddings for all tokens in <sent>.
@@ -38,7 +40,7 @@ class ElmoE(Embeddings):
         # concatenation = [torch.cat((tpl[0], tpl[1]), 0)
         #                  for tpl in zip(layer1, layer2)]
         # return concatenation
-        embeddings = elmo.embed_sentence(sent)
+        embeddings = self.elmo.embed_sentence(sent)
         vectors_layer3 = embeddings[2]
         return vectors_layer3
 
@@ -51,14 +53,19 @@ class GloveE(Embeddings):
 class FastTextE(Embeddings):
 
     def __init__(self):
-        self._mpath = 'wiki.simple.bin'
-        self._model = gensim.models.FastText.load_fasttext_format(self._mpath)
+        self.mpath = 'fasttext_model.bin'
+        self.model = None
+
+    def load_model(self, fpath: Union[None, str]) -> None:
+        if fpath:
+            self.mpath = fpath
+        self.model = fasttext.load_model(self.mpath)
 
     def get_embeddings(self, sent: List[str]) -> embeddings_type:
-        return [self._model.wv[token] for token in sent]
+        return [self.model[word] for word in sent]
 
     def get_embedding(self, word: str):
-        return self._model.wv[token]
+        return self.model[word]
         
 
 class Word2VecE(Embeddings):
@@ -76,10 +83,49 @@ class Word2VecE(Embeddings):
 class CombinedEmbeddings(Embeddings):
 
     def __init__(self,
-                 model_types: List[str] = ['fasttext', 'elmo'],
-                 model_paths: List[str] = ['', '']
+                 model_types: List[str] = ('fasttext', 'elmo'),
+                 model_paths: List[str] = ('', '')
                  ) -> None:
-        pass
+        self.model_types = model_types
+        self.model_paths = model_paths
+        self.model_mapping = {
+            'word2vec': Word2VecE,
+            'glove': GloveE,
+            'fasttext': FastTextE,
+            'elmo': ElmoE
+        }
+        self.models = self._get_models()
+
+    def _get_models(self):
+        models = []
+
+        for i in range(len(self.model_types)):
+            mtype = self.model_types[i]
+            mpath = self.model_paths[i]
+            model = self.model_mapping[mtype]()
+            if mpath:
+                model.load_model(mpath)
+            models.append(model)
+
+        return models
+
+    def get_embeddings(self,
+                       sent: List[str]
+                       ) -> embeddings_type:
+        combined_vectors = []
+        model_word_matrix = []  # rows -> models, columns -> words
+        for model in self.models:
+            embeddings = model.get_embeddings(sent)
+            model_word_matrix.append(embeddings)
+
+        # rows -> words, columns -> models
+        word_model_matrix = list(zip(*model_word_matrix))
+
+        for word_tpl in word_model_matrix:
+            word_vec = np.hstack(word_tpl)
+            combined_vectors.append(word_vec)
+
+        return combined_vectors
 
 
 
