@@ -45,7 +45,6 @@ class ElmoE(Embeddings):
         return vectors_layer3
 
 
-
 class GloveE(Embeddings):
     pass
 
@@ -56,7 +55,20 @@ class FastTextE(Embeddings):
         self.mpath = 'fasttext_model.bin'
         self.model = None
 
-    def load_model(self, fpath: Union[None, str]) -> None:
+    def train(self, input_data: str, model_name: str) -> None:
+        """Train a fasttext model.
+
+        Args:
+            input_data: The path to the text file used for training.
+            model_name: Name under which the model is saved.
+        Output:
+            The model is saved in self.model.
+            The model is saved as a binary file in <model_name>.bin.
+            The model is saved as a vector text file in <model_name>.vec.
+        """
+        self.model = fasttext.skipgram(input_data, model_name)
+
+    def load_model(self, fpath: Union[None, str] = None) -> None:
         if fpath:
             self.mpath = fpath
         self.model = fasttext.load_model(self.mpath)
@@ -66,7 +78,7 @@ class FastTextE(Embeddings):
 
     def get_embedding(self, word: str):
         return self.model[word]
-        
+
 
 class Word2VecE(Embeddings):
 
