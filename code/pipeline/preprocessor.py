@@ -56,8 +56,8 @@ class Preprocessor(TextProcessingUnit):
         - lemma_to_idx.txt: The file contains one lemma per line.
             Each line is of the form: Lemma SPACE Index
             (now as json)
-        - lemma_counts.txt: A mapping of lemma_id to it's number of
-            occurences.
+        - lemma_counts.json: Map each lemma to it's number of occurences
+            in the corpus.
 
     All files are written to the specified output directory
     ('path_out' in __init__).
@@ -90,6 +90,7 @@ class Preprocessor(TextProcessingUnit):
         self._token_idx = 0       # index counter for tokens
         self._lemma_to_idx = {}   # {lemma: idx}
         self._lemma_idx = 0       # index counter for lemmas
+        self._lemma_count = {}    # {lemma_idx: num of occurences}
         # Pattern to extract sequences of nouns and adjectives ending
         # with a noun.
         self._term_pattern = re.compile(
@@ -116,12 +117,14 @@ class Preprocessor(TextProcessingUnit):
         """
         docs = utility_functions.get_docs(corpus_path, sent_tokenized=False)
         tfidf = TfidfVectorizer(analyzer='word',
-                                tokenizer=dummy_function,
-                                preprocessor=dummy_function,
-                                token_pattern=r'\S+')
+                                tokenizer=identity_function,
+                                preprocessor=identity_function,
+                                token_pattern=None)
+        print('fit-transform tfidf')
         tfidf_matrix = tfidf.fit_transform(docs).toarray()
         lemma_ids = tfidf.get_feature_names()
         path_out = os.path.join(self.path_out, 'tfidf.txt')
+        print('write tfidf to file...')
         with open(path_out, 'w', encoding='utf8') as f:
             for i, row in enumerate(zip(*tfidf_matrix)):
                 lemma_id = lemma_ids[i]
@@ -184,6 +187,8 @@ class DBLPPreprocessor(Preprocessor):
                 self._process_title(title)
 
                 if self._titles_proc % self._file_write_threshhold == 0:
+                    # write contents to file periodically to avoid too
+                    # much memory usage
                     self._write_pp_corpus_to_file(
                         self._pp_corpus, 'pp_corpus.txt')
                     self._write_idx_corpus_to_file(
@@ -191,6 +196,7 @@ class DBLPPreprocessor(Preprocessor):
                     self._write_idx_corpus_to_file(
                         self._lemma_idx_corpus, 'lemma_idx_corpus.txt')
 
+                    # clear corpus after writing
                     self._pp_corpus = []
                     self._token_idx_corpus = []
                     self._lemma_idx_corpus = []
@@ -208,6 +214,10 @@ class DBLPPreprocessor(Preprocessor):
         fpath_lemma_to_idx = os.path.join(self.path_out, 'lemma_to_idx.json')
         with open(fpath_lemma_to_idx, 'w', encoding='utf8') as f:
             json.dump(self._lemma_to_idx, f)
+
+        fpath_lemma_counts = os.path.join(self.path_out, 'lemma_counts.json')
+        with open(fpath_lemma_counts, 'w', encoding='utf8') as f:
+            json.dump(self._lemma_count, f)
 
         self._write_hierarchical_rels_to_file('hierarchical_relations.txt')
 
@@ -313,6 +323,10 @@ class DBLPPreprocessor(Preprocessor):
                 self._lemma_idx += 1
             lemma_idx_sent.append(self._lemma_to_idx[lemma])
         lemma_idx_sent = self._concat_term_idxs(lemma_idx_sent, term_indices)
+
+        # update lemma counts
+        for lemma_idx in lemma_idx_sent:
+            self._add_count(lemma_idx)
 
         # get relations
         rels = HearstHypernymExtractor.get_rels(nlp_sent)
@@ -428,6 +442,12 @@ class DBLPPreprocessor(Preprocessor):
             lemmas[ti[0]:ti[-1] + 1] = [joined]
         sent = ' '.join(lemmas)
         return sent
+
+    def _add_count(self, lemma_idx: str) -> None:
+        if lemma_idx in self._lemma_count:
+            self._lemma_count[lemma_idx] += 1
+        else:
+            self._lemma_count[lemma_idx] = 1
 
     def _write_pp_corpus_to_file(self,
                                  pp_corpus: List[List[str]],
@@ -579,7 +599,7 @@ class SPPreprocessor(Preprocessor):
                   end='\r')
 
 
-def dummy_function(x):
+def identity_function(x):
     return x
 
 
