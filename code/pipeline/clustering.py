@@ -26,9 +26,9 @@ class Clustering:
         self.cluster = None
         self.compactness = None
 
-    def cluster(self,
+    def fit(self,
                 data: List[Iterator[float]],
-                find_n: False
+                find_n: bool = False
                 ) -> Dict[str, Union[List[int],  Union[float, None]]]:
         """Cluster the input data into n clusters.
 
@@ -40,8 +40,8 @@ class Clustering:
             A list of integers as class labels. The order of the list
             corresponds to the order of the input data.
         """
-        if not n:
-            n = self._get_n()
+        if find_n:
+            self.n_clusters = self._get_n()
         if self.clus_type == 'kmeans':
             self.cluster = k_means(n_clusters=self.n_clusters)
         elif self.clus_type == 'sphericalkmeans':
@@ -53,15 +53,15 @@ class Clustering:
                 linkage=self.linkage)
 
         self.cluster.fit(data)
-        self._calc_compactness()
+        self._calc_density()
 
-        return {'labels': cluster.labels_, 'compactness': self.compactness}
+        return {'labels': self.cluster.labels_, 'density': self.compactness}
 
     def _get_n(self):
         raise NotImplementedError
 
-    def _calc_compactness(self):
+    def _calc_density(self):
         if self.clus_type == 'kmeans' or self.clus_type == 'sphericalkmeans':
-            return self.cluster.inertia
+            return self.cluster.inertia_
         else:
             return None
