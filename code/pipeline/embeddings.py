@@ -140,6 +140,27 @@ class CombinedEmbeddings(Embeddings):
         return combined_vectors
 
 
+    def get_avg_emb(term_id: str, corpus: List[int]) -> Iterator[float]:
+        """Get the average Embedding for all occurences of a term.
+
+        Args:
+            term_id: The term for which the avg embeddings is computed.
+            corpus: A list of document indices which make up the corpus.
+        Return:
+            The average term embedding as a numpy array.
+        """
+        sents, indices = get_term_sents(term_id, corpus)
+        # returns list of tuples (lemmatized sentences, index at which term is)
+        occurence_embeddings = []  # List of embeddings of term
+        for i in range(len(sents)):
+            sent, idx = sents[i], indices[i]
+            term_embedding = self.get_embeddings(sent)[idx]
+            occurence_embeddings.append(term_embedding)
+        # avg the occurence embeddings
+        avg_embeddings = np.mean(occurence_embeddings, axis=0)
+        return avg_embeddings
+
+
 
 if __name__ == '__main__':
     elmo = ElmoE()
