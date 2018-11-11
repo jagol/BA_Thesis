@@ -209,7 +209,6 @@ class DBLPPreprocessor(Preprocessor):
         fpath_lemma_to_idx = os.path.join(self.path_out, 'lemma_to_idx.json')
         with open(fpath_lemma_to_idx, 'w', encoding='utf8') as f:
             json.dump(self._lemma_to_idx, f)
-        del self._lemma_to_idx
 
         fpath_lemma_counts = os.path.join(self.path_out, 'lemma_counts.json')
         with open(fpath_lemma_counts, 'w', encoding='utf8') as f:
@@ -222,6 +221,7 @@ class DBLPPreprocessor(Preprocessor):
         del self.term_index
 
         self._write_hierarchical_rels_to_file('hierarchical_relations.txt')
+        del self._lemma_to_idx
 
         print('Calculate tfidf...')
         fpath = os.path.join(self.path_out, 'lemma_idx_corpus.txt')
