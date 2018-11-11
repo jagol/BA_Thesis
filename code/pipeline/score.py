@@ -1,6 +1,9 @@
 from typing import *
 from math import log, sqrt, exp
 
+from scipy.spatial.distance import cosine
+
+
 """Compute term-candidate scores."""
 """
 - prepare pseudo docs using tfidf scores
@@ -21,16 +24,17 @@ from math import log, sqrt, exp
         -> z1...zn: labels of the parent cluster
 """
 
-class scorer:
+
+class Scorer:
 
     def __init__(self) -> None:
         pass
 
-    def calc_score(self,
-                   term_id: str,
-                   cluster_id: int,
-                   top_level=False
-                   ) -> float:
+    def calc_term_score(self,
+                        term_id: str,
+                        cluster_id: int,
+                        top_level=False
+                        ) -> float:
         if top_level:
             score = self.calc_top_level_score(term_id, cluster_id)
         else:
@@ -38,12 +42,32 @@ class scorer:
 
         return score
 
-    def calc_top_level_score(self, term_id: str, cluster_id: str) -> float:
+    def calc_top_level_score(self, term_id: str, cluster_id: int) -> float:
+        """Calculate the term score on the top level of the taxonomy.
+
+        Args:
+            term_id: The id of the term for which the score is
+                calcualted.
+            cluster_id: The id of the cluster for which the term score
+                is calculated.
+        Return:
+            The score.
+        """
         pop = self.get_pop(term_id, cluster_id)
         con = self.get_con(term_id, cluster_id)
         return sqrt(pop*con)
 
     def calc_gen_score(self, term_id: str, cluster_id: int) -> float:
+        """Calculate the term score in the general case (not top level).
+
+        Args:
+            term_id: The id of the term for which the score is
+                calcualted.
+            cluster_id: The id of the cluster for which the term score
+                is calculated.
+        Return:
+            The score.
+        """
         pop = self.get_pop(term_id, cluster_id)
         con = self.get_con(term_id, cluster_id)
         hyp = self.get_hyp(term_id, cluster_id)
@@ -101,3 +125,15 @@ class scorer:
         for i in range(len(similarities)):
             sim_scores.append(similarities[i]*parent_label_scores[i])
         return sum(sim_scores)
+
+    @staticmethod
+    def get_sim(v1: Iterator[float], v2: Iterator[float]) -> float:
+        """Calcualte the consine similarity between vectors v1 and v2.
+
+        Args:
+            v1: vector 1
+            v2: vector 2
+        Return:
+            The cosine similarity.
+        """
+        return 1-cosine(v1, v2)
