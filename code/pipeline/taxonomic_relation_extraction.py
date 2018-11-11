@@ -46,7 +46,12 @@ class HearstHypernymExtractor(HypernymExtractor):
     """Extract hypernym-relations using Hearst Patterns."""
 
     # np = r'((JJ[RS]{0,2}\d+ )|(NN[PS]{0,2}\d+ ))*NN[PS]{0,2}\d+'
-    np = r'(JJ[RS]{0,2}\d+ |NN[PS]{0,2}\d+ )*NN[PS]{0,2}\d+'
+    # to include determiners
+    np = r'(DT\d+ )?(JJ[RS]{0,2}\d+ |NN[PS]{0,2}\d+ )*NN[PS]{0,2}\d+'
+    # determiners not included
+    # np = r'(JJ[RS]{0,2}\d+ |NN[PS]{0,2}\d+ )*NN[PS]{0,2}\d+'
+    # in/of included
+    np = r'(JJ[RS]{0,2}\d+ |NN[PS]{0,2}\d+ |IN\d+ )*NN[PS]{0,2}\d+'
     # To also match all/some: |(P?DT\d+ )
     comma = r',\d+'
     conj = r'(or|and)'
@@ -59,7 +64,7 @@ class HearstHypernymExtractor(HypernymExtractor):
             r'({Conj} )?(?P<hypo>{NP})')
     str2 = str2.format(NP=np, Comma=comma, Conj=conj)
 
-    str3_4 = (r'(?P<hypo>{NP}) ({Comma} (?P<hypos>{NP}))* ({Comma} )?'
+    str3_4 = (r'(?P<hypo>{NP}) (({Comma} (?P<hypos>{NP}))* ({Comma} )?)?'
               r'{Conj} other (?P<hyper>{NP})')
     str3_4 = str3_4.format(NP=np, Comma=comma, Conj=conj)
 
@@ -186,6 +191,24 @@ class HearstHypernymExtractor(HypernymExtractor):
                     rels = cls._get_matches(sent, match)
                     for rel in rels:
                         hyp_rels.append(rel)
+        keywords = ['including', 'and other', 'such as']
+        pr = False
+        tokens = [word[0] for word in sent]
+        if 'including' in tokens:
+            pr = True
+        elif 'and' in tokens and 'other' in tokens:
+            pr = True
+        elif 'such' in tokens and 'as' in tokens:
+            pr = True
+        elif 'especially' in tokens:
+            pr = True
+        if pr:
+            print(30*'-')
+            print('sent:', sent)
+            print('poses words:', pw)
+            print(hyp_rels)
+            print(30*'-')
+
         return hyp_rels
 
     @classmethod
