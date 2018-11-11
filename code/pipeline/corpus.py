@@ -47,7 +47,7 @@ class Corpus:
     def get_docs(self) -> Generator[List[str], None, None]:
         """Yield documents from given file.
 
-        Each document is a list of lines
+        Each document is a list of lines.
         """
         doc = []
         with open(self.path, 'r', encoding='utf8') as f:
