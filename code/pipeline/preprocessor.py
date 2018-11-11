@@ -3,8 +3,9 @@ import re
 import json
 import gzip
 from typing import List, Tuple, Dict, Union, BinaryIO
-from sklearn.feature_extraction.text import TfidfVectorizer
+from collections import defaultdict
 
+from sklearn.feature_extraction.text import TfidfVectorizer
 import spacy
 
 import utility_functions
@@ -96,6 +97,11 @@ class Preprocessor(TextProcessingUnit):
         self._term_pattern = re.compile(
             r'(JJ[RS]{0,2}\d+ |NN[PS]{0,2}\d+ )*NN[PS]{0,2}\d+')
         # self._term_pattern = re.compile('(NN[PS]{0,2}\d+ )+')
+        self.term_index = defaultdict(
+            lambda: defaultdict(lambda: defaultdict(list)))
+        # {lemma_idx: {doc_id: {sent_id: word_id}}
+        # in term_index: list all extracted terms and where
+        # in the corpus they occur
         self._pp_corpus = []
         self._token_idx_corpus = []
         self._lemma_idx_corpus = []
@@ -168,18 +174,6 @@ class DBLPPreprocessor(Preprocessor):
         Output: A file containing one sentence per line. After the
         end of each document there is an additional newline.
         """
-        # open the three output files
-        # path_pp_corpus = os.path.join(self.path_out, 'pp_corpus.txt')
-        # self._pp_corpus = open(path_pp_corpus, 'w', encoding='utf8')
-        # path_token_idx_corpus = os.path.join(
-        #     self.path_out, 'token_idx_corpus.txt')
-        # self._token_idx_corpus = open(
-        #     path_token_idx_corpus, 'w', encoding='utf8')
-        # path_lemma_idx_corpus = os.path.join(
-        #     self.path_out, 'lemma_idx_corpus.txt')
-        # self._lemma_idx_corpus = open(
-        #     path_lemma_idx_corpus, 'w', encoding='utf8')
-
         path_infile = os.path.join(self.path_in)  # , self._fnames[0])
         with gzip.open(path_infile, 'r') as f:
             self._files_processed += 1
@@ -210,14 +204,22 @@ class DBLPPreprocessor(Preprocessor):
         fpath_token_to_idx = os.path.join(self.path_out, 'token_to_idx.json')
         with open(fpath_token_to_idx, 'w', encoding='utf8') as f:
             json.dump(self._token_to_idx, f)
+        del self._token_to_idx
 
         fpath_lemma_to_idx = os.path.join(self.path_out, 'lemma_to_idx.json')
         with open(fpath_lemma_to_idx, 'w', encoding='utf8') as f:
             json.dump(self._lemma_to_idx, f)
+        del self._lemma_to_idx
 
         fpath_lemma_counts = os.path.join(self.path_out, 'lemma_counts.json')
         with open(fpath_lemma_counts, 'w', encoding='utf8') as f:
             json.dump(self._lemma_count, f)
+        del self._lemma_count
+
+        fpath_term_index = os.path.join(self.path_out, 'term_index.json')
+        with open(fpath_term_index, 'w', encoding='utf8') as f:
+            json.dump(self.term_index, f)
+        del self.term_index
 
         self._write_hierarchical_rels_to_file('hierarchical_relations.txt')
 
@@ -254,11 +256,11 @@ class DBLPPreprocessor(Preprocessor):
 
         # process each sentence of title
         nlp_title = self._nlp(title)
-        for sent in nlp_title.sents:
+        for i, sent in enumerate(nlp_title.sents):
             nlp_sent = [(token.text, token.tag_, token.lemma_,
                          token.is_stop)
                         for token in sent]
-            pp_sent, token_idx_sent, lemma_idx_sent, rels =\
+            pp_sent, token_idx_sent, lemma_idx_sent, rels, term_indices =\
                 self._process_sent(nlp_sent)
 
             # add extracted relations to relation dict
@@ -268,6 +270,11 @@ class DBLPPreprocessor(Preprocessor):
             pp_title.append(pp_sent)
             token_idx_title.append(token_idx_sent)
             lemma_idx_title.append(lemma_idx_sent)
+
+            # add term occurences to term index
+            for word_index in term_indices:
+                tidx = lemma_idx_sent[word_index]
+                self.term_index[tidx][self._titles_proc][i].append(word_index)
 
         # add processed title to corpus
         self._pp_corpus.append(pp_title)
@@ -280,7 +287,8 @@ class DBLPPreprocessor(Preprocessor):
 
     def _process_sent(self,
                       nlp_sent: nlp_sent_type
-                      ) -> Tuple[str, idx_repr_type, idx_repr_type, rels_type]:
+                      ) -> Tuple[str, idx_repr_type, idx_repr_type,
+                                 rels_type, List[int]]:
         """Process a sentence.
 
         For the given sentence, produce a:
@@ -324,6 +332,11 @@ class DBLPPreprocessor(Preprocessor):
             lemma_idx_sent.append(self._lemma_to_idx[lemma])
         lemma_idx_sent = self._concat_term_idxs(lemma_idx_sent, term_indices)
 
+        # get indices of all term positions in sentence
+        term_idxs = []
+        for i in range(len(lemma_idx_sent)):
+            if isinstance(lemma_idx_sent[i], str):
+                term_idxs.append(i)
         # update lemma counts
         for lemma_idx in lemma_idx_sent:
             self._add_count(lemma_idx)
@@ -335,7 +348,7 @@ class DBLPPreprocessor(Preprocessor):
         # get lemmatized string sentence with concatenations
         pp_sent = self._concat_terms(lemmas, term_indices)
 
-        return pp_sent, token_idx_sent, lemma_idx_sent, rels
+        return pp_sent, token_idx_sent, lemma_idx_sent, rels, term_idxs
 
     @staticmethod
     def _concat_rels(rels):
@@ -365,7 +378,7 @@ class DBLPPreprocessor(Preprocessor):
         pos_sent = ' '.join(pos_words)
         matches = re.finditer(self._term_pattern, pos_sent)
         term_indices = [self._get_indices(match.group()) for match in matches]
-        return [indices for indices in term_indices if len(indices) > 1]
+        return term_indices
 
     @staticmethod
     def _get_indices(match: str):
@@ -407,6 +420,7 @@ class DBLPPreprocessor(Preprocessor):
         for ti in term_indices[::-1]:
             str_idxs = [str(idx) for idx in idx_sent[ti[0]:ti[-1] + 1]]
             joined = '_'.join(str_idxs)
+            # joined += '_'
             idx_sent[ti[0]:ti[-1] + 1] = [joined]
 
         return idx_sent
@@ -601,6 +615,10 @@ class SPPreprocessor(Preprocessor):
 
 def identity_function(x):
     return x
+
+
+def build_lemma_occurence_index():
+    pass
 
 
 if __name__ == '__main__':
