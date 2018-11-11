@@ -34,12 +34,12 @@ class Corpus:
             if len(self.docs_read) == self.num_docs:
                 break
         # check if all docs were fetched
-        not_extraced = []
+        not_extracted = []
         for i in self.docs:
             if i not in self.docs_read:
                 not_extraced.append(i)
         # throw exception if not all documents were fetched
-        if not_extraced:
+        if not_extracted:
             doc_ids = ', '.join([str(i) for i in not_extraced])
             msg = 'Not all documents were extracted. DocIDs: {}'
             raise Exception(msg.format(doc_ids))
