@@ -298,7 +298,7 @@ class DBLPPreprocessor(Preprocessor):
 
         # update the command line
         self._docs_proc += 1
-        self._update_cmd()
+        self._update_cmd_counter()
 
     def _process_sent(self,
                       nlp_sent: nlp_sent_type
@@ -568,13 +568,13 @@ class DBLPPreprocessor(Preprocessor):
             msg = 'ERROR! Indices for {} in {} do not exist.'
             print(msg.format(str(keys_not_exist), hyper))
 
-    def _update_cmd(self) -> None:
+    def _update_cmd_counter(self) -> None:
         """Update the information on the command line."""
         if self._docs_proc == self._upper_bound:
-            msg = 'Processing: doc {} of {}'
+            msg = 'Processing: document {} of {}'
             print(msg.format(self._docs_proc, self._upper_bound))
         else:
-            msg = 'Processing: doc {} of {}\r'
+            msg = 'Processing: document {} of {}\r'
             print(msg.format(self._docs_proc, self._upper_bound), end='\r')
 
     def _update_cmd_time_info(self, end=False):
@@ -585,8 +585,8 @@ class DBLPPreprocessor(Preprocessor):
         """
         time_stamp = time.time()
         time_passed = time_stamp - self._start_time
-        msg = ('Writing the next {} docs to file. '
-               'Written {} docs to file in total. '
+        msg = ('Writing {} documents to file. '
+               'Written {} documents to file in total. '
                'Time passed: {:2f}')
         if end:
             print(msg.format(self._docs_proc % self._file_write_threshhold,
@@ -628,7 +628,7 @@ class SPPreprocessor(Preprocessor):
                 self._summaries[self._sum_processed] = {}
                 self._add_sents(nlp_summary)
                 self._sum_processed += 1
-                self._update_cmd()
+                self._update_cmd_counter()
                 if self._sum_processed % 10000 == 0:
                     self._write_json(self._summaries)
                     self._summaries = {}
@@ -647,7 +647,7 @@ class SPPreprocessor(Preprocessor):
         with open(f_out, 'w', encoding='utf8') as f:
             json.dump(summaries, f)
 
-    def _update_cmd(self) -> None:
+    def _update_cmd_counter(self) -> None:
         """Update the information on the command line."""
         if self._sum_processed == self._num_summaries:
             msg = 'Processing: summary {} of {}'
