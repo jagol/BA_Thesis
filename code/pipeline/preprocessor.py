@@ -95,9 +95,11 @@ class Preprocessor(TextProcessingUnit):
         self._lemma_count = {}    # {lemma_idx: num of occurences}
         # Pattern to extract sequences of nouns and adjectives ending
         # with a noun.
-        self._term_pattern = re.compile(
-            r'(JJ[RS]{0,2}\d+ |NN[PS]{0,2}\d+ |IN\d+ )*NN[PS]{0,2}\d+')
+        # self._term_pattern = re.compile(
+        #     r'(JJ[RS]{0,2}\d+ |NN[PS]{0,2}\d+ |IN\d+ )*NN[PS]{0,2}\d+')
         # self._term_pattern = re.compile('(NN[PS]{0,2}\d+ )+')
+        self._term_pattern = (r'(JJ[RS]{0,2}\d+ |NN[PS]{0,2}\d+ |IN\d+ '
+                              r'|VB[NG]\d+ )*NN[PS]{0,2}\d+')
         self.term_index = defaultdict(
             lambda: defaultdict(lambda: defaultdict(list)))
         # {lemma_idx: {doc_id: {sent_id: word_id}}
@@ -162,7 +164,7 @@ class DBLPPreprocessor(Preprocessor):
         self._num_sents = 4189903
         self._files_processed = 1
         self._docs_proc = 0
-        self._file_write_threshhold = 50000
+        self._file_write_threshhold = 10000
         self._hyper_hypo_rels = {}  # {hypernym: [hyponym1, hyponym2, ...]}
         self._title_pattern = re.compile(r'<(\w+)>(.*)</\w+>')
         super().__init__(path_in, path_out, path_lang_model, encoding,
@@ -238,14 +240,14 @@ class DBLPPreprocessor(Preprocessor):
         self._write_hierarchical_rels_to_file('hierarchical_relations.txt')
         del self._lemma_to_idx
 
-        print('Calculate tfidf...')
-        fpath = os.path.join(self.path_out, 'lemma_idx_corpus.txt')
-        self.calc_tfidf(fpath)
-        print('Preprocessing done.')
+        # print('Calculate tfidf...')
+        # fpath = os.path.join(self.path_out, 'lemma_idx_corpus.txt')
+        # self.calc_tfidf(fpath)
+        # print('Preprocessing done.')
 
     def _doc_getter(self,
-                      f: BinaryIO
-                      ) -> str:
+                    f: BinaryIO
+                    ) -> str:
         """Yield all titles (docs) of the dblp corpus file.
 
         All lines that do not have the tag title or that have the tag
@@ -263,8 +265,8 @@ class DBLPPreprocessor(Preprocessor):
                     yield content
 
     def _process_doc(self,
-                       doc: str
-                       ) -> None:
+                     doc: str
+                     ) -> None:
         pp_doc = []
         token_idx_doc = []
         lemma_idx_doc = []
@@ -669,7 +671,7 @@ def build_lemma_occurence_index():
 if __name__ == '__main__':
     from utility_functions import get_corpus_config
     corpus, config = get_corpus_config('preprocessing')
-    config['max_docs'] = 205
+    config['max_docs'] = 10000
     if corpus == 'dblp':
         dp = DBLPPreprocessor(**config)
         dp.preprocess_corpus()
