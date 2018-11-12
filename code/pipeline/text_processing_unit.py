@@ -6,7 +6,7 @@ class TextProcessingUnit:
     def __init__(self,
                  path_in: str,
                  path_out: str,
-                 max_files: Union[int, None] = None
+                 max_docs: Union[int, None] = None
                  ) -> None:
         """Initialize a text processing unit.
 
@@ -16,7 +16,7 @@ class TextProcessingUnit:
         """
         self.path_in = path_in
         self.path_out = path_out
-        self._max_files = max_files
+        self._max_docs = max_docs
         if os.path.isdir(self.path_in):
             self._fnames = [fname for fname in os.listdir(self.path_in)
                         if os.path.isfile(os.path.join(self.path_in, fname))]
@@ -28,13 +28,14 @@ class TextProcessingUnit:
         self._num_sents = 0
         self._files_processed = 0
         self._sents_processed = 0
+        self._num_docs = 0
 
         if not os.path.isdir(self.path_out):
             os.makedirs(self.path_out)
 
     def _get_upper_bound(self) -> int:
-        if self._max_files:
-            return min(self._max_files, self._num_files)
+        if self._max_docs:
+            return min(self._max_docs, self._num_docs)
         return self._num_files
 
     def _update_cmd(self) -> None:

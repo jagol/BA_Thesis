@@ -2,6 +2,7 @@ import os
 import re
 import json
 import gzip
+import time
 from typing import List, Tuple, Dict, Union, BinaryIO
 from collections import defaultdict
 
@@ -72,7 +73,7 @@ class Preprocessor(TextProcessingUnit):
                  path_out: str,
                  path_lang_model: str,
                  encoding: str,
-                 max_files: int = None
+                 max_docs: int = None
                  ) -> None:
         """Initialize Preprocessor.
 
@@ -81,7 +82,7 @@ class Preprocessor(TextProcessingUnit):
             path_out: path to output directory
             path_lang_model: path to the spacy language model
             encoding: encoding of the text files
-            max_files: max number of files to be processed
+            max_docs: max number of documents to be processed
         """
         self.path_in = path_in
         self.path_out = path_out
@@ -95,7 +96,7 @@ class Preprocessor(TextProcessingUnit):
         # Pattern to extract sequences of nouns and adjectives ending
         # with a noun.
         self._term_pattern = re.compile(
-            r'(JJ[RS]{0,2}\d+ |NN[PS]{0,2}\d+ )*NN[PS]{0,2}\d+')
+            r'(JJ[RS]{0,2}\d+ |NN[PS]{0,2}\d+ |IN\d+ )*NN[PS]{0,2}\d+')
         # self._term_pattern = re.compile('(NN[PS]{0,2}\d+ )+')
         self.term_index = defaultdict(
             lambda: defaultdict(lambda: defaultdict(list)))
@@ -105,7 +106,8 @@ class Preprocessor(TextProcessingUnit):
         self._pp_corpus = []
         self._token_idx_corpus = []
         self._lemma_idx_corpus = []
-        super().__init__(path_in, path_out, max_files)
+        self._start_time = 0
+        super().__init__(path_in, path_out, max_docs)
 
     def preprocess_corpus(self):
         raise NotImplementedError
@@ -144,7 +146,8 @@ class DBLPPreprocessor(Preprocessor):
 
     Only the paper titles are considered as part of the corpus and are
     extracted. The full text is not available in mark up. All other information
-    like author, year etc is discarded.
+    like author, year etc is discarded. The titles are referred to as
+    documents since they serve here the function of a document.
     """
 
     def __init__(self,
@@ -152,7 +155,7 @@ class DBLPPreprocessor(Preprocessor):
                  path_out: str,
                  path_lang_model: str,
                  encoding: str,
-                 max_files: int = None
+                 max_docs: int = None
                  ) -> None:
 
         self._num_titles = 4327497
@@ -163,7 +166,12 @@ class DBLPPreprocessor(Preprocessor):
         self._hyper_hypo_rels = {}  # {hypernym: [hyponym1, hyponym2, ...]}
         self._title_pattern = re.compile(r'<(\w+)>(.*)</\w+>')
         super().__init__(path_in, path_out, path_lang_model, encoding,
-                         max_files)
+                         max_docs)
+
+    def _get_upper_bound(self) -> int:
+        if self._max_docs:
+            return min(self._max_docs, self._num_titles)
+        return self._num_titles
 
     def preprocess_corpus(self) -> None:
         """Preprocess the dblp corpus.
@@ -174,15 +182,21 @@ class DBLPPreprocessor(Preprocessor):
         Output: A file containing one sentence per line. After the
         end of each document there is an additional newline.
         """
+        self._start_time = time.time()
         path_infile = os.path.join(self.path_in)  # , self._fnames[0])
         with gzip.open(path_infile, 'r') as f:
             self._files_processed += 1
             for title in self._title_getter(f):
                 self._process_title(title)
 
+                if self._titles_proc >= self._upper_bound:
+                    break
+
                 if self._titles_proc % self._file_write_threshhold == 0:
                     # write contents to file periodically to avoid too
                     # much memory usage
+                    # print infos when writing to file
+                    self._update_cmd_time_info()
                     self._write_pp_corpus_to_file(
                         self._pp_corpus, 'pp_corpus.txt')
                     self._write_idx_corpus_to_file(
@@ -195,6 +209,7 @@ class DBLPPreprocessor(Preprocessor):
                     self._token_idx_corpus = []
                     self._lemma_idx_corpus = []
 
+        self._update_cmd_time_info(end=True)
         self._write_pp_corpus_to_file(self._pp_corpus, 'pp_corpus.txt')
         self._write_idx_corpus_to_file(
             self._token_idx_corpus, 'token_idx_corpus.txt')
@@ -538,17 +553,47 @@ class DBLPPreprocessor(Preprocessor):
         in the given dict. The results then are joined again by the
         separator.
         """
-        idxs = [str(idx_dict[h]) for h in hyper.split('_')]
-        return '_'.join(idxs)
+        try:
+            idxs = [str(idx_dict[h]) for h in hyper.split('_')]
+            return '_'.join(idxs)
+        except KeyError:
+            idxs = []
+            keys_not_exist = []
+            for h in hyper.split(' '):
+                try:
+                    idxs.append(str(idx_dict[h]))
+                except KeyError:
+                    idxs.append('unk')
+                    keys_not_exist.append(h)
+            msg = 'ERROR! Indices for {} in {} do not exist.'
+            print(msg.format(str(keys_not_exist), hyper))
 
     def _update_cmd(self) -> None:
         """Update the information on the command line."""
-        if self._titles_proc == self._num_titles:
+        if self._titles_proc == self._upper_bound:
             msg = 'Processing: title {} of {}'
-            print(msg.format(self._titles_proc, self._num_titles))
+            print(msg.format(self._titles_proc, self._upper_bound))
         else:
             msg = 'Processing: title {} of {}\r'
-            print(msg.format(self._titles_proc, self._num_titles), end='\r')
+            print(msg.format(self._titles_proc, self._upper_bound), end='\r')
+
+    def _update_cmd_time_info(self, end=False):
+        """Update time information on the command line.
+
+        Args:
+            end: set to True if last writing procedure
+        """
+        time_stamp = time.time()
+        time_passed = time_stamp - self._start_time
+        msg = ('Writing the next {} titles to file. '
+               'Written {} titles to file in total. '
+               'Time passed: {:2f}')
+        if end:
+            print(msg.format(self._titles_proc % self._file_write_threshhold,
+                             self._titles_proc, time_passed))
+        else:
+            print(msg.format(self._file_write_threshhold,
+                             self._titles_proc, time_passed))
 
 
 class SPPreprocessor(Preprocessor):
@@ -564,7 +609,7 @@ class SPPreprocessor(Preprocessor):
                  path_out: str,
                  path_lang_model: str,
                  encoding: str,
-                 max_files: int = None
+                 max_docs: int = None
                  ) -> None:
 
         self._num_summaries = 94476
@@ -572,7 +617,7 @@ class SPPreprocessor(Preprocessor):
         # Dict[int, Dict[int, List[List[Union[str, bool]]]]]
         self._sum_processed = 0
         super().__init__(path_in, path_out, path_lang_model, encoding,
-                         max_files)
+                         max_docs)
 
     def preprocess_corpus(self) -> None:
         """Preprocess the SP-corpus. Write output to json file."""
@@ -624,6 +669,7 @@ def build_lemma_occurence_index():
 if __name__ == '__main__':
     from utility_functions import get_corpus_config
     corpus, config = get_corpus_config('preprocessing')
+    # config['max_docs'] = 205
     if corpus == 'dblp':
         dp = DBLPPreprocessor(**config)
         dp.preprocess_corpus()
