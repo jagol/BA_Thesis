@@ -158,10 +158,10 @@ class DBLPPreprocessor(Preprocessor):
                  max_docs: int = None
                  ) -> None:
 
-        self._num_titles = 4327497
+        self._num_docs = 4327497
         self._num_sents = 4189903
         self._files_processed = 1
-        self._titles_proc = 0
+        self._docs_proc = 0
         self._file_write_threshhold = 50000
         self._hyper_hypo_rels = {}  # {hypernym: [hyponym1, hyponym2, ...]}
         self._title_pattern = re.compile(r'<(\w+)>(.*)</\w+>')
@@ -170,8 +170,8 @@ class DBLPPreprocessor(Preprocessor):
 
     def _get_upper_bound(self) -> int:
         if self._max_docs:
-            return min(self._max_docs, self._num_titles)
-        return self._num_titles
+            return min(self._max_docs, self._num_docs)
+        return self._num_docs
 
     def preprocess_corpus(self) -> None:
         """Preprocess the dblp corpus.
@@ -186,13 +186,13 @@ class DBLPPreprocessor(Preprocessor):
         path_infile = os.path.join(self.path_in)  # , self._fnames[0])
         with gzip.open(path_infile, 'r') as f:
             self._files_processed += 1
-            for title in self._title_getter(f):
-                self._process_title(title)
+            for doc in self._doc_getter(f):
+                self._process_doc(doc)
 
-                if self._titles_proc >= self._upper_bound:
+                if self._docs_proc >= self._upper_bound:
                     break
 
-                if self._titles_proc % self._file_write_threshhold == 0:
+                if self._docs_proc % self._file_write_threshhold == 0:
                     # write contents to file periodically to avoid too
                     # much memory usage
                     # print infos when writing to file
@@ -243,10 +243,10 @@ class DBLPPreprocessor(Preprocessor):
         self.calc_tfidf(fpath)
         print('Preprocessing done.')
 
-    def _title_getter(self,
+    def _doc_getter(self,
                       f: BinaryIO
                       ) -> str:
-        """Yield all titles of the dblp corpus file.
+        """Yield all titles (docs) of the dblp corpus file.
 
         All lines that do not have the tag title or that have the tag
         but just the generic content 'Home Page' are filteret out.
@@ -262,16 +262,16 @@ class DBLPPreprocessor(Preprocessor):
                 if tag == 'title' and content != 'Home Page':
                     yield content
 
-    def _process_title(self,
-                       title: str
+    def _process_doc(self,
+                       doc: str
                        ) -> None:
-        pp_title = []
-        token_idx_title = []
-        lemma_idx_title = []
+        pp_doc = []
+        token_idx_doc = []
+        lemma_idx_doc = []
 
-        # process each sentence of title
-        nlp_title = self._nlp(title)
-        for i, sent in enumerate(nlp_title.sents):
+        # process each sentence of doc
+        nlp_doc = self._nlp(doc)
+        for i, sent in enumerate(nlp_doc.sents):
             nlp_sent = [(token.text, token.tag_, token.lemma_,
                          token.is_stop)
                         for token in sent]
@@ -281,23 +281,23 @@ class DBLPPreprocessor(Preprocessor):
             # add extracted relations to relation dict
             self._add_rels(rels)
 
-            # append processed sentences to title
-            pp_title.append(pp_sent)
-            token_idx_title.append(token_idx_sent)
-            lemma_idx_title.append(lemma_idx_sent)
+            # append processed sentences to doc
+            pp_doc.append(pp_sent)
+            token_idx_doc.append(token_idx_sent)
+            lemma_idx_doc.append(lemma_idx_sent)
 
             # add term occurences to term index
             for word_index in term_indices:
                 tidx = lemma_idx_sent[word_index]
-                self.term_index[tidx][self._titles_proc][i].append(word_index)
+                self.term_index[tidx][self._docs_proc][i].append(word_index)
 
-        # add processed title to corpus
-        self._pp_corpus.append(pp_title)
-        self._token_idx_corpus.append(token_idx_title)
-        self._lemma_idx_corpus.append(lemma_idx_title)
+        # add processed doc to corpus
+        self._pp_corpus.append(pp_doc)
+        self._token_idx_corpus.append(token_idx_doc)
+        self._lemma_idx_corpus.append(lemma_idx_doc)
 
         # update the command line
-        self._titles_proc += 1
+        self._docs_proc += 1
         self._update_cmd()
 
     def _process_sent(self,
@@ -498,7 +498,7 @@ class DBLPPreprocessor(Preprocessor):
 
     def _get_write_mode(self) -> str:
         """Return the mode in which the file should be written to."""
-        if self._titles_proc == self._file_write_threshhold:
+        if self._docs_proc == self._file_write_threshhold:
             return 'w'
         return 'a'
 
@@ -570,12 +570,12 @@ class DBLPPreprocessor(Preprocessor):
 
     def _update_cmd(self) -> None:
         """Update the information on the command line."""
-        if self._titles_proc == self._upper_bound:
-            msg = 'Processing: title {} of {}'
-            print(msg.format(self._titles_proc, self._upper_bound))
+        if self._docs_proc == self._upper_bound:
+            msg = 'Processing: doc {} of {}'
+            print(msg.format(self._docs_proc, self._upper_bound))
         else:
-            msg = 'Processing: title {} of {}\r'
-            print(msg.format(self._titles_proc, self._upper_bound), end='\r')
+            msg = 'Processing: doc {} of {}\r'
+            print(msg.format(self._docs_proc, self._upper_bound), end='\r')
 
     def _update_cmd_time_info(self, end=False):
         """Update time information on the command line.
@@ -585,15 +585,15 @@ class DBLPPreprocessor(Preprocessor):
         """
         time_stamp = time.time()
         time_passed = time_stamp - self._start_time
-        msg = ('Writing the next {} titles to file. '
-               'Written {} titles to file in total. '
+        msg = ('Writing the next {} docs to file. '
+               'Written {} docs to file in total. '
                'Time passed: {:2f}')
         if end:
-            print(msg.format(self._titles_proc % self._file_write_threshhold,
-                             self._titles_proc, time_passed))
+            print(msg.format(self._docs_proc % self._file_write_threshhold,
+                             self._docs_proc, time_passed))
         else:
             print(msg.format(self._file_write_threshhold,
-                             self._titles_proc, time_passed))
+                             self._docs_proc, time_passed))
 
 
 class SPPreprocessor(Preprocessor):
@@ -669,7 +669,7 @@ def build_lemma_occurence_index():
 if __name__ == '__main__':
     from utility_functions import get_corpus_config
     corpus, config = get_corpus_config('preprocessing')
-    # config['max_docs'] = 205
+    config['max_docs'] = 205
     if corpus == 'dblp':
         dp = DBLPPreprocessor(**config)
         dp.preprocess_corpus()
