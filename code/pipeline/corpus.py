@@ -121,18 +121,19 @@ def get_pseudo_corpus(term_ids: Set[str],
 def get_tfidf(term_ids: Set[str],
               corpus: Set[int],
               key: str = 'term'
-              ) -> Dict[int, List[Tuple[float]]]:
+              ) -> Defaultdict[int, Dict[str, float]]:
     """Compute the tfidf score for the given terms in the given corpus.
 
     Args:
         term_ids: The lemma-ids of the lemmas for which tfidf is computed.
-        corpus: The document-ids of the documents for which make up the
+        corpus: The document-ids of the documents which make up the
             corpus.
         key: either 'term' or 'doc'.
-        If 'term', then the tfidf is returned in the following structure:
-        Dict[term_id, List[tfidf_doc1, ...]
-        If 'doc', then the tfidf is returned in the following structure:
-        Dict[doc_id, List[term1, ...]]
+            If 'term', then the tfidf is returned in the
+            following structure: Dict[term_id, List[tfidf_doc1, ...]
+            If 'doc', then the tfidf is returned in the following
+            structure: Dict[doc_id, List[term1, ...]]
+            NOTE: at the moment the method always returns as if key='doc'
     """
     fpath = 'preprocessed_corpora/dblp/lemma_idx_corpus.txt'
     c = Corpus(corpus, fpath)
@@ -174,4 +175,4 @@ def get_tfidf(term_ids: Set[str],
             idf_term = idf[term_id]
             tfidf[doc_id][term_id] = tf_term_doc*idf_term
 
-    return tf, df, idf, tfidf
+    return tfidf
