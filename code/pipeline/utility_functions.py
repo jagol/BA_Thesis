@@ -99,3 +99,9 @@ def get_corpus_config(unit: str) -> Tuple[str, corpus_config_type]:
             return sp, configs[location][sp][unit]
         else:
             raise Exception('Error! Corpus not known.')
+
+
+def get_clus_config():
+    with open('configs.json', 'r', encoding='utf8') as f:
+        configs = json.load(f)
+        return configs['clustering']
