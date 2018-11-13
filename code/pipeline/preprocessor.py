@@ -58,7 +58,7 @@ class Preprocessor(TextProcessingUnit):
         - lemma_to_idx.txt: The file contains one lemma per line.
             Each line is of the form: Lemma SPACE Index
             (now as json)
-        - lemma_counts.json: Map each lemma to it's number of occurences
+        - lemma_counts.json: Map each lemma to it's number of occurrences
             in the corpus.
 
     All files are written to the specified output directory
