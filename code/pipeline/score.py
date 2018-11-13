@@ -1,19 +1,14 @@
 from typing import *
 from math import log, sqrt, exp
+from collecctions import defaultdict
 
 from scipy.spatial.distance import cosine
 
+from corpus import *
 
 """Compute term-candidate scores."""
 """
-- prepare pseudo docs using tfidf scores
-    - for each doc
-        - for each term in the doc
-            - calc the idf score idf = log(1.0 + N / keyword_idf[w]) 
-                -> see dataset.py
-            - calc the tf 
-            - get the sum of all the idf's in a doc for each cluster
-            - find the cluster for which this sum is the highest
+- prepare pseudo docs for given terms using tfidf scores
 - code formulas:
     - score(t, S_k) = sqrt(pop(t, S_k)*con(t, S_k)*hyp(t, S_k))
     - pop(t, S_k) = log(tf(t, D_k)+1)/log(tf(D_k))
@@ -22,13 +17,68 @@ from scipy.spatial.distance import cosine
         -> use gensim's bm25 scorer to calculate rel(t, D_k)
     - hyp(t, S_k) = sum(sim(t, projection(z1...zn)*score(z1...zn)))
         -> z1...zn: labels of the parent cluster
+DO NEXT: implement get_topic_docs and check if implementation of get_tf 
+is even necessary -> think about file storage system
 """
 
+# ----------------------------------------------------------------------
+# type definitions
+
+# Type of a cluster as a set of term-ids.
+cluster_type = Set[str]
+# Type of a corpus as a list of tuples (doc_id, doc) where the document
+# is a list of sentences which is a list of words.
+corpus_type = List[Tuple[int, List[List[str]]]]
+
+# ----------------------------------------------------------------------
 
 class Scorer:
 
-    def __init__(self) -> None:
-        pass
+    def __init__(self,
+                 cluster: cluster_type,
+                 parent_corpus: Set[int],
+                 path_base_corpus: str
+                 ) -> None:
+        """Initialize a Scorer object.
+
+        Args:
+            cluster: The clusters with the term-ids to be scored.
+            parent_corpus: The doc-ids of the document, that make up the
+                parent corpus (the corpus, to which the cluster belongs).
+            path_base_corpus: The path to the original corpus file.
+        """
+        self.cluster = cluster
+        self.parent_corpus = Corpus(parent_corpus, self.path_base_corpus)
+        self.parent_corpus.get_corpus_docs()
+        self.path_base_corpus = path_base_corpus
+        self.topic_corpus = Corpus(self.cluster, self.path_base_corpus)
+        self.topic_corpus.get_corpus_docs()
+
+        # precompute term frequencies for all given terms
+        self.tf_topic_corpus = self.get_tf(cluster, self.topic_corpus.docs)
+        self.tf_parent_corpus = self.get_tf(cluster, self.parent_corpus.docs)
+
+    def get_tf(self,
+               cluster: cluster_type,
+               corpus: corpus_type
+               ) -> Dict[str, int]:
+        """Get term frequency of terms in the cluster for the corpus.
+
+        Args:
+            cluster: A set of term-ids.
+            corpus: A list of document-ids and their documents.
+        Return:
+            A dictionary mapping each term-id in the cluster to it's
+            frequency in the corpus.
+        """
+        tf_dict = defaultdict(int)
+        for id_, doc in corpus:
+            for sent in doc:
+                for word in sent:
+                    for term_id in cluster:
+                        if term_id == word:
+                            tf_dict[term_id] += 1
+        return tf_dict
 
     def calc_term_score(self,
                         term_id: str,
@@ -53,12 +103,15 @@ class Scorer:
         Return:
             The score.
         """
-        pop = self.get_pop(term_id, cluster_id)
+        pop = self.get_pop(term_id)
         con = self.get_con(term_id, cluster_id)
         return sqrt(pop*con)
 
     def calc_gen_score(self, term_id: str, cluster_id: int) -> float:
         """Calculate the term score in the general case (not top level).
+
+        The term score is calculated as following:
+        score(t, D_k) = sqrt(pop(t, D_k)*con(t, D_k)*hyp(t, D_k))
 
         Args:
             term_id: The id of the term for which the score is
@@ -68,12 +121,12 @@ class Scorer:
         Return:
             The score.
         """
-        pop = self.get_pop(term_id, cluster_id)
+        pop = self.get_pop(term_id)
         con = self.get_con(term_id, cluster_id)
         hyp = self.get_hyp(term_id, cluster_id)
         return sqrt(pop*con*hyp)
 
-    def get_pop(self, term_id: str, cluster_id: int) -> float:
+    def get_pop(self, term_id: str) -> float:
         """Get the popularity of the term in the cluster corpus.
 
         For the set of documents belonging to the cluster-id, calculate:
@@ -89,9 +142,8 @@ class Scorer:
         Return:
             The popularity score.
         """
-        topics_docs = self.get_topic_docs(cluster_id)
-        numerator = log(self.get_tf(term_id, topics_docs)+1)
-        denominator = log(self.get_tf(term_id, self.all_docs))
+        numerator = log(self.tf_topic_corpus[term_id]+1)
+        denominator = log(self.tf_parent_corpus[term_id])
         return numerator/denominator
 
     def get_con(self, term_id: str, cluster_id: int) -> float:
@@ -137,3 +189,6 @@ class Scorer:
             The cosine similarity.
         """
         return 1-cosine(v1, v2)
+
+    def get_topic_docs(self):
+        pass
