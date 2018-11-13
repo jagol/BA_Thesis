@@ -1,5 +1,5 @@
 from math import log
-from typing import Generator, List, Set, Tuple, Dict
+from typing import Generator, List, Set, Tuple, Dict, DefaultDict
 from collections import defaultdict
 
 
@@ -9,36 +9,46 @@ class Corpus:
     indices to the documents in the original corpus file.
     """
 
-    def __init__(self, docs: Set[int], path: str) -> None:
+    def __init__(self, doc_ids: Set[int], path: str) -> None:
         """Initialize the corpus.
 
         Args:
             docs: A list of indices to the docs belonging to the corpus.
             path: The path to the original corpus file
         """
-        self.docs = docs
-        self.num_docs = len(self.docs)
+        self.doc_ids = doc_ids
+        self.num_docs = len(self.doc_ids)
         self.docs_read = set()
         self.path = path
+        self.docs = []  #  List of tuples (doc_id, doc)
 
-    def get_corpus_docs(self) -> Generator[Tuple[int, List[List[str]]], None, None]:
+    def get_corpus_docs(self,
+                        save_inside: bool = True,
+                        ) -> Generator[Tuple[int, List[List[str]]], None, None]:
         """Get all the documents belonging to the corpus.
 
         Yield a generator of documents. Each document is a list of
         sentences and each sentence a list of words.
+
+        Args:
+            save_inside: If save_inside, then documents are not yielded
+                but instead saved in self.docs.
         """
         for i, doc in enumerate(self.get_docs()):
-            if i in self.docs:
+            if i in self.doc_ids:
                 doc = [line.strip('\n').split(' ') for line in doc]
                 self.docs_read.add(i)
-                yield i, doc
+                if save_inside:
+                    self.docs.append((i, doc))
+                else:
+                    yield i, doc
             # stop iterating if all docs were fetched
             if len(self.docs_read) == self.num_docs:
                 break
 
         # check if all docs were fetched
         not_extracted = []
-        for i in self.docs:
+        for i in self.doc_ids:
             if i not in self.docs_read:
                 not_extracted.append(i)
 
@@ -113,15 +123,15 @@ def get_pseudo_corpus(term_ids: Set[str],
     tfidf_doc = get_tfidf(term_ids, base_corpus, key='doc')
 
     for doc_id in tfidf_doc:
-        tfidf_doc[doc_id] = sum(tfidf_dict[doc_id])
+        tfidf_doc[doc_id] = sum(tfidf_doc[doc_id])
     ranked_docs = sorted(
         tfidf_doc.items(), key=lambda tpl: tpl[1], reverse=True)
-    return ranked_docs[:n]
+    return set(ranked_docs[:n])
 
 def get_tfidf(term_ids: Set[str],
               corpus: Set[int],
               key: str = 'term'
-              ) -> Defaultdict[int, Dict[str, float]]:
+              ) -> DefaultDict[int, Dict[str, float]]:
     """Compute the tfidf score for the given terms in the given corpus.
 
     Args:
@@ -130,9 +140,9 @@ def get_tfidf(term_ids: Set[str],
             corpus.
         key: either 'term' or 'doc'.
             If 'term', then the tfidf is returned in the
-            following structure: Dict[term_id, List[tfidf_doc1, ...]
+            following structure: Dict[term_id, Dict[term_id, tfidf]
             If 'doc', then the tfidf is returned in the following
-            structure: Dict[doc_id, List[term1, ...]]
+            structure: Dict[doc_id, Dict[term_id, tfidf]]
             NOTE: at the moment the method always returns as if key='doc'
     """
     fpath = 'preprocessed_corpora/dblp/lemma_idx_corpus.txt'
@@ -145,7 +155,6 @@ def get_tfidf(term_ids: Set[str],
         tf_doc = defaultdict(int)
         doc = c.flatten_doc(doc)
         num_tokens = len(doc)
-        print(doc_id, doc)
         for term_id in term_ids:
             for lemma_id in doc:
                 if lemma_id == term_id:
@@ -162,7 +171,7 @@ def get_tfidf(term_ids: Set[str],
             if term_id in tf_doc:
                 df[term_id] += 1
 
-    # calc idf
+    # calc idf with +1-smoothing
     idf = {}
     for term_id in df:
         idf[term_id] = log(c.num_docs/(1+df[term_id]))
@@ -176,3 +185,7 @@ def get_tfidf(term_ids: Set[str],
             tfidf[doc_id][term_id] = tf_term_doc*idf_term
 
     return tfidf
+
+
+def get_pseudo_corpora():
+    pass
