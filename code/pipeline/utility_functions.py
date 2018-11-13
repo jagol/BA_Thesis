@@ -10,6 +10,26 @@ doc_type = Union[List[str], List[List[str]], str]
 # ----------------------------------------------------------------------
 
 
+def prep_output_dir(path: str) -> None:
+    """Prepare the output directory by creating needed subdirectories.
+
+    The following subdirectories are created:
+    - embeddings/
+    - hierarchy/
+    - processed_corpus/
+    - indexing/
+    - concept_terms/
+    - frequencies/
+    """
+    if not os.path.isdir(path):
+        raise Exception('ERROR! Path does not lead to a directory.')
+    dir_names = ['embeddings', 'hierarchy', 'processed_corpus',
+                 'indexing', 'concept_terms', 'frequencies']
+    for dir_name in dir_names:
+        dir_path = os.path.join(path, dir_name)
+        os.mkdir(dir_path)
+
+
 def get_docs(fpath: str,
              word_tokenized: bool = True,
              sent_tokenized: bool = True
@@ -76,7 +96,7 @@ def get_corpus_config(unit: str) -> Tuple[str, corpus_config_type]:
     parser.add_argument(
         '-c',
         '--corpus',
-        help='indicate name of corpus to be processed: europarl; dblp;'
+        help='name of corpus to be processed: europarl; dblp; sp;'
     )
     args = parser.parse_args()
 
@@ -105,3 +125,17 @@ def get_clus_config():
     with open('configs.json', 'r', encoding='utf8') as f:
         configs = json.load(f)
         return configs['clustering']
+
+
+def get_config():
+    with open('configs.json', 'r', encoding='utf8') as f:
+        configs = json.load(f)
+        return configs
+
+def get_path_out(args: Any, config: Dict[str, Any]) -> str:
+    path_out = config['paths'][args.location][args.corpus]['path_out']
+    return path_out
+
+def get_path_in(args: Any, config: Dict[str, Any]) -> str:
+    path_in = config['paths'][args.location][args.corpus]['path_in']
+    return path_in
