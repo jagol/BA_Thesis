@@ -1,14 +1,15 @@
+import os
 import json
 import argparse
-from typing import Tuple, Dict, List, Generator, Union
+from typing import Dict, List, Generator, Union, Any
 
 # ----------------------------------------------------------------------
 # type definitions
 corpus_config_type = Dict[str, Dict[str, str]]
 doc_type = Union[List[str], List[List[str]], str]
 
-# ----------------------------------------------------------------------
 
+# ------------------ functions to prepare environment ------------------
 
 def prep_output_dir(path: str) -> None:
     """Prepare the output directory by creating needed subdirectories.
@@ -29,6 +30,48 @@ def prep_output_dir(path: str) -> None:
         dir_path = os.path.join(path, dir_name)
         os.mkdir(dir_path)
 
+
+# ------------------ configuration and cmd args functions --------------
+
+def get_args() -> Any:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '-l',
+        '--location',
+        help='indicate if local paths or server paths should be used',
+        action='store_true')
+    parser.add_argument(
+        '-c',
+        '--corpus',
+        help='name of corpus to be processed: europarl; dblp; sp;'
+    )
+    args = parser.parse_args()
+    return args
+
+
+def get_clus_config():
+    with open('configs.json', 'r', encoding='utf8') as f:
+        configs = json.load(f)
+        return configs['clustering']
+
+
+def get_config():
+    with open('configs.json', 'r', encoding='utf8') as f:
+        configs = json.load(f)
+        return configs
+
+
+def get_path_out(args: Any, config: Dict[str, Any]) -> str:
+    path_out = config['paths'][args.location][args.corpus]['path_out']
+    return path_out
+
+
+def get_path_in(args: Any, config: Dict[str, Any]) -> str:
+    path_in = config['paths'][args.location][args.corpus]['path_in']
+    return path_in
+
+
+# ------------------ corpus processing functions -----------------------
 
 def get_docs(fpath: str,
              word_tokenized: bool = True,
@@ -84,58 +127,3 @@ def format_doc(doc: List[str],
         return doc
     else:
         return ' '.join(doc)
-
-
-def get_corpus_config(unit: str) -> Tuple[str, corpus_config_type]:
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        '-s',
-        '--server',
-        help='indicate if local paths or server paths should be used',
-        action='store_true')
-    parser.add_argument(
-        '-c',
-        '--corpus',
-        help='name of corpus to be processed: europarl; dblp; sp;'
-    )
-    args = parser.parse_args()
-
-    with open('configs.json', 'r', encoding='utf8') as f:
-        configs = json.load(f)
-        if args.server:
-            location = 'server'
-        else:
-            location = 'local'
-
-        dblp = 'dblp'
-        euprl = 'europarl'
-        sp = 'sp'
-
-        if args.corpus == dblp:
-            return dblp, configs[location][dblp][unit]
-        elif args.corpus == euprl:
-            return euprl, configs[location][euprl][unit]
-        elif args.corpus == sp:
-            return sp, configs[location][sp][unit]
-        else:
-            raise Exception('Error! Corpus not known.')
-
-
-def get_clus_config():
-    with open('configs.json', 'r', encoding='utf8') as f:
-        configs = json.load(f)
-        return configs['clustering']
-
-
-def get_config():
-    with open('configs.json', 'r', encoding='utf8') as f:
-        configs = json.load(f)
-        return configs
-
-def get_path_out(args: Any, config: Dict[str, Any]) -> str:
-    path_out = config['paths'][args.location][args.corpus]['path_out']
-    return path_out
-
-def get_path_in(args: Any, config: Dict[str, Any]) -> str:
-    path_in = config['paths'][args.location][args.corpus]['path_in']
-    return path_in
