@@ -51,7 +51,9 @@ class LingPreprocessor(TextProcessingUnit):
         self.path_out_dir = os.path.join(path_out, 'processed_corpus/')
         self._nlp = spacy.load(path_lang_model)
         self._start_time = 0
+        self._file_write_threshhold = 10000
         self._pp_corpus = []
+        self.f_out_name = 'ling_pp_corpus.txt'
         self.f_out = os.path.join(self.path_out_dir, self.f_out_name)
 
     def _doc_getter(self,
@@ -157,13 +159,22 @@ class LingPreprocessor(TextProcessingUnit):
         """
         time_stamp = time.time()
         time_passed = time_stamp - self._start_time
-        msg = ('Writing {} documents to file. '
-               'Written {} documents to file in total. '
-               'Time passed: {:2f}')
-        docs_proc_now = self._docs_processed % self._file_write_threshhold
         if end:
-            print(msg.format(docs_proc_now, self._docs_processed, time_passed))
+            docs_proc_now = self._docs_processed % self._file_write_threshhold
+            if docs_proc_now == 0:
+                msg = ('Written {} documents to file in total. '
+                       'Time passed: {:2f}')
+                print(msg.format(self._docs_processed, time_passed))
+            else:
+                msg = ('Writing {} documents to file. '
+                       'Written {} documents to file in total. '
+                       'Time passed: {:2f}')
+                print(msg.format(
+                    docs_proc_now, self._docs_processed, time_passed))
         else:
+            msg = ('Writing {} documents to file. '
+                   'Written {} documents to file in total. '
+                   'Time passed: {:2f}')
             print(msg.format(self._file_write_threshhold,
                              self._docs_processed, time_passed))
 
@@ -186,11 +197,8 @@ class DBLPLingPreprocessor(LingPreprocessor):
         self._num_docs = 4327497
         self._num_sents = 4189903
         self._docs_processed = 0
-        self._file_write_threshhold = 10000
         self._title_pattern = re.compile(r'<(\w+)>(.*)</\w+>')
-        self.f_out_name = 'ling_pp_dblp.txt'
         super().__init__(path_in, path_out, path_lang_model, max_docs)
-
 
     def _doc_getter(self,
                     f: BinaryIO
@@ -229,9 +237,7 @@ class SPLingPreprocessor(LingPreprocessor):
         self._num_docs = 94476
         self._num_sents = 0
         self._docs_processed = 0
-        self.f_out_name = 'ling_pp_sp.txt'
         super().__init__(path_in, path_out, path_lang_model, max_docs)
-
 
     def _doc_getter(self,
                     f: BinaryIO
@@ -240,13 +246,13 @@ class SPLingPreprocessor(LingPreprocessor):
 
 
 def main():
-    from utility_functions import get_config, get_args
+    from utility_functions import get_config, get_cmd_args
     config = get_config()
     args = get_cmd_args()
     path_in = config['paths'][args.location][args.corpus]['path_in']
     path_out = config['paths'][args.location][args.corpus]['path_out']
     path_lang_model = config['paths'][args.location]['path_lang_model']
-    max_docs = 1000
+    max_docs = 10000
     if args.corpus == 'dblp':
         dp = DBLPLingPreprocessor(path_in, path_out, path_lang_model, max_docs)
         dp.preprocess_corpus()
