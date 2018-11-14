@@ -239,10 +239,6 @@ class SPLingPreprocessor(LingPreprocessor):
         pass
 
 
-def identity_function(x):
-    return x
-
-
 def main():
     from utility_functions import get_config, get_args
     config = get_config()
