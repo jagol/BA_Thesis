@@ -1,6 +1,8 @@
+import sys
 import os
 import json
 import argparse
+import shutil
 from typing import Dict, List, Generator, Union, Any
 
 # ----------------------------------------------------------------------
@@ -27,19 +29,35 @@ def prep_output_dir(path: str) -> None:
     dir_names = ['embeddings', 'hierarchy', 'processed_corpus',
                  'indexing', 'concept_terms', 'frequencies']
     for dir_name in dir_names:
+        path_dir = os.path.join(path, dir_name)
+        if os.path.exists(path_dir):
+            msg = ('One or more of the directories exist already. Should the '
+                   'directories be overwritten? y or n: ')
+            y_or_n = input(msg)
+
+            for dir_name in dir_names:
+                if y_or_n == 'y':
+                    path_dir = os.path.join(path, dir_name)
+                    shutil.rmtree(path_dir)
+                else:
+                    sys.exit()
+
+            break
+
+    for dir_name in dir_names:
         dir_path = os.path.join(path, dir_name)
         os.mkdir(dir_path)
 
 
 # ------------------ configuration and cmd args functions --------------
 
-def get_args() -> Any:
+def get_cmd_args() -> Any:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '-l',
         '--location',
         help='indicate if local paths or server paths should be used',
-        action='store_true')
+    )
     parser.add_argument(
         '-c',
         '--corpus',
