@@ -186,8 +186,10 @@ class PatternExtractor:
 class TermExtractor:
     """Class to handle functions to extract terms from sentences."""
 
-    term_pattern = re.compile((r'(JJ[RS]{0,2}\d+ |NN[PS]{0,2}\d+ '
-                               r'|IN\d+ |VB[NG]\d+ )*NN[PS]{0,2}\d+'))
+    # term_pattern = re.compile((r'(JJ[RS]{0,2}\d+ |NN[PS]{0,2}\d+ '
+    #                            r'|IN\d+ |VB[NG]\d+ )*NN[PS]{0,2}\d+'))
+    term_pattern = re.compile(r'(JJ[RS]{0,2}\d+ |NN[PS]{0,2}\d+ |VB[NG]\d+ )*'
+                              r'NN[PS]{0,2}\d+')
     index_pattern = re.compile(r'(\w+?)(\d+)')
 
     @classmethod
@@ -233,7 +235,8 @@ class TermExtractor:
 
 class HearstExtractor:
 
-    np = r'(JJ[RS]{0,2}\d+ |NN[PS]{0,2}\d+ |IN\d+ |VB[NG]\d+ )*NN[PS]{0,2}\d+'
+    # np = r'(JJ[RS]{0,2}\d+ |NN[PS]{0,2}\d+ |IN\d+ |VB[NG]\d+ )*NN[PS]{0,2}\d+'
+    np = r'(JJ[RS]{0,2}\d+ |NN[PS]{0,2}\d+ |VB[NG]\d+ )*NN[PS]{0,2}\d+'
     comma = r',\d+'
     conj = r'(or|and)'
 
