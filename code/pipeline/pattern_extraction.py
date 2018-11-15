@@ -24,6 +24,10 @@ class PatternExtractor:
             self.path_out_corpus, 'pp_lemma_corpus.txt')
         self.path_out_hierarchy_rels = os.path.join(
             self.path_out_hierarchy, 'hierarchical_relations.json')
+        self.path_token_terms = os.path.join(
+            self.path_out_corpus, 'token_terms.txt')
+        self.path_lemma_terms = os.path.join(
+            self.path_out_corpus, 'lemma_terms.txt')
 
         self.hierarch_rels = {}     # {hypernym: list of hyponyms}
 
@@ -31,6 +35,8 @@ class PatternExtractor:
         self._docs_processed = 0
         self._token_corpus = []
         self._lemma_corpus = []
+        self._token_terms = set()
+        self._lemma_terms = set()
 
         self._start_time = 0
         self._max_docs = max_docs
@@ -51,8 +57,14 @@ class PatternExtractor:
                 tokens = [w[0] for w in sent]
                 lemmas = [w[2] for w in sent]
 
-                concat_tokens = self.concat(tokens, term_indices)
-                concat_lemmas = self.concat(lemmas, term_indices)
+                concat_tokens, token_terms = self.concat(tokens, term_indices)
+                concat_lemmas, lemma_terms = self.concat(lemmas, term_indices)
+
+                for tt in token_terms:
+                    self._token_terms.add(tt)
+
+                for lt in lemma_terms:
+                    self._lemma_terms.add(lt)
 
                 doc_concat_tokens.append(concat_tokens)
                 doc_concat_lemmas.append(concat_lemmas)
@@ -80,14 +92,24 @@ class PatternExtractor:
             self.write_corpus(self._token_corpus, self.path_out_pp_tokens)
             self.write_corpus(self._lemma_corpus, self.path_out_pp_lemmas)
 
+        print('Writing token terms to file...')
+        self.write_terms(self._token_terms, self.path_token_terms)
+        print('Writing lemma terms to file...')
+        self.write_terms(self._lemma_terms, self.path_lemma_terms)
         print('Writing hierarchical relations to file...')
         self.write_hierarch_rels()
         print('Done')
 
     @staticmethod
+    def write_terms(terms: Set[str], path: str) -> None:
+        with open(path, 'w', encoding='utf8') as f:
+            for t in terms:
+                f.write(t + '\n')
+
+    @staticmethod
     def concat(words: List[str],
                term_indices: List[List[int]]
-               ) -> List[str]:
+               ) -> List[List[str]]:
         """Concatenate the terms given by term_indices.
 
         Use an underscore as concatenator. For example: If words is
@@ -99,12 +121,14 @@ class PatternExtractor:
             term_indices: A list of lists. Each list is a term and
                 contains the indices belonging to that term.
         """
+        terms = []
         for ti in term_indices[::-1]:
             term_words = words[ti[0]:ti[-1] + 1]
             joined = '_'.join(term_words)
+            terms.append(joined)
             words[ti[0]:ti[-1] + 1] = [joined]
 
-        return words
+        return [words, terms]
 
     def add_hierarch_rels(self, rels: rels_type) -> None:
         """Add given hierarchical relations to relation dictionary.
@@ -235,7 +259,8 @@ class TermExtractor:
 
 class HearstExtractor:
 
-    # np = r'(JJ[RS]{0,2}\d+ |NN[PS]{0,2}\d+ |IN\d+ |VB[NG]\d+ )*NN[PS]{0,2}\d+'
+    # np = r'(JJ[RS]{0,2}\d+ |NN[PS]{0,2}\d+ |IN\d+ |VB[NG]\d+ )*
+    # NN[PS]{0,2}\d+'
     np = r'(JJ[RS]{0,2}\d+ |NN[PS]{0,2}\d+ |VB[NG]\d+ )*NN[PS]{0,2}\d+'
     comma = r',\d+'
     conj = r'(or|and)'
