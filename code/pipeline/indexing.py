@@ -45,6 +45,16 @@ class Indexer:
         self.path_idx_to_lemma = os.path.join(
             self.path_out_indexing, 'idx_to_lemma.json')
 
+        self.path_token_terms = os.path.join(
+            self.path_out_corpus, 'token_terms.txt')
+        self.path_lemma_terms = os.path.join(
+            self.path_out_corpus, 'lemma_terms.txt')
+
+        self.path_idx_token_terms = os.path.join(
+            self.path_out_corpus, 'token_terms_idxs.txt')
+        self.path_idx_lemma_terms = os.path.join(
+            self.path_out_corpus, 'lemma_terms_idxs.txt')
+
         self._file_write_threshhold = 10000
         self._docs_processed = 0
         self._start_time = 0
@@ -62,6 +72,9 @@ class Indexer:
         with open(self.path_idx_to_token, 'w', encoding='utf8') as f:
             json.dump(idx_to_token, f)
 
+        print('Generate token-idx-terms...')
+        self._terms_to_idxs('token', token_to_idx)
+
     def index_lemmas(self):
         print('indexing of lemmas...')
         lemma_to_idx, idx_to_lemma = self.index(
@@ -73,6 +86,9 @@ class Indexer:
 
         with open(self.path_idx_to_lemma, 'w', encoding='utf8') as f:
             json.dump(idx_to_lemma, f)
+
+        print('Generate lemma-idx-terms...')
+        self._terms_to_idxs('lemma', lemma_to_idx)
 
     def index(self,
               path_in: str,
@@ -136,6 +152,33 @@ class Indexer:
         if self._docs_processed <= self._file_write_threshhold:
             return 'w'
         return 'a'
+
+    def _terms_to_idxs(self,
+                       level: str,
+                       term_to_idx: Dict[str, int]
+                       ) -> None:
+        """Use a term file to produce a file with indices of terms.
+
+        Args:
+            level: 'token' or 'lemma', indicate if tokens or lemmas
+                should be processed.
+        """
+        if level == 'token':
+            path_in = self.path_token_terms
+            path_out = self.path_idx_token_terms
+        elif level == 'lemma':
+            path_in = self.path_lemma_terms
+            path_out = self.path_idx_lemma_terms
+
+        terms = set()
+
+        with open(path_in, 'r', encoding='utf8') as fin:
+            for line in fin:
+                terms.add(line.strip('\n'))
+
+        with open(path_out, 'w', encoding='utf8') as fout:
+            for t in terms:
+                fout.write(str(term_to_idx[t]) + '\n')
 
     def _update_cmd_counter(self) -> None:
         """Update the information on the command line."""
