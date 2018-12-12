@@ -7,7 +7,26 @@ from utility_functions import get_docs
 
 class Indexer:
 
-    def __init__(self, path):
+    """Class to index tokens and lemmas.
+
+    If the main index_tokens and index_lemmas are executed the following
+    files are produced:
+    - 'token_idx_corpus': Same structure as 'pp_token_corpus.txt' but
+        all tokens are replaced with their index.
+    - 'lemma_idx_corpus': Same structure as 'pp_lemma_corpus.txt' but
+        all tokens are replaced with their index.
+    - 'token_to_idx.json': Maps each token to it's index.
+    - 'idx_to_token.json': Maps each index to it's tokens.
+    - 'lemma_to_idx.json': Maps each lemma to it's index.
+    - 'idx_to_lemma.json': Maps each index to it's lemma.
+    """
+
+    def __init__(self, path: str) -> None:
+        """Initialize an indexer obejct.
+
+        Args:
+            path: The path to the output directory.
+        """
         self.path = os.path.join(path, 'processed_corpus')
         self.path_in_tokens = os.path.join(self.path, 'pp_token_corpus.txt')
         self.path_in_lemmas = os.path.join(self.path, 'pp_lemma_corpus.txt')
