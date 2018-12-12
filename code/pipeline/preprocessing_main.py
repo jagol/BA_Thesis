@@ -1,9 +1,9 @@
 from utility_functions import *
-from ling_preprocessing import LingPreprocessor
-from term_extraction import TermExtractor
-from indexing import indexer
-from frequency_analysis import FreqAnalyzer
-from embeddings import Embeddings
+from ling_preprocessing import DBLPLingPreprocessor, SPLingPreprocessor
+from pattern_extraction import PatternExtractor
+from indexing import Indexer
+# from frequency_analysis import FreqAnalyzer
+# from embeddings import Embeddings
 
 """
 Main script to execute all preprocessing steps.
@@ -22,44 +22,58 @@ The preprocessing steps are:
 - training hyponym projection model
 """
 
+
 def main():
     # setting up paths and directories
     args = get_cmd_args()
-    config = get_config
+    config = get_config()
     path_out = get_path_out(args, config)
     path_in = get_path_in(args, config)
-    path_lang_model = config['path_lang_model']
+    path_lang_model = config['paths'][args.location]['path_lang_model']
     prep_output_dir(path_out)
 
+    print('Start preprocessing...')
+
     # corpus preprocessing
-    lpp = LingPreprocessor(path_in, path_out, path_lang_model)
+    print('Start tokenization, tagging, lemmatization and marking stop-words...')
+    if args.corpus == 'dblp':
+        lpp = DBLPLingPreprocessor(path_in, path_out, path_lang_model, max_docs=1000)
+    elif args.corpus == 'sp':
+        lpp = SPLingPreprocessor(path_in, path_out, path_lang_model, max_docs=1000)
     lpp.preprocess_corpus()
+    print('Done.')
 
-    # term extraction
-    te = TermExtractor()
-    te.extract_nps()
-
-    # hypernym extraction with hearst
-    he = HearstHypernymExtractor
-    he.extract_hypernyms()
+    # term extraction and hearst pattern extraction
+    print('Start term extraction and hearst pattern extraction...')
+    te = PatternExtractor(path_out)
+    te.extract()
+    print('Done.')
 
     # indexing of corpus
-    idxer = Indexer()
+    print('Start indexing...')
+    idxer = Indexer(path_out)
     idxer.index_tokens()
     idxer.index_lemmas()
+    print('Done.')
 
-    # analyze lemma frequencies
-    fa = FreqAnalyzer(level='lemma')
-    fa.calc_tf()
-    fa.calc_df()
-    fa.calc_dl()
+    # # analyze lemma frequencies
+    # print('Start frequency analysis for tf, df and dl.)
+    # fa = FreqAnalyzer(level='lemma')
+    # fa.calc_tf()
+    # fa.calc_df()
+    # fa.calc_dl()
+    # print('Done')
+    #
+    # # train embeddings
+    # embs = Embeddings('fasttext')
+    # embs.train()
+    # embs.calc_term_vecs()
+    # embs.calc_combined_term_vecs()
+    #
+    # # train hyponym projector
+    # hp = HyponymProjector()
+    # hp.train()
 
-    # train embeddings
-    embs = Embeddings('fasttext')
-    embs.train()
-    embs.calc_term_vecs()
-    embs.calc_combined_term_vecs()
 
-    # train hyponym projector
-    hp = HyponymProjector()
-    hp.train()
+if __name__ == '__main__':
+    main()
