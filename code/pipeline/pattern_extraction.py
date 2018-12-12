@@ -11,7 +11,23 @@ rels_type = Dict[str, List[str]]
 
 
 class PatternExtractor:
-    """Class to extract terms and hearst patterns."""
+    """Class to extract terms and hearst patterns.
+
+    Terms are just NPs matching a pos-tag pattern defined in the
+    TermExtractor.
+
+    The extract method outputs the following files:
+    - 'pp_token_corpus.txt': Tokens are space separated. Multiword-
+        terms are concatenated by '_'. One sent per line. Two newlines
+        between document borders.
+    - 'pp_lemma_corpus.txt': Like 'pp_token_corpus', but with lemmas
+        instead.
+    - 'token_terms.txt': One extracted term per line. Multiword-terms are
+        concatenated by '_'.
+    - 'lemma_terms.txt': Like 'token_terms.txt' but with lemmas instead.
+    - 'hierarchical_relations.json': Dict[str, List[str]]
+        Each hypernym (key) is mapped to a list of hyponyms.
+    """
 
     def __init__(self, path: str, max_docs: Union[int, None] = None) -> None:
         self.path = os.path.join(path, 'processed_corpus')
@@ -98,7 +114,6 @@ class PatternExtractor:
         self.write_terms(self._lemma_terms, self.path_lemma_terms)
         print('Writing hierarchical relations to file...')
         self.write_hierarch_rels()
-        print('Done')
 
     @staticmethod
     def write_terms(terms: Set[str], path: str) -> None:
