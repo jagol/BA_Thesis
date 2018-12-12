@@ -246,13 +246,14 @@ class SPLingPreprocessor(LingPreprocessor):
 
 
 def main():
-    from utility_functions import get_config, get_cmd_args
+    from utility_functions import get_config, get_cmd_args, prep_output_dir
     config = get_config()
     args = get_cmd_args()
     path_in = config['paths'][args.location][args.corpus]['path_in']
     path_out = config['paths'][args.location][args.corpus]['path_out']
     path_lang_model = config['paths'][args.location]['path_lang_model']
-    max_docs = 10000
+    max_docs = 1000
+    prep_output_dir(path_out)
     if args.corpus == 'dblp':
         dp = DBLPLingPreprocessor(path_in, path_out, path_lang_model, max_docs)
         dp.preprocess_corpus()
