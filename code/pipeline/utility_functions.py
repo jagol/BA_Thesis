@@ -116,6 +116,7 @@ def get_docs(fpath: str,
             if line == '\n':
                 if doc:
                     yield format_doc(doc, word_tokenized, sent_tokenized)
+                    doc = []
             else:
                 doc.append(line.strip('\n'))
 
