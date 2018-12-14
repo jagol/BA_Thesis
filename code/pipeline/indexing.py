@@ -55,10 +55,14 @@ class Indexer:
         self.path_idx_lemma_terms = os.path.join(
             self.path_out_corpus, 'lemma_terms_idxs.txt')
 
-        self.path_hierarch_rels = os.path.join(
-            path, 'hierarchy/hierarchical_relations.json')
-        self.path_hierarch_rels_idx = os.path.join(
-            path, 'hierarchy/hierarch_rels_lemma_idx.json')
+        self.path_hierarch_rels_tokens = os.path.join(
+            path, 'hierarchy/hierarchical_relations_tokens.json')
+        self.path_hierarch_rels_lemmas = os.path.join(
+            path, 'hierarchy/hierarchical_relations_lemmas.json')
+        self.path_hierarch_rels_tokens_idx = os.path.join(
+            path, 'hierarchy/hierarch_rels_tokens_idx.json')
+        self.path_hierarch_rels_lemmas_idx = os.path.join(
+            path, 'hierarchy/hierarch_rels_lemmas_idx.json')
 
         self._file_write_threshhold = 10000
         self._docs_processed = 0
@@ -185,14 +189,34 @@ class Indexer:
             for t in terms:
                 fout.write(str(term_to_idx[t]) + '\n')
 
+    def hierarch_rels_to_token_idx(self) -> None:
+        """Convert 'hierarchical_relations_tokens.json' to index repr.
+
+        Output 'hierarch_rels_token_idx.json'.
+        """
+        with open(self.path_token_to_idx, 'r', encoding='utf8') as f:
+            token_to_idx = json.load(f)
+        with open(self.path_hierarch_rels_tokens, 'r', encoding='utf8') as f:
+            hr = json.load(f)
+
+        hr_idx = {}
+        for hyper in hr:
+            hyper_idx = token_to_idx[hyper]
+            hypos = hr[hyper]
+            hypos_idxs = [token_to_idx[hypo] for hypo in hypos]
+            hr_idx[hyper_idx] = hypos_idxs
+
+        with open(self.path_hierarch_rels_tokens_idx, 'w', encoding='utf8') as f:
+            json.dump(hr_idx, f)
+
     def hierarch_rels_to_lemma_idx(self) -> None:
-        """Convert 'hierarchical_relations.json' to index repr.
+        """Convert 'hierarchical_relations_lemmas.json' to index repr.
 
         Output 'hierarch_rels_lemma_idx.json'.
         """
         with open(self.path_lemma_to_idx, 'r', encoding='utf8') as f:
             lemma_to_idx = json.load(f)
-        with open(self.path_hierarch_rels, 'r', encoding='utf8') as f:
+        with open(self.path_hierarch_rels_lemmas, 'r', encoding='utf8') as f:
             hr = json.load(f)
 
         hr_idx = {}
@@ -202,7 +226,7 @@ class Indexer:
             hypos_idxs = [lemma_to_idx[hypo] for hypo in hypos]
             hr_idx[hyper_idx] = hypos_idxs
 
-        with open(self.path_hierarch_rels_idx, 'w', encoding='utf8') as f:
+        with open(self.path_hierarch_rels_lemmas_idx, 'w', encoding='utf8') as f:
             json.dump(hr_idx, f)
 
     def _update_cmd_counter(self) -> None:
@@ -247,6 +271,7 @@ def main():
     idxer = Indexer('output/dblp/')
     idxer.index_tokens()
     idxer.index_lemmas()
+    idxer.hierarch_rels_to_token_idx()
     idxer.hierarch_rels_to_lemma_idx()
 
 
