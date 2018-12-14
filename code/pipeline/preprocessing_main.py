@@ -1,9 +1,10 @@
+import os
 from utility_functions import *
 from ling_preprocessing import DBLPLingPreprocessor, SPLingPreprocessor
 from pattern_extraction import PatternExtractor
 from indexing import Indexer
 from frequency_analysis import FreqAnalyzer
-# from embeddings import Embeddings
+from embeddings import train_fasttext
 
 """
 Main script to execute all preprocessing steps.
@@ -66,20 +67,28 @@ def main():
     # analyze lemma frequencies
     print('Start frequency analysis for tf, df and dl...')
     fa = FreqAnalyzer(path_out)
-    print('Calculate term frequencies...')
-    fa.calc_tf()
-    print('Calculate document frequencies...')
-    fa.calc_df()
+    print('Calculate token term frequencies...')
+    fa.calc_tf('t')
+    print('Calculate lemma term frequencies...')
+    fa.calc_tf('l')
+    print('Calculate token document frequencies...')
+    fa.calc_df('t')
+    print('Calculate lemma document frequencies...')
+    fa.calc_df('l')
     print('Calculate document lengths...')
     fa.calc_dl()
     print('Done.')
-    #
-    # # train embeddings
-    # embs = Embeddings('fasttext')
-    # embs.train()
-    # embs.calc_term_vecs()
+
+    # train embeddings
+    # os.system('cd ./output/dblp/processed_corpus')
+    os.system('head -n 1000 ./output/dblp/processed_corpus/pp_token_corpus.txt > ./output/dblp/processed_corpus/pp_token_corpus_1000.txt')
+    os.system('head -n 1000 ./output/dblp/processed_corpus/pp_lemma_corpus.txt > ./output/dblp/processed_corpus/pp_lemma_corpus_1000.txt')
+    print('Train fasttext token embeddings...')
+    train_fasttext(path_out, 't')
+    print('Train fasttext lemma embeddings...')
+    train_fasttext(path_out, 'l')
     # embs.calc_combined_term_vecs()
-    #
+
     # # train hyponym projector
     # hp = HyponymProjector()
     # hp.train()
