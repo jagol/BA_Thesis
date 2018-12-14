@@ -3,9 +3,11 @@ import torch
 import numpy as np
 import fasttext
 # from allennlp.modules.elmo import Elmo, batch_to_ids
+import os
 from allennlp.commands.elmo import ElmoEmbedder
 from allennlp.modules.similarity_functions.cosine import CosineSimilarity
 import gensim
+from utility_functions import get_docs
 
 
 embeddings_type = List[Iterator[float]]
@@ -55,18 +57,18 @@ class FastTextE(Embeddings):
         self.mpath = 'fasttext_model.bin'
         self.model = None
 
-    def train(self, input_data: str, model_name: str) -> None:
+    def train(self, input_data: str, path_model: str) -> None:
         """Train a fasttext model.
 
         Args:
             input_data: The path to the text file used for training.
-            model_name: Name under which the model is saved.
+            path_model: Name under which the model is saved.
         Output:
             The model is saved in self.model.
             The model is saved as a binary file in <model_name>.bin.
             The model is saved as a vector text file in <model_name>.vec.
         """
-        self.model = fasttext.skipgram(input_data, model_name)
+        self.model = fasttext.skipgram(input_data, path_model)
 
     def load_model(self, fpath: Union[None, str] = None) -> None:
         if fpath:
@@ -82,14 +84,29 @@ class FastTextE(Embeddings):
 
 class Word2VecE(Embeddings):
 
-    def __init__(self):
-        self._mpath = 'GoogleNews-vectors-negative300.bin'
-        self._model = gensim.models.KeyedVectors.load_word2vec_format(
-            self._mpath, binary=True)
+    # def __init__(self):
+    #     self._mpath = 'GoogleNews-vectors-negative300.bin'
+    #     self._model = gensim.models.KeyedVectors.load_word2vec_format(
+    #         self._mpath, binary=True)
+
+    def get_embedding(self, word: str) -> Iterator[float]:
+        """Get the word2vec embeddings for all tokens in <sent>."""
+        return self._model.wv[word]
 
     def get_embeddings(self, sent: List[str]) -> embeddings_type:
         """Get the word2vec embeddings for all tokens in <sent>."""
-        return [self._model.wv[token] for token in sent]
+        return [self._model.wv[word] for word in sent]
+
+    def train(self, input_data: str, path_model: str) -> None:
+        """Train word2vec embeddings.
+
+        Args:
+            input_data: The path to the text file used for training.
+            path_model: Name/path under which the model is saved.
+        """
+        sentences = get_docs(input_data)
+        model = gensim.models.Word2Vec(sentences, min_count=1, workers = 4)
+        model.wv.save(path_model)
 
 
 class CombinedEmbeddings(Embeddings):
@@ -160,6 +177,51 @@ class CombinedEmbeddings(Embeddings):
         avg_embeddings = np.mean(occurence_embeddings, axis=0)
         return avg_embeddings
 
+
+def train_fasttext(path: str) -> None:
+    """Train fasttext models for tokens and lemmas.
+
+    Args:
+        path: Path to the output directory.
+    """
+    # Train fasttext on tokens.
+    path_in = os.path.join(
+        path, 'output/dblp/processed_corpus/pp_token_corpus_1000.txt')
+    path_out = os.path.join(
+        path, 'output/dblp/embeddings/fasttext_token_embeddings')
+    embedder = FastTextE()
+    embedder.train(path_in, path_out)
+
+    # Train fasttext on lemmas.
+    path_in = os.path.join(
+        path, 'output/dblp/processed_corpus/pp_lemma_corpus_1000.txt')
+    path_out = os.path.join(
+        path, 'output/dblp/embeddings/fasttext_lemma_embeddings')
+    embedder = FastTextE()
+    embedder.train(path_in, path_out)
+
+
+# def train_w2v(path: str) -> None:
+#     """Train w2v models for tokens and lemmas.
+#
+#     Args:
+#         path: Path to the output directory.
+#     """
+#     # Train fasttext on tokens.
+#     path_in = os.path.join(
+#         path, 'output/dblp/processed_corpus/pp_token_corpus_1000.txt')
+#     path_out = os.path.join(
+#         path, 'output/dblp/embeddings/w2v_token_embeddings')
+#     embedder = Word2VecE()
+#     embedder.train(path_in, path_out)
+#
+#     # Train fasttext on lemmas.
+#     path_in = os.path.join(
+#         path, 'output/dblp/processed_corpus/pp_lemma_corpus_1000.txt')
+#     path_out = os.path.join(
+#         path, 'output/dblp/embeddings/w2v_lemma_embeddings')
+#     embedder = Word2VecE()
+#     embedder.train(path_in, path_out)
 
 
 if __name__ == '__main__':
