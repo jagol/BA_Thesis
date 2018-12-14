@@ -133,7 +133,6 @@ class FreqAnalyzer:
 
         msg = '{} documents processed'
         print(msg.format(self._docs_processed))
-        print(path_df)
         with open(path_df, 'w', encoding='utf8') as f:
             json.dump(df, f)
 
