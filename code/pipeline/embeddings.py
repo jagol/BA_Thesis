@@ -178,25 +178,24 @@ class CombinedEmbeddings(Embeddings):
         return avg_embeddings
 
 
-def train_fasttext(path: str) -> None:
+def train_fasttext(path: str, level: str) -> None:
     """Train fasttext models for tokens and lemmas.
 
     Args:
         path: Path to the output directory.
+        level: 't' if token, 'l' if lemma.
     """
-    # Train fasttext on tokens.
-    path_in = os.path.join(
-        path, 'output/dblp/processed_corpus/pp_token_corpus_1000.txt')
-    path_out = os.path.join(
-        path, 'output/dblp/embeddings/fasttext_token_embeddings')
-    embedder = FastTextE()
-    embedder.train(path_in, path_out)
+    if level == 't':
+        path_corpus = 'processed_corpus/pp_token_corpus_1000.txt'
+        path_model = 'embeddings/fasttext_token_embeddings'
+    elif level == 'l':
+        path_corpus = 'processed_corpus/pp_lemma_corpus_1000.txt'
+        path_model = 'embeddings/fasttext_lemma_embeddings'
 
-    # Train fasttext on lemmas.
     path_in = os.path.join(
-        path, 'output/dblp/processed_corpus/pp_lemma_corpus_1000.txt')
+        path, path_corpus)
     path_out = os.path.join(
-        path, 'output/dblp/embeddings/fasttext_lemma_embeddings')
+        path, path_model)
     embedder = FastTextE()
     embedder.train(path_in, path_out)
 
