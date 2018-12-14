@@ -395,6 +395,8 @@ class HearstExtractor:
                      ) -> List[Tuple[str, str]]:
         """Use the result of re.findall to extract matches.
 
+        Tokens are lowercased.
+
         Args:
             sent: The input sentence.
             match: A dictionary of matched group and it's contents.
@@ -416,8 +418,9 @@ class HearstExtractor:
             i0 = reli[0]
             i1 = reli[1]
             if level == 't':
-                hyper = ' '.join([sent[i][0] for i in i0])
-                hypo = ' '.join([sent[i][0] for i in i1])
+                # Additionally lowercase all tokens
+                hyper = ' '.join([sent[i][0].lower() for i in i0])
+                hypo = ' '.join([sent[i][0].lower() for i in i1])
             elif level == 'l':
                 hyper = ' '.join([sent[i][2] for i in i0])
                 hypo = ' '.join([sent[i][2] for i in i1])
