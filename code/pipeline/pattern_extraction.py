@@ -38,14 +38,17 @@ class PatternExtractor:
             self.path_out_corpus, 'pp_token_corpus.txt')
         self.path_out_pp_lemmas = os.path.join(
             self.path_out_corpus, 'pp_lemma_corpus.txt')
-        self.path_out_hierarchy_rels = os.path.join(
-            self.path_out_hierarchy, 'hierarchical_relations.json')
+        self.path_hierarchy_rels_tokens = os.path.join(
+            self.path_out_hierarchy, 'hierarchical_relations_tokens.json')
+        self.path_hierarchy_rels_lemmas = os.path.join(
+            self.path_out_hierarchy, 'hierarchical_relations_lemmas.json')
         self.path_token_terms = os.path.join(
             self.path_out_corpus, 'token_terms.txt')
         self.path_lemma_terms = os.path.join(
             self.path_out_corpus, 'lemma_terms.txt')
 
-        self.hierarch_rels = {}     # {hypernym: list of hyponyms}
+        self.hierarch_rels_tokens = {}    # {hypernym: list of hyponyms}
+        self.hierarch_rels_lemmas = {}
 
         self._file_write_threshhold = 10000
         self._docs_processed = 0
@@ -65,29 +68,41 @@ class PatternExtractor:
             doc_concat_tokens = []
             doc_concat_lemmas = []
             for sent in doc:
-                hierarch_rels = HearstExtractor.get_hierarch_rels(sent)
+                # Extract hierarchical relations on token level.
+                hierarch_rels = HearstExtractor.get_hierarch_rels(sent, 't')
                 hierarch_rels_concat = HearstExtractor.concat_rels(
                     hierarch_rels)
-                self.add_hierarch_rels(hierarch_rels_concat)
+                self.add_hierarch_rels(hierarch_rels_concat, 't')
 
+                # Extract hierarchical relations on lemma level.
+                hierarch_rels = HearstExtractor.get_hierarch_rels(sent, 'l')
+                hierarch_rels_concat = HearstExtractor.concat_rels(
+                    hierarch_rels)
+                self.add_hierarch_rels(hierarch_rels_concat, 'l')
+
+                # Find terms and get their indices in the sentence.
                 term_indices = TermExtractor.get_term_indices(sent)
 
                 # Lowercase all tokens. Lemmas are already lowercased.
                 tokens = [w[0].lower() for w in sent]
                 lemmas = [w[2] for w in sent]
 
+                # Concatenate multiword terms.
                 concat_tokens, token_terms = self.concat(tokens, term_indices)
                 concat_lemmas, lemma_terms = self.concat(lemmas, term_indices)
 
+                # Add terms to set of all terms.
                 for tt in token_terms:
                     self._token_terms.add(tt)
 
                 for lt in lemma_terms:
                     self._lemma_terms.add(lt)
 
+                # Add sentence with concatentated terms to document.
                 doc_concat_tokens.append(concat_tokens)
                 doc_concat_lemmas.append(concat_lemmas)
 
+            # Add document to corpus.
             self._token_corpus.append(doc_concat_tokens)
             self._lemma_corpus.append(doc_concat_lemmas)
 
@@ -148,18 +163,24 @@ class PatternExtractor:
 
         return [words, terms]
 
-    def add_hierarch_rels(self, rels: rels_type) -> None:
+    def add_hierarch_rels(self, rels: rels_type, level: str) -> None:
         """Add given hierarchical relations to relation dictionary.
 
         Args:
             rels: a dict containing hypernym-hyponym relations
+            level: 't' if token level, 'l' if lemma level.
         """
+        if level == 't':
+            hierarch_rels = self.hierarch_rels_tokens
+        elif level == 'l':
+            hierarch_rels = self.hierarch_rels_lemmas
+
         for hypernym in rels:
             hyponyms = rels[hypernym]
-            if hypernym in self.hierarch_rels:
-                self.hierarch_rels[hypernym].extend(hyponyms)
+            if hypernym in hierarch_rels:
+                hierarch_rels[hypernym].extend(hyponyms)
             else:
-                self.hierarch_rels[hypernym] = hyponyms
+                hierarch_rels[hypernym] = hyponyms
 
     def write_corpus(self, docs, f_out):
         mode = self._get_write_mode()
@@ -184,8 +205,10 @@ class PatternExtractor:
         return 'a'
 
     def write_hierarch_rels(self):
-        with open(self.path_out_hierarchy_rels, 'w', encoding='utf8') as f:
-            json.dump(self.hierarch_rels, f)
+        with open(self.path_hierarchy_rels_tokens, 'w', encoding='utf8') as f:
+            json.dump(self.hierarch_rels_tokens, f)
+        with open(self.path_hierarchy_rels_lemmas, 'w', encoding='utf8') as f:
+            json.dump(self.hierarch_rels_lemmas, f)
 
     def update_cmd_counter(self) -> None:
         """Update the information on the command line."""
@@ -252,7 +275,7 @@ class TermExtractor:
         for i, word in enumerate(sent):
             # Check if word is a special hearst pattern word.
             # if so, exclude it from any potential terms by
-            # not using it's pos but the lemma.
+            # not using it's pos but the token/lemma.
             if word[2] in lex_words:
                 poses.append(word[2])
             else:
@@ -316,18 +339,20 @@ class HearstExtractor:
 
     @classmethod
     def get_hierarch_rels(cls,
-                          nlp_sent: List[List[str]]
+                          nlp_sent: List[List[str]],
+                          level: str
                           ) -> rels_type:
         """Extract and return hierarchical relations from a sentence.
 
         Args:
             nlp_sent: A list of words. Each word is a tuple of token,
                 pos-tag, lemma, is_stop.
+            level: 't' if token level, 'l' if lemma level.
         Return:
             A dictionary with the extracted hierarchical relations.
         """
         rel_dict = {}
-        rels = cls._get_hypernyms(nlp_sent)
+        rels = cls._get_hypernyms(nlp_sent, level)
         for rel in rels:
             hyper, hypo = rel[0], rel[1]
             if hyper in rel_dict:
@@ -339,12 +364,14 @@ class HearstExtractor:
 
     @classmethod
     def _get_hypernyms(cls,
-                       sent: List[List[str]]
+                       sent: List[List[str]],
+                       level: str
                        ) -> List[Tuple[str, str]]:
         """Extract hypernym relations from a given sentence.
 
         Args:
             sent: input sentence
+            level: 't' if token level, 'l' if lemma level.
         Return:
             A list of hypernyms and hyponyms as tuples.
             (hypernym at index 0, hyponym at index 1)
@@ -355,7 +382,7 @@ class HearstExtractor:
             matches = [m.groupdict() for m in re.finditer(p, pw)]
             for match in matches:
                 if match:
-                    rels = cls._get_matches(sent, match)
+                    rels = cls._get_matches(sent, match, level)
                     for rel in rels:
                         hyp_rels.append(rel)
         return hyp_rels
@@ -363,9 +390,16 @@ class HearstExtractor:
     @classmethod
     def _get_matches(cls,
                      sent: List[List[str]],
-                     match: Dict[str, str]
+                     match: Dict[str, str],
+                     level: str
                      ) -> List[Tuple[str, str]]:
-        """Use the result of re.findall to extract matches."""
+        """Use the result of re.findall to extract matches.
+
+        Args:
+            sent: The input sentence.
+            match: A dictionary of matched group and it's contents.
+            level: 't' if token level, 'l' if lemma level.
+        """
         if match['hypos']:
             hypos_matches = re.split(r',\d+', match['hypos'])
         else:
@@ -381,10 +415,13 @@ class HearstExtractor:
         for reli in rel_inds:
             i0 = reli[0]
             i1 = reli[1]
-            hyper = ' '.join([sent[i][2] for i in i0])
-            hypo = ' '.join([sent[i][2] for i in i1])
+            if level == 't':
+                hyper = ' '.join([sent[i][0] for i in i0])
+                hypo = ' '.join([sent[i][0] for i in i1])
+            elif level == 'l':
+                hyper = ' '.join([sent[i][2] for i in i0])
+                hypo = ' '.join([sent[i][2] for i in i1])
             results.append((hyper, hypo))
-
         return results
 
     @staticmethod
@@ -431,7 +468,6 @@ class HearstExtractor:
         rel_dict_c = {}
         p = re.compile(r' ')
         for hyper in rel_dict:
-            print(hyper, type(hyper))
             hyper_c = re.sub(p, '_', hyper)
             hypos = rel_dict[hyper]
             hypos_c = [re.sub(p, '_', hypo) for hypo in hypos]
