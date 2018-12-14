@@ -2,7 +2,7 @@ from utility_functions import *
 from ling_preprocessing import DBLPLingPreprocessor, SPLingPreprocessor
 from pattern_extraction import PatternExtractor
 from indexing import Indexer
-# from frequency_analysis import FreqAnalyzer
+from frequency_analysis import FreqAnalyzer
 # from embeddings import Embeddings
 
 """
@@ -35,11 +35,14 @@ def main():
     print('Start preprocessing...')
 
     # corpus preprocessing
-    print('Start tokenization, tagging, lemmatization and marking stop-words...')
+    print(
+        'Start tokenization, tagging, lemmatization and marking stop-words...')
     if args.corpus == 'dblp':
-        lpp = DBLPLingPreprocessor(path_in, path_out, path_lang_model, max_docs=1000)
+        lpp = DBLPLingPreprocessor(
+            path_in, path_out, path_lang_model, max_docs=1000)
     elif args.corpus == 'sp':
-        lpp = SPLingPreprocessor(path_in, path_out, path_lang_model, max_docs=1000)
+        lpp = SPLingPreprocessor(
+            path_in, path_out, path_lang_model, max_docs=1000)
     lpp.preprocess_corpus()
     print('Done.')
 
@@ -52,17 +55,24 @@ def main():
     # indexing of corpus
     print('Start indexing...')
     idxer = Indexer(path_out)
+    print('index tokens...')
     idxer.index_tokens()
+    print('index lemmas...')
     idxer.index_lemmas()
+    print('convert relations to index...')
+    idxer.hierarch_rels_to_lemma_idx()
     print('Done.')
 
-    # # analyze lemma frequencies
-    # print('Start frequency analysis for tf, df and dl.)
-    # fa = FreqAnalyzer(level='lemma')
-    # fa.calc_tf()
-    # fa.calc_df()
-    # fa.calc_dl()
-    # print('Done')
+    # analyze lemma frequencies
+    print('Start frequency analysis for tf, df and dl...')
+    fa = FreqAnalyzer(path_out)
+    print('Calculate term frequencies...')
+    fa.calc_tf()
+    print('Calculate document frequencies...')
+    fa.calc_df()
+    print('Calculate document lengths...')
+    fa.calc_dl()
+    print('Done.')
     #
     # # train embeddings
     # embs = Embeddings('fasttext')
