@@ -66,7 +66,9 @@ class PatternExtractor:
             doc_concat_lemmas = []
             for sent in doc:
                 hierarch_rels = HearstExtractor.get_hierarch_rels(sent)
-                self.add_hierarch_rels(hierarch_rels)
+                hierarch_rels_concat = HearstExtractor.concat_rels(
+                    hierarch_rels)
+                self.add_hierarch_rels(hierarch_rels_concat)
 
                 term_indices = TermExtractor.get_term_indices(sent)
 
@@ -243,10 +245,18 @@ class TermExtractor:
             List of terms. Each term is a list of sentence indices,
             which make up the term.
         """
+        lex_words = ['such', 'as', 'and', 'or',
+                     'other', 'including', 'especially']
         poses = []
         for i, word in enumerate(sent):
-            pos = word[1] + str(i)
-            poses.append(pos)
+            # Check if word is a special hearst pattern word.
+            # if so, exclude it from any potential terms by
+            # not using it's pos but the lemma.
+            if word[2] in lex_words:
+                poses.append(word[2])
+            else:
+                pos = word[1] + str(i)
+                poses.append(pos)
 
         pos_sent = ' '.join(poses)
         matches = re.finditer(cls.term_pattern, pos_sent)
@@ -408,6 +418,24 @@ class HearstExtractor:
         poses_words = ' '.join(poses_words)
         return poses_words
 
+    @staticmethod
+    def concat_rels(rel_dict: Dict[str, List[str]]
+                    ) -> Dict[str, List[str]]:
+        """Replace ' ' by '_' in all terms in the relation dictionary.
+
+        Args:
+            rel_dict: relation dictionary of the form:
+            {hyponym: [hypernym1, hypernym2]}
+        """
+        rel_dict_c = {}
+        p = re.compile(r' ')
+        for hyper in rel_dict:
+            print(hyper, type(hyper))
+            hyper_c = re.sub(p, '_', hyper)
+            hypos = rel_dict[hyper]
+            hypos_c = [re.sub(p, '_', hypo) for hypo in hypos]
+            rel_dict_c[hyper_c] = hypos_c
+        return rel_dict_c
 
 def get_pp_corpus(fpath: str) -> Generator[List[List[List[str]]], None, None]:
     """Yield the documents of the corpus in the given file.
