@@ -72,7 +72,8 @@ class PatternExtractor:
 
                 term_indices = TermExtractor.get_term_indices(sent)
 
-                tokens = [w[0] for w in sent]
+                # Lowercase all tokens. Lemmas are already lowercased.
+                tokens = [w[0].lower() for w in sent]
                 lemmas = [w[2] for w in sent]
 
                 concat_tokens, token_terms = self.concat(tokens, term_indices)
@@ -436,6 +437,7 @@ class HearstExtractor:
             hypos_c = [re.sub(p, '_', hypo) for hypo in hypos]
             rel_dict_c[hyper_c] = hypos_c
         return rel_dict_c
+
 
 def get_pp_corpus(fpath: str) -> Generator[List[List[List[str]]], None, None]:
     """Yield the documents of the corpus in the given file.
