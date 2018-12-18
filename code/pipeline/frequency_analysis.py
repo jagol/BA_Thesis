@@ -182,7 +182,11 @@ class FreqAnalyzer:
 
 
 def main():
-    fa = FreqAnalyzer('./output/dblp/')
+    from utility_functions import get_config, get_cmd_args
+    config = get_config()
+    args = get_cmd_args()
+    path = config['paths'][args.location][args.corpus]['path_out']
+    fa = FreqAnalyzer(path)
     fa.calc_tf('t')
     fa.calc_tf('l')
     fa.calc_df('t')
