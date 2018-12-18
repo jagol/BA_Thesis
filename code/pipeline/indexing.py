@@ -71,8 +71,9 @@ class Indexer:
 
     def index_tokens(self):
         print('indexing of tokens...')
-        token_to_idx, idx_to_token = self.index(
-            self.path_in_tokens, self.path_out_idx_tokens)
+        token_to_idx, idx_to_token = self.index(self.path_in_tokens,
+                                                self.path_out_idx_tokens,
+                                                self.path_token_terms)
 
         print('Writing idx-word-mappings to file...')
         with open(self.path_token_to_idx, 'w', encoding='utf8') as f:
@@ -86,8 +87,9 @@ class Indexer:
 
     def index_lemmas(self):
         print('indexing of lemmas...')
-        lemma_to_idx, idx_to_lemma = self.index(
-            self.path_in_lemmas, self.path_out_idx_lemmas)
+        lemma_to_idx, idx_to_lemma = self.index(self.path_in_lemmas,
+                                                self.path_out_idx_lemmas,
+                                                self.path_lemma_terms)
 
         print('Writing idx-word-mappings to file...')
         with open(self.path_lemma_to_idx, 'w', encoding='utf8') as f:
@@ -101,7 +103,8 @@ class Indexer:
 
     def index(self,
               path_in: str,
-              path_out: str
+              path_out: str,
+              path_terms: str
               ) -> Tuple[Dict[str, int], Dict[int, str]]:
         """Create an index representation for the input corpus.
 
@@ -114,6 +117,12 @@ class Indexer:
         """
         self._docs_processed = 0
         self._start_time = time.time()
+
+        # terms = set()
+        # with open(path_terms, 'r', encoding='utf8') as fin:
+        #     for line in fin:
+        #         terms.add(line.strip('\n'))
+
         word_to_idx = {}
         idx_to_word = {}
         i = 0
@@ -123,6 +132,14 @@ class Indexer:
             for sent in doc:
                 for word in sent:
                     if word not in word_to_idx:
+                        # if word in terms:
+                        #     idx = int('00'+str(i))
+                        #     print(30*'-')
+                        #     print(i, idx)
+                        #     word_to_idx[word] = idx
+                        #     idx_to_word[idx] = word
+                        #     i += 1
+                        # else:
                         word_to_idx[word] = i
                         idx_to_word[i] = word
                         i += 1
@@ -268,7 +285,11 @@ class Indexer:
 
 
 def main():
-    idxer = Indexer('output/dblp/')
+    from utility_functions import get_config, get_cmd_args
+    config = get_config()
+    args = get_cmd_args()
+    path = config['paths'][args.location][args.corpus]['path_out']
+    idxer = Indexer(path)
     idxer.index_tokens()
     idxer.index_lemmas()
     idxer.hierarch_rels_to_token_idx()
