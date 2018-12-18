@@ -508,7 +508,10 @@ def get_pp_corpus(fpath: str) -> Generator[List[List[List[str]]], None, None]:
 
 
 def main():
-    path = 'output/dblp/'
+    from utility_functions import get_config, get_cmd_args
+    config = get_config()
+    args = get_cmd_args()
+    path = config['paths'][args.location][args.corpus]['path_out']
     pe = PatternExtractor(path)
     pe.extract()
 
