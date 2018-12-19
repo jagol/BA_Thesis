@@ -104,11 +104,11 @@ def get_docs(fpath: str,
 
     Args:
         fpath: path to corpus file
-        word_tokenized: indicate, if output should be word_tokenized
-        sent_tokenized: indicate, if output should be split into
-            sentences
+        word_tokenized: Indicate, if output should be word_tokenized.
+        sent_tokenized: Indicate, if output should be split into
+            sentences.
     Return:
-        a generator object of documents
+        A generator object of documents.
     """
     with open(fpath, 'r', encoding='utf8') as f:
         doc = []
@@ -119,6 +119,25 @@ def get_docs(fpath: str,
                     doc = []
             else:
                 doc.append(line.strip('\n'))
+
+
+def get_docs_list(fpath: str,
+                  word_tokenized: str,
+                  sent_tokenized: str
+                  ) -> None:
+    """Same as get_docs, but returns a list instead of a geneartor."""
+    with open(fpath, 'r', encoding='utf8') as f:
+        docs = []
+        doc = []
+        for line in f:
+            if line == '\n':
+                if doc:
+                    docs.append(format_doc(doc, word_tokenized, sent_tokenized))
+                    doc = []
+            else:
+                doc.append(line.strip('\n'))
+
+        return docs
 
 
 def format_doc(doc: List[str],
@@ -147,3 +166,74 @@ def format_doc(doc: List[str],
         return doc
     else:
         return ' '.join(doc)
+
+
+def get_num_docs(path: str) -> int:
+    """Get the number of documents in a corpus."""
+    with open(path, 'r', encoding='utf8') as f:
+        counter = 0
+        for line in f:
+            if line == '\n':
+                counter += 1
+    return counter
+
+
+def split_corpus(path_in: str, path_out: str, n: int) -> List[str]:
+    """Split a corpus into n evenly sized number of documents."""
+    num_docs = get_num_docs(path_in)
+    split_points = [int(num_docs/n*i) for i in range(1, n+1)]
+    split_points.append(num_docs)
+    j = 0  # pointer to the current split-point
+    num_docs = 0
+
+    fnames = []
+    with open(path_in, 'r', encoding='utf8') as f:
+        lines = []
+        for line in f:
+            lines.append(line)
+
+            if line == '\n':
+                num_docs += 1
+
+            if num_docs == split_points[j]:
+                fname = str(num_docs) + '.txt.split'
+                fnames.append(fname)
+                fpath = os.path.join(path_out, fname)
+                f = open(fpath, 'w', encoding='utf8')
+                docs = ''.join(lines)
+                f.write(docs)
+                f.close()
+                lines = []
+                print(j, split_points[j])
+                j += 1
+
+        # # write last chunk to file
+        # fname = str(num_docs) + '.txt'
+        # fnames.append(fname)
+        # fpath = os.path.join(path_out, fname)
+        # f = open(fpath, 'w', encoding='utf8')
+        # docs = ''.join(lines)
+        # f.write(docs)
+        # f.close()
+
+    return fnames
+
+
+def concat_corpus(paths_in: List[str], path_out) -> None:
+    """Concatenate the given files.
+
+    Args:
+        paths_in: The list of paths to the files.
+        path_out: The path to the output file.
+    """
+    paths_in_str = ' '.join(paths_in)
+    os.system('cat {0} > {1}'.format(paths_in_str, path_out))
+
+
+def main():
+    path = 'output/dblp/processed_corpus/pp_lemma_corpus.txt'
+    split_corpus(path, 8)
+
+
+if __name__ == '__main__':
+    main()
