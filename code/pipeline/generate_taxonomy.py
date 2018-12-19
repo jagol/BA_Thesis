@@ -82,7 +82,7 @@ def build_corpus(doc_ids: Set[int], cur_node_id: int) -> str:
     with open(path_out, 'w', encoding='utf8') as f:
         for i, doc in enumerate(get_docs(path, word_tokenized=False)):  # yields strings of sentences
             for sent in doc:
-                line =
+                pass
 
 
 
