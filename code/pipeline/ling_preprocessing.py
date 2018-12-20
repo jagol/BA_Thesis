@@ -2,7 +2,7 @@ import os
 import re
 import gzip
 import time
-from typing import List, Tuple, BinaryIO
+from typing import List, Tuple, BinaryIO, Any
 import spacy
 from text_processing_unit import TextProcessingUnit
 
@@ -73,7 +73,7 @@ class LingPreprocessor(TextProcessingUnit):
         path_infile = os.path.join(self.path_in)
         with gzip.open(path_infile, 'r') as f:
             for doc in self._doc_getter(f):
-                self._process_doc(doc)
+                self._process_doc(doc, True)
 
                 if self._docs_processed >= self._upper_bound:
                     break
@@ -91,8 +91,32 @@ class LingPreprocessor(TextProcessingUnit):
         self._update_cmd_time_info(end=True)
         self._write_pp_corpus_to_file()
 
+    # def _process_doc(self,
+    #                  doc: str
+    #                  ) -> None:
+    #     """Tokenize, pos-tag, lemmatize, and get stop-words for corpus."""
+    #     pp_doc = []
+    #
+    #     # process each sentence of doc
+    #     nlp_doc = self._nlp(doc)
+    #     for i, sent in enumerate(nlp_doc.sents):
+    #         nlp_sent = [(token.text, token.tag_, token.lemma_,
+    #                      token.is_stop)
+    #                     for token in sent]
+    #
+    #         # append processed sentences to doc
+    #         pp_doc.append(nlp_sent)
+    #
+    #     # add processed doc to corpus
+    #     self._pp_corpus.append(pp_doc)
+    #
+    #     # update the command line
+    #     self._docs_processed += 1
+    #     self._update_cmd_counter()
+
     def _process_doc(self,
-                     doc: str
+                     doc: str,
+                     concat_nps: bool
                      ) -> None:
         """Tokenize, pos-tag, lemmatize, and get stop-words for corpus."""
         pp_doc = []
@@ -103,6 +127,9 @@ class LingPreprocessor(TextProcessingUnit):
             nlp_sent = [(token.text, token.tag_, token.lemma_,
                          token.is_stop)
                         for token in sent]
+            if concat_nps:
+                np_indices = self._get_np_indices(sent)
+                nlp_sent = self._concat_np(nlp_sent, np_indices)
 
             # append processed sentences to doc
             pp_doc.append(nlp_sent)
@@ -113,6 +140,49 @@ class LingPreprocessor(TextProcessingUnit):
         # update the command line
         self._docs_processed += 1
         self._update_cmd_counter()
+
+    @staticmethod
+    def _get_np_indices(nlp_sent: Any) -> List[Tuple[int, int]]:
+        """Get the starting and ending indices of NPs."""
+        return [(np.start, np.end) for np in nlp_sent.noun_chunks]
+
+    def _concat_np(self,
+                   nlp_sent: nlp_sent_type,
+                   np_indices: List[Tuple[int, int]]
+                   ) -> nlp_sent_type:
+        """Replace all NPs by concatenated NPs and give the tag 'np'.
+
+        Args:
+            ...
+        """
+        strip_pattern = re.compile(r'^[Aa]n?_|^[Tt]he_|^-_|_-$')
+        repl_pattern = re.compile(r'_-_')
+        tokens = [t[0] for t in nlp_sent]
+        tags = [t[1] for t in nlp_sent]
+        lemmas = [t[2] for t in nlp_sent]
+        is_stop = [t[3] for t in nlp_sent]
+        for start, end in np_indices[::-1]:
+            # Create concats.
+            concat_tokens = '_'.join(tokens[start:end])
+            concat_tokens = re.sub(strip_pattern, '', concat_tokens)
+            concat_tokens = re.sub(repl_pattern, '_', concat_tokens)
+            concat_tags = 'np'
+            concat_lemmas = '_'.join(lemmas[start:end])
+            concat_lemmas = re.sub(strip_pattern, '', concat_lemmas)
+            concat_lemmas = re.sub(repl_pattern, '_', concat_lemmas)
+            concat_is_stop = False
+
+            # Place concatenated in original list.
+            tokens[start: end] = [concat_tokens]
+            tags[start: end] = [concat_tags]
+            lemmas[start: end] = [concat_lemmas]
+            is_stop[start: end] = [concat_is_stop]
+
+        nlp_sent = []
+        for t in zip(tokens, tags, lemmas, is_stop):
+            nlp_sent.append(tuple(t))
+
+        return nlp_sent
 
     def _write_pp_corpus_to_file(self) -> None:
         mode = self._get_write_mode()
@@ -245,6 +315,9 @@ class SPLingPreprocessor(LingPreprocessor):
         pass
 
 
+
+
+
 def main():
     from utility_functions import get_config, get_cmd_args, prep_output_dir
     config = get_config()
@@ -255,7 +328,7 @@ def main():
     max_docs = 1000
     prep_output_dir(path_out)
     if args.corpus == 'dblp':
-        dp = DBLPLingPreprocessor(path_in, path_out, path_lang_model, max_docs)
+        dp = DBLPLingPreprocessor(path_in, path_out, path_lang_model, max_docs=max_docs)
         dp.preprocess_corpus()
     elif args.corpus == 'sp':
         sp = SPLingPreprocessor(path_in, path_out, path_lang_model, max_docs)
