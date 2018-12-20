@@ -3,6 +3,7 @@ import json
 import subprocess
 from typing import *
 from corpus import get_relevant_docs
+from utility_functions import get_docs
 
 
 def generate_taxonomy():
@@ -64,7 +65,7 @@ def rec_find_children(term_ids: Set[int], cur_node_id: int, level: int, path_out
 
 
 def build_corpus(doc_ids: Set[int], cur_node_id: int) -> str:
-    """Generate file from document ids.
+    """Generate corpus file from document ids.
 
     Reads the TOKEN-Corpus!!!
 
@@ -79,11 +80,26 @@ def build_corpus(doc_ids: Set[int], cur_node_id: int) -> str:
     """
     path_in = 'processed_corpus/pp_token_corpus.txt'
     path_out = 'processed_corpus/{}.txt'.format(cur_node_id)
-    with open(path_out, 'w', encoding='utf8') as f:
-        for i, doc in enumerate(get_docs(path, word_tokenized=False)):  # yields strings of sentences
-            for sent in doc:
-                pass
 
+    # Buffer to store n number of docs. (less writing operations)
+    docs_str = ''
+    # yields sentences as strings
+    with open(path_out, 'w', encoding='utf8') as f_out:
+        for i, doc in enumerate(get_docs(path_in, word_tokenized=False)):
+            doc_str = ''
+            for sent in doc:
+                line = sent + '\n'
+                doc_str += line
+            doc_str += '\n'
+            docs_str += doc_str
+
+            if i % 1000 == 0:
+                f_out.write(docs_str)
+                docs_str = ''
+
+        f_out.write(docs_str)
+
+    return path_out
 
 
 def train_embeddings(path_corpus: str,
