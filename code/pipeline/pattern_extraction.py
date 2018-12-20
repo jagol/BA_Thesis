@@ -253,8 +253,9 @@ class TermExtractor:
 
     # term_pattern = re.compile((r'(JJ[RS]{0,2}\d+ |NN[PS]{0,2}\d+ '
     #                            r'|IN\d+ |VB[NG]\d+ )*NN[PS]{0,2}\d+'))
-    term_pattern = re.compile(r'(JJ[RS]{0,2}\d+ |NN[PS]{0,2}\d+ |VB[NG]\d+ )*'
-                              r'NN[PS]{0,2}\d+')
+    # term_pattern = re.compile(r'(JJ[RS]{0,2}\d+ |NN[PS]{0,2}\d+ |VB[NG]\d+ )*'
+    #                           r'NN[PS]{0,2}\d+')
+    term_pattern = r'np\d+'
     index_pattern = re.compile(r'(\w+?)(\d+)')
 
     @classmethod
@@ -310,7 +311,9 @@ class HearstExtractor:
 
     # np = r'(JJ[RS]{0,2}\d+ |NN[PS]{0,2}\d+ |IN\d+ |VB[NG]\d+ )*
     # NN[PS]{0,2}\d+'
-    np = r'(JJ[RS]{0,2}\d+ |NN[PS]{0,2}\d+ |VB[NG]\d+ )*NN[PS]{0,2}\d+'
+    # np = r'(JJ[RS]{0,2}\d+ |NN[PS]{0,2}\d+ |VB[NG]\d+ )*NN[PS]{0,2}\d+' <- extended
+    # np = r'(NN[PS]{0,2}\d+ )*NN[PS]{0,2}\d+' # <- only_NN
+    np = r'np\d+'
     comma = r',\d+'
     conj = r'(or|and)'
 
