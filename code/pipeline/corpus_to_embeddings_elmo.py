@@ -1,5 +1,6 @@
 from typing import *
 import time
+import re
 import os
 import json
 import multiprocessing as mp
@@ -84,7 +85,7 @@ def embed_corpus_terms(path: str, level: str, num_processes: int):
     time_passed = end_time-start_time
     print('time-passed:', time_passed)
     print('Concatenating corpus files...')
-    merge_dicts(fnames_emb, './all_corpus_term_embs.emb')
+    merge_dicts(fnames_emb, './all_corpus_term_embs.json')
     print('Cleaning temporary files...')
     # os.system('rm {}*.emb; rm {}*.txt.split'.format(path_out, path_out))
     print('Done.')
@@ -147,7 +148,8 @@ def embed_terms(path_term_to_idxs: str,
 
     for i, doc in enumerate(get_docs(path_in)):
         doc_id = start_num + i
-        print('processing {}...'.format(i))
+        print('processing {}...'.format(doc_id))
+        print('doc_id and doc', doc_id, doc)
         for sent in doc:
             sent_terms = []
             for j in range(len(sent)):
@@ -155,15 +157,17 @@ def embed_terms(path_term_to_idxs: str,
                 if word in terms_to_idxs:
                     term_idx = terms_to_idxs[word]
                     sent_terms.append((term_idx, word.split('_'), j))
-                if sent_terms:
-                    prepped_sent, term_idxs = prepare_sentence(sent, sent_terms)
-                    embs = elmo.get_embeddings(prepped_sent)
-                    for h in range(len(sent_terms)):
-                        term = sent_terms[h]
-                        term_emb = get_term_emb(embs, term_idxs[h])
-                        # term_emb = [float(f) for f in embs[term[1]]]
-                        term_idx = term[0]
-                        term_embs_per_doc[term_idx][doc_id].append(term_emb)
+            print('doc-id and sent-terms:', doc_id, sent_terms)
+            if sent_terms:
+                prepped_sent, term_idxs = prepare_sentence(sent, sent_terms)
+                print(prepped_sent, term_idxs)
+                embs = elmo.get_embeddings(prepped_sent)
+                for h in range(len(sent_terms)):
+                    term = sent_terms[h]
+                    term_emb = get_term_emb(embs, term_idxs[h])
+                    # term_emb = [float(f) for f in embs[term[1]]]
+                    term_idx = term[0]
+                    term_embs_per_doc[term_idx][doc_id].append(term_emb)
         if i > 100:
             break
 
@@ -210,7 +214,7 @@ def prepare_sentence(sent: List[str],
     for i in range(len(sent_terms))[::-1]:
         term = sent_terms[i]
         term_idx = term[2]
-        term_words = [t + str(i) for t in term[1]]
+        term_words = [t + '__' + str(i) for t in term[1]]
         sent[term_idx] = term_words
 
     # Flatten list.
@@ -222,15 +226,17 @@ def prepare_sentence(sent: List[str],
         else:
             flat_sent.append(w)
 
-    # Get indices and clean sent. Only works if there are less then 10 terms in one sentence.
     prepped_sent = []
     indices_in_sent = defaultdict(list)
+    pattern = re.compile(r'__(\d+)')
     for i in range(len(flat_sent)):
         w = flat_sent[i]
-        if w[-1].isdigit():
-            term_idx = int(w[-1])
+        # if w[-1].isdigit():
+        match = re.search(pattern, w)
+        if match:
+            term_idx = int(match.group(1))
             indices_in_sent[term_idx].append(i)
-            w = w[:-1]
+            w = re.sub(pattern, '', w)
             prepped_sent.append(w)
         else:
             prepped_sent.append(w)
@@ -252,12 +258,13 @@ def merge_dicts(fpaths: List[str], path_out: str) -> None:
     for fp in fpaths:
         with open(fp, 'r', encoding='utf8') as f:
             cur_dict = json.load(f)
+            print(cur_dict.keys())
             for term_id in cur_dict:
                 if term_id in out_dict:
                     cur_term_dict = cur_dict[term_id]
                     out_dict_term = out_dict[term_id]
-                    for doc_id in embs_term:
-                        if doc_id in out_dict_term[doc_id]:
+                    for doc_id in cur_term_dict:
+                        if doc_id in out_dict_term:
                             print(
                                 'Two files have the same doc_ids...there is something wrong!')
                         else:
@@ -265,7 +272,7 @@ def merge_dicts(fpaths: List[str], path_out: str) -> None:
                 else:
                     out_dict[term_id] = cur_dict[term_id]
     with open(path_out, 'w', encoding='utf8') as f:
-        json.dump(out_dict)
+        json.dump(out_dict, f)
 
 
 # def embed_docs(path_in: str, path_out: str) -> None:
