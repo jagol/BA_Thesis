@@ -1,8 +1,9 @@
 from typing import *
+from collections import defaultdict
+import json
 import torch
 import numpy as np
 import fasttext
-# from allennlp.modules.elmo import Elmo, batch_to_ids
 import os
 from allennlp.commands.elmo import ElmoEmbedder
 from allennlp.modules.similarity_functions.cosine import CosineSimilarity
@@ -27,13 +28,16 @@ class ElmoE(Embeddings):
         # self._weights = 'elmo_2x4096_512_2048cnn_2xhighway_5.5B_weights.hdf5'
         self.elmo = ElmoEmbedder()
 
-    def get_embeddings(self, sent: List[str]) -> embeddings_type:
+    def get_embeddings(self, sent: List[str], mode: int) -> embeddings_type:
         """Get embeddings for all tokens in <sent>.
 
         Args:
-            sent: The sentence the word appears in.
-        Return:
-            The concatenation of the two hidden layer embeddings.
+            sent: The sentence to be embedded.
+            mode: determines what is returned.
+                if 0: The context insensitive repr is returned.
+                if 1: The last LSTM-layer is returned (context
+                    sensitive repr).
+                if 2: The concatenation of option 0 and 1 is returned.
         """
         # character_ids = batch_to_ids([sent])
         # embeddings = self._elmo(character_ids)
@@ -43,8 +47,89 @@ class ElmoE(Embeddings):
         #                  for tpl in zip(layer1, layer2)]
         # return concatenation
         embeddings = self.elmo.embed_sentence(sent)
-        vectors_layer3 = embeddings[2]
-        return vectors_layer3
+        if mode == 0:
+            return embeddings[0]
+        elif mode == 1:
+            return embeddings[2]
+        elif mode == 2:
+            concatenation = [torch.cat((tpl[0], tpl[1]), 0)
+                             for tpl in zip(embeddings[0], embeddings[2])]
+            return concatenation
+
+    # def calc_avg_embs_per_doc(self,
+    #                           path: str,
+    #                           level: str
+    #                           ) -> None:
+    #     """Compute the average ELMo embedding per document.
+    #
+    #     Produce a dict of the form:
+    #     {term_id: {doc_id: [avg<float>, weight<int>]}
+    #
+    #     Save it under '/embeddings/avg_embs_per_doc.json'.
+    #
+    #     Args:
+    #         cpath: Path to the output directory.
+    #         level: 't' if token, 'l' if lemma.
+    #     """
+    #     if level == 't':
+    #         cpath = os.path.join(
+    #             path, 'processed_corpus/pp_token_corpus.txt')
+    #         cpath_idx = os.path.join(
+    #             path, 'processed_corpus/token_idx_corpus.txt')
+    #         path_terms = os.path.join(
+    #             path, 'processed_corpus/token_terms_idxs.txt')
+    #         path_out = os.path.join(
+    #             path, 'embeddings/elmo_avg_embs_per_doc_tokens.json')
+    #     elif level == 'l':
+    #         cpath = os.path.join(
+    #             path, 'processed_corpus/pp_lemma_corpus.txt')
+    #         cpath_idx = os.path.join(
+    #             path, 'processed_corpus/lemma_idx_corpus.txt')
+    #         path_terms = os.path.join(
+    #             path, 'processed_corpus/lemma_terms_idxs.txt')
+    #         path_out = os.path.join(
+    #             path, 'embeddings/elmo_avg_embs_per_doc_lemmas.json')
+    #
+    #     terms = set()
+    #     with open(path_terms, 'r', encoding='utf8') as fin:
+    #         for line in fin:
+    #             terms.add(line.strip('\n'))
+    #
+    #     avg_embs = defaultdict(lambda: defaultdict(int))
+    #     # Loop though both corpus files at once. Get term embeddings.
+    #     doc_counter = -1
+    #     # for word_doc, idx_doc in zip(get_docs(cpath), get_docs(cpath_idx)):
+    #     #     doc_counter += 1
+    #     #     print('processing {}'.format(doc_counter))
+    #     #     doc_embs = defaultdict(list)   #  {term_idx: [emb1, emb2, ...]}
+    #     #     for i in range(len(idx_doc)):
+    #     #         idx_sent = idx_doc[i]
+    #     #         word_sent = word_doc[i]
+    #     #         for j in range(len(idx_sent)):
+    #     #             idx = idx_sent[j]
+    #     #             if idx in terms:
+    #     #                 emb = self.get_embeddings(word_sent)[j]
+    #     #                 doc_embs[idx].append(emb)
+    #     for doc in get_docs(cpath):
+    #         doc_counter += 1
+    #         print('processing {}'.format(doc_counter))
+    #         for i in range(len(doc)):
+    #             word_sent = doc[i]
+    #             emb = self.get_embeddings(word_sent)
+    #
+    #         # # Calculate average term embeddings per document
+    #         # # and it's weight (=number of term occurences).
+    #         # for idx in doc_embs:
+    #         #     embs = doc_embs[idx]
+    #         #     weight = len(embs)
+    #         #     avg_emb = np.mean(embs)
+    #         #     avg_embs[idx][doc_counter] = [avg_emb.tolist(), weight]
+    #
+    #         if doc_counter >= 10:
+    #             break
+    #
+    #     with open(path_out, 'w', encoding='utf8') as f:
+    #         json.dump(avg_embs, f)
 
 
 class GloveE(Embeddings):
@@ -157,25 +242,25 @@ class CombinedEmbeddings(Embeddings):
         return combined_vectors
 
 
-    def get_avg_emb(term_id: str, corpus: List[int]) -> Iterator[float]:
-        """Get the average Embedding for all occurences of a term.
-
-        Args:
-            term_id: The term for which the avg embeddings is computed.
-            corpus: A list of document indices which make up the corpus.
-        Return:
-            The average term embedding as a numpy array.
-        """
-        sents, indices = get_term_sents(term_id, corpus)
-        # returns list of tuples (lemmatized sentences, index at which term is)
-        occurence_embeddings = []  # List of embeddings of term
-        for i in range(len(sents)):
-            sent, idx = sents[i], indices[i]
-            term_embedding = self.get_embeddings(sent)[idx]
-            occurence_embeddings.append(term_embedding)
-        # avg the occurence embeddings
-        avg_embeddings = np.mean(occurence_embeddings, axis=0)
-        return avg_embeddings
+    # def get_avg_emb(self, term_id: str, corpus: List[int]) -> Iterator[float]:
+    #     """Get the average Embedding for all occurences of a term.
+    #
+    #     Args:
+    #         term_id: The term for which the avg embeddings is computed.
+    #         corpus: A list of document indices which make up the corpus.
+    #     Return:
+    #         The average term embedding as a numpy array.
+    #     """
+    #     sents, indices = get_term_sents(term_id, corpus)
+    #     # returns list of tuples (lemmatized sentences, index at which term is)
+    #     occurence_embeddings = []  # List of embeddings of term
+    #     for i in range(len(sents)):
+    #         sent, idx = sents[i], indices[i]
+    #         term_embedding = self.get_embeddings(sent)[idx]
+    #         occurence_embeddings.append(term_embedding)
+    #     # avg the occurence embeddings
+    #     avg_embeddings = np.mean(occurence_embeddings, axis=1)
+    #     return avg_embeddings
 
 
 def train_fasttext(path: str, level: str) -> None:
