@@ -100,7 +100,7 @@ class FreqAnalyzer:
 
     def _get_write_mode(self) -> str:
         """Return the mode in which the file should be written to."""
-        if self._docs_processed == self._file_write_threshhold:
+        if self._docs_processed <= self._file_write_threshhold:
             return 'w'
         return 'a'
 
