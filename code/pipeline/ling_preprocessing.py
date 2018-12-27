@@ -73,7 +73,7 @@ class LingPreprocessor(TextProcessingUnit):
         path_infile = os.path.join(self.path_in)
         with gzip.open(path_infile, 'r') as f:
             for doc in self._doc_getter(f):
-                self._process_doc(doc, True)
+                self._process_doc(doc, concat_nps=True)
 
                 if self._docs_processed >= self._upper_bound:
                     break
@@ -89,6 +89,7 @@ class LingPreprocessor(TextProcessingUnit):
                     self._pp_corpus = []
 
         self._update_cmd_time_info(end=True)
+        print(self._pp_corpus)
         self._write_pp_corpus_to_file()
 
     # def _process_doc(self,
@@ -142,13 +143,13 @@ class LingPreprocessor(TextProcessingUnit):
         self._update_cmd_counter()
 
     @staticmethod
-    def _get_np_indices(nlp_sent: Any) -> List[Tuple[int, int]]:
-        """Get the starting and ending indices of NPs."""
-        return [(np.start, np.end) for np in nlp_sent.noun_chunks]
+    def _get_np_indices(nlp_sent: Any) -> List[Tuple[int, int, int]]:
+        """Get the starting, ending and root index of NPs."""
+        return [(np.start, np.end, np.root.i) for np in nlp_sent.noun_chunks]
 
     def _concat_np(self,
                    nlp_sent: nlp_sent_type,
-                   np_indices: List[Tuple[int, int]]
+                   np_indices: List[Tuple[int, int, int]]
                    ) -> nlp_sent_type:
         """Replace all NPs by concatenated NPs and give the tag 'np'.
 
@@ -161,15 +162,20 @@ class LingPreprocessor(TextProcessingUnit):
         tags = [t[1] for t in nlp_sent]
         lemmas = [t[2] for t in nlp_sent]
         is_stop = [t[3] for t in nlp_sent]
-        for start, end in np_indices[::-1]:
+        for start, end, root in np_indices[::-1]:
             # Create concats.
             concat_tokens = '_'.join(tokens[start:end])
             concat_tokens = re.sub(strip_pattern, '', concat_tokens)
             concat_tokens = re.sub(repl_pattern, '_', concat_tokens)
-            concat_tags = 'np'
+
+            # Tag noun phrase as '*np' where '*' is the relative
+            # position/index of the root in the noun phrase.
+            concat_tags = str(root-start) + 'np'
+
             concat_lemmas = '_'.join(lemmas[start:end])
             concat_lemmas = re.sub(strip_pattern, '', concat_lemmas)
             concat_lemmas = re.sub(repl_pattern, '_', concat_lemmas)
+
             concat_is_stop = False
 
             # Place concatenated in original list.
@@ -181,6 +187,7 @@ class LingPreprocessor(TextProcessingUnit):
         nlp_sent = []
         for t in zip(tokens, tags, lemmas, is_stop):
             nlp_sent.append(tuple(t))
+        print(nlp_sent)
 
         return nlp_sent
 
@@ -192,7 +199,7 @@ class LingPreprocessor(TextProcessingUnit):
 
     def _get_write_mode(self) -> str:
         """Return the mode in which the file should be written to."""
-        if self._docs_processed == self._file_write_threshhold:
+        if self._docs_processed <= self._file_write_threshhold:
             return 'w'
         return 'a'
 
@@ -326,7 +333,7 @@ def main():
     path_out = config['paths'][args.location][args.corpus]['path_out']
     path_lang_model = config['paths'][args.location]['path_lang_model']
     max_docs = 1000
-    prep_output_dir(path_out)
+    # prep_output_dir(path_out)
     if args.corpus == 'dblp':
         dp = DBLPLingPreprocessor(path_in, path_out, path_lang_model, max_docs=max_docs)
         dp.preprocess_corpus()
