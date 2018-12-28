@@ -91,29 +91,6 @@ class LingPreprocessor(TextProcessingUnit):
         self._update_cmd_time_info(end=True)
         self._write_pp_corpus_to_file()
 
-    # def _process_doc(self,
-    #                  doc: str
-    #                  ) -> None:
-    #     """Tokenize, pos-tag, lemmatize, and get stop-words for corpus."""
-    #     pp_doc = []
-    #
-    #     # process each sentence of doc
-    #     nlp_doc = self._nlp(doc)
-    #     for i, sent in enumerate(nlp_doc.sents):
-    #         nlp_sent = [(token.text, token.tag_, token.lemma_,
-    #                      token.is_stop)
-    #                     for token in sent]
-    #
-    #         # append processed sentences to doc
-    #         pp_doc.append(nlp_sent)
-    #
-    #     # add processed doc to corpus
-    #     self._pp_corpus.append(pp_doc)
-    #
-    #     # update the command line
-    #     self._docs_processed += 1
-    #     self._update_cmd_counter()
-
     def _process_doc(self,
                      doc: str,
                      concat_nps: bool
@@ -131,7 +108,6 @@ class LingPreprocessor(TextProcessingUnit):
 
         # process each sentence of doc
         nlp_doc = self._nlp(doc)
-        # sents_bw = list(nlp_doc.sents)[::-1]
         for sent in nlp_doc.sents:
             proc_sent = [(token.text, token.tag_, token.lemma_,
                          token.is_stop)
@@ -202,8 +178,6 @@ class LingPreprocessor(TextProcessingUnit):
             proc_sent: See proc_sent_type-defintion at the top of the
                 script.
         """
-        # strip_pattern = re.compile(r'^[Aa]n?_|^[Tt]he_|^-_|_-$')
-        # repl_pattern = re.compile(r'_-_')
         tokens = [t[0] for t in proc_sent]
         tags = [t[1] for t in proc_sent]
         lemmas = [t[2] for t in proc_sent]
