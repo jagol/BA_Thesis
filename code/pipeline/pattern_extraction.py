@@ -81,15 +81,17 @@ class PatternExtractor:
                 self.add_hierarch_rels(hierarch_rels_concat, 'l')
 
                 # Find terms and get their indices in the sentence.
-                term_indices = TermExtractor.get_term_indices(sent)
+                term_indices, term_heads = TermExtractor.get_term_indices(sent)
 
                 # Lowercase all tokens. Lemmas are already lowercased.
                 tokens = [w[0].lower() for w in sent]
                 lemmas = [w[2] for w in sent]
 
-                # Concatenate multiword terms.
-                concat_tokens, token_terms = self.concat(tokens, term_indices)
-                concat_lemmas, lemma_terms = self.concat(lemmas, term_indices)
+                # Get terms.
+                token_terms, tokens = self._get_token_terms(
+                    tokens, term_indices)
+                lemma_terms, lemmas = self._get_lemma_terms(
+                    tokens, lemmas, term_indices, term_heads)
 
                 # Add terms to set of all terms.
                 for tt in token_terms:
@@ -99,8 +101,8 @@ class PatternExtractor:
                     self._lemma_terms.add(lt)
 
                 # Add sentence with concatentated terms to document.
-                doc_concat_tokens.append(concat_tokens)
-                doc_concat_lemmas.append(concat_lemmas)
+                doc_concat_tokens.append(tokens)
+                doc_concat_lemmas.append(lemmas)
 
             # Add document to corpus.
             self._token_corpus.append(doc_concat_tokens)
@@ -140,28 +142,59 @@ class PatternExtractor:
                 f.write(t + '\n')
 
     @staticmethod
-    def concat(words: List[str],
-               term_indices: List[List[int]]
-               ) -> List[List[str]]:
-        """Concatenate the terms given by term_indices.
-
-        Use an underscore as concatenator. For example: If words is
-        ['The', 'multi', 'processing'] and term_indices is [[1, 2]] the
-        output should be ['The', 'multi_processing'].
+    def _get_token_terms(tokens: List[str],
+                         term_indices: List[List[int]]
+                         ) -> List[List[str]]:
+        """Get the sentences terms (token form) and tokens.
 
         Args:
-            words: A list of words (tokens or lemmas).
+            tokens: A list of tokens.
             term_indices: A list of lists. Each list is a term and
                 contains the indices belonging to that term.
         """
-        terms = []
-        for ti in term_indices[::-1]:
-            term_words = words[ti[0]:ti[-1] + 1]
-            joined = '_'.join(term_words)
-            terms.append(joined)
-            words[ti[0]:ti[-1] + 1] = [joined]
+        token_terms = []
+        for ti in term_indices:
+            token_terms.append(tokens[ti[0]])
 
-        return [words, terms]
+        return [token_terms, tokens]
+
+    @staticmethod
+    def _get_lemma_terms(tokens: List[str],
+                         lemmas: List[str],
+                         term_indices: List[List[int]],
+                         term_heads: List[int]
+                         ) -> List[List[str]]:
+        """Get the lemmatized terms and sentences with lemmatized terms.
+
+        Args:
+            tokens: A list of tokens.
+            lemmas: A list of lemmas.
+            term_indices: A list of lists. Each list is a term and
+                contains the indices belonging to that term.
+            term_heads: A list relative indices that point to the head
+                of the term/np.
+        """
+        lemma_terms = []
+
+        # Loop backwards through term-indices.
+        for i in range(len(term_indices)-1, 0, -1):
+            term_idx = term_indices[i][0]
+            term_head_idx = term_heads[i]
+
+            token_term = tokens[term_idx]
+            lemma_term = lemmas[term_idx]
+
+            token_term_words = token_term.split('_')
+            lemma_term_words = lemma_term.split('_')
+
+            # As head, use lemma, tokens for everything else.
+            token_term_words[term_head_idx] = lemma_term_words[term_head_idx]
+            lemma_term = '_'.join(token_term_words)
+
+            lemma_terms.append(lemma_term)
+            lemmas[term_idx] = lemma_term
+
+        return [lemma_terms, lemmas]
 
     def add_hierarch_rels(self, rels: rels_type, level: str) -> None:
         """Add given hierarchical relations to relation dictionary.
@@ -253,15 +286,15 @@ class TermExtractor:
 
     # term_pattern = re.compile((r'(JJ[RS]{0,2}\d+ |NN[PS]{0,2}\d+ '
     #                            r'|IN\d+ |VB[NG]\d+ )*NN[PS]{0,2}\d+'))
-    # term_pattern = re.compile(r'(JJ[RS]{0,2}\d+ |NN[PS]{0,2}\d+ |VB[NG]\d+ )*'
-    #                           r'NN[PS]{0,2}\d+')
-    term_pattern = r'np\d+'
-    index_pattern = re.compile(r'(\w+?)(\d+)')
+    # term_pattern = re.compile(r'(JJ[RS]{0,2}\d+ |NN[PS]{0,2}\d+ |'
+    #                           r'VB[NG]\d+ )*NN[PS]{0,2}\d+')
+    term_pattern = r'\d+np\d+'
+    index_pattern = re.compile(r'^(\d+)([^0-9]+)(\d+)$')
 
     @classmethod
     def get_term_indices(cls,
                          sent: List[List[str]]
-                         ) -> List[List[int]]:
+                         ) -> Tuple[List[List[int]], List[int]]:
         """Extract terms of a sentence.
 
         Args:
@@ -284,12 +317,13 @@ class TermExtractor:
                 poses.append(pos)
 
         pos_sent = ' '.join(poses)
-        matches = re.finditer(cls.term_pattern, pos_sent)
+        matches = list(re.finditer(cls.term_pattern, pos_sent))
         term_indices = [cls.get_indices(match.group()) for match in matches]
-        return term_indices
+        term_heads = [cls.get_head(match.group()) for match in matches]
+        return term_indices, term_heads
 
     @classmethod
-    def get_indices(cls, match: str):
+    def get_indices(cls, match: str) -> List[int]:
         """Get the indices in match.
 
         The indices are concatenated with their corresponding words.
@@ -297,23 +331,39 @@ class TermExtractor:
         output [0, 1, 2, 3, 4].
 
         Args:
-            match: the input string with words and indices
+            match: The input string with words and indices.
         """
         indices = []
         for pos in match.split(' '):
             if pos and pos[-1].isdigit():
-                index = int(re.search(cls.index_pattern, pos).group(2))
+                index = int(re.search(cls.index_pattern, pos).group(3))
                 indices.append(index)
         return indices
+
+    @classmethod
+    def get_head(cls, pos: str) -> int:
+        """Get the relative index of the head word of the term/np.
+
+        Args:
+            pos: The pos-tag with an prefixed index.
+        Return:
+            The relative index of the term head in the np.
+        """
+        pattern = re.compile(r'(\d+).*')
+        match = re.search(pattern, pos)
+        return int(match.group(1))
 
 
 class HearstExtractor:
 
     # np = r'(JJ[RS]{0,2}\d+ |NN[PS]{0,2}\d+ |IN\d+ |VB[NG]\d+ )*
     # NN[PS]{0,2}\d+'
-    # np = r'(JJ[RS]{0,2}\d+ |NN[PS]{0,2}\d+ |VB[NG]\d+ )*NN[PS]{0,2}\d+' <- extended
+
+    # np = r'(JJ[RS]{0,2}\d+ |NN[PS]{0,2}\d+ |VB[NG]\d+ )*NN[PS]{0,2}\d+'
+    # <- extended
+
     # np = r'(NN[PS]{0,2}\d+ )*NN[PS]{0,2}\d+' # <- only_NN
-    np = r'np\d+'
+    np = r'\d+np\d+'
     comma = r',\d+'
     conj = r'(or|and)'
 
