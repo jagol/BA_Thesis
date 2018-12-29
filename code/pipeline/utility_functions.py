@@ -3,7 +3,7 @@ import os
 import json
 import argparse
 import shutil
-from typing import Dict, List, Generator, Union, Any
+from typing import Dict, List, Tuple, Generator, Union, Any
 
 # ----------------------------------------------------------------------
 # type definitions
@@ -178,8 +178,20 @@ def get_num_docs(path: str) -> int:
     return counter
 
 
-def split_corpus(path_in: str, path_out: str, n: int) -> List[str]:
-    """Split a corpus into n evenly sized number of documents."""
+def split_corpus(path_in: str,
+                 path_out: str,
+                 n: int
+                 ) -> Tuple[List[str], List[int]]:
+    """Split a corpus into n evenly sized chunks of documents.
+
+    Args:
+        path_in: File containing corpus to be split up.
+        path_out: Path to directory of output file.
+        n: The number of chunks.
+    Return:
+        A list of the filenames that were created.
+        A list of starting numbers (doc id) for each filename.
+    """
     num_docs = get_num_docs(path_in)
     split_points = [int(num_docs/n*i) for i in range(1, n+1)]
     split_points.append(num_docs)
@@ -187,6 +199,7 @@ def split_corpus(path_in: str, path_out: str, n: int) -> List[str]:
     num_docs = 0
 
     fnames = []
+    start_nums = [0]
     with open(path_in, 'r', encoding='utf8') as f:
         lines = []
         for line in f:
@@ -196,8 +209,9 @@ def split_corpus(path_in: str, path_out: str, n: int) -> List[str]:
                 num_docs += 1
 
             if num_docs == split_points[j]:
-                fname = str(num_docs) + '.txt.split'
+                fname = str(start_nums[j]) + '.txt.split'
                 fnames.append(fname)
+                start_nums.append(num_docs)
                 fpath = os.path.join(path_out, fname)
                 f = open(fpath, 'w', encoding='utf8')
                 docs = ''.join(lines)
@@ -207,16 +221,9 @@ def split_corpus(path_in: str, path_out: str, n: int) -> List[str]:
                 print(j, split_points[j])
                 j += 1
 
-        # # write last chunk to file
-        # fname = str(num_docs) + '.txt'
-        # fnames.append(fname)
-        # fpath = os.path.join(path_out, fname)
-        # f = open(fpath, 'w', encoding='utf8')
-        # docs = ''.join(lines)
-        # f.write(docs)
-        # f.close()
+    start_nums = start_nums[:-1]
 
-    return fnames
+    return fnames, start_nums
 
 
 def concat_corpus(paths_in: List[str], path_out) -> None:
