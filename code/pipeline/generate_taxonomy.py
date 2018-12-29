@@ -1,9 +1,12 @@
 import os
 import json
 import subprocess
+from collections import defaultdict
 from typing import *
 from corpus import get_relevant_docs
-from utility_functions import get_docs
+from clustering import Clustering
+from score import Scorer
+from utility_functions import *
 
 
 def generate_taxonomy():
@@ -23,15 +26,43 @@ def generate_taxonomy():
         - remove them from cluster
         - start again at beginning using the resulting cluster
     """
+    # Load cmd args and configs.
     config = get_config()
     args = get_cmd_args()
+
+    # Get paths.
+    path_base_corpus = config['paths'][args.location][args.corpus]['path_in']
     path_out = config['paths'][args.location][args.corpus]['path_out']
-    path_term_ids = os.path.join(path, 'indexing/lemma_idxs_to_terms.json')
+    lemmatized = config['lemmatized']
+    if lemmatized:
+        path_term_ids = os.path.join(
+            path_out, 'indexing/lemma_idxs_to_terms.json')
+        path_df = os.path.join(path_out, 'frequency_analysis/df_lemmas.json')
+        path_tf = os.path.join(path_out, 'frequency_analysis/tf_lemmas.json')
+    else:
+        path_term_ids = os.path.join(
+            path_out, 'indexing/token_idxs_to_terms.json')
+        path_df = os.path.join(path_out, 'frequency_analysis/df_tokens.json')
+        path_tf = os.path.join(path_out, 'frequency_analysis/tf_tokens.json')
+
+    # Define starting variables.
     term_ids = load_term_ids(path_term_ids)
-    rec_tax_gen(term_ids, cur_node_id=0, level=0, path_out)
+    # base_corpus = set([i for i in range(get_num_docs(path_corpus))])
+
+    # Start recursive taxonomy generation.
+    rec_find_children(term_ids, path_base_corpus=path_base_corpus,
+                      cur_node_id=0, level=0, path_df=path_df,
+                      path_tf=path_tf, path_out=path_out)
 
 
-def rec_find_children(term_ids: Set[int], cur_node_id: int, level: int, path_out: str):
+def rec_find_children(term_ids: Set[int],
+                      cur_node_id: int,
+                      level: int,
+                      path_base_corpus: str,
+                      path_df: str,
+                      path_tf: str,
+                      path_out: str
+                      ) -> None:
     """Recursive function to generate child nodes for parent node.
 
     Args:
@@ -41,61 +72,93 @@ def rec_find_children(term_ids: Set[int], cur_node_id: int, level: int, path_out
             term_ids.
         level: The level or deepness of the taxonomy. The root node has
             level 0.
+        path_base_corpus: Path to the corpus file with all documents.
+        path_df: Path to the document frequencies of the entire corpus.
+        path_tf: Path to the term frequencies of the entire corpus.
         path_out: The path to the output directory.
     """
     node_id = cur_node_id
-    if level >= 5:
-        return
-    if len(term_ids) =< 5:
-        return
+    if len(term_ids) <= 5:
+        return None
 
-    doc_ids = get_relevant_docs(term_ids)  # set of doc ids
-    corpus_path = build_corpus(doc_ids, cur_node_id)
+    corpus = get_relevant_docs(term_ids)  # set of doc ids
+    df = get_df_corpus(term_ids, corpus, path_df)
+    tf = get_tf_corpus(corpus, path_tf)
+    corpus_path = build_corpus_file(corpus, path_base_corpus, cur_node_id)
     emb_path = train_embeddings(corpus_path, cur_node_id)
     term_ids_to_embs = get_embeddings(term_ids, emb_path)  # {id: embedding}
     clusters = cluster(term_ids_to_embs)  # list[set(term_ids)] of len == 5
-    least_conc = get_least_concentrated_terms(clusters)
+    term_scores = get_term_scores(clusters, df, tf)
+    proc_clusters, concept_terms = process_clusters(clusters, term_scores)
 
-    for clus in clusters:
-        repr_terms = get_repr_terms(clus, term_ids_to_embs)  # List[Tuple[term_id, score]]
-        terms_to_remove = repr_terms.union(unrepr_terms)
-        clus = remove(clus, terms_to_remove)
+    for label, clus in proc_clusters.items():
         node_id += 1
-        return rec_find_children(clus, node_id, level+1, path_out)
+        rec_find_children(clus, path_base_corpus, node_id, level+1, path_out)
 
 
-def build_corpus(doc_ids: Set[int], cur_node_id: int) -> str:
+def process_clusters(clusters: Dict[int, Set[int]],
+                     term_scores: Dict[int, Tuple[float, float]]
+                     ) -> Tuple[Dict[int, Set[int]], Set[int]]:
+    """Remove general terms and unpopular terms from clusters.
+
+    For each cluster remove the unpopular terms and push up and
+    remove concept terms.
+
+    Args:
+        clusters: A list of clusters. Each cluster is a set of doc-ids.
+        term_scores: Maps each term-idx to its popularity and
+            concentrations.
+    Return:
+        proc_cluster: Same as the input variable 'clusters', but with
+            terms removed.
+        concept_terms: A set of term-ids beloning to the concept.
+    """
+    proc_clusters = {}  # {label: clus}
+    concept_terms = set()
+    for label, clus in clusters.items():
+        terms_to_remove = get_terms_to_remove(clus, term_scores)
+        concept_terms_clus = get_concept_terms(clus, term_scores)
+        concept_terms.union(concept_terms_clus)
+        clus = remove(clus, terms_to_remove.union(concept_terms))
+        proc_clusters[label] = clus
+    return proc_clusters, concept_terms
+
+
+def build_corpus_file(doc_ids: Set[int],
+                      path_base_corpus: str,
+                      cur_node_id: int
+                      ) -> str:
     """Generate corpus file from document ids.
-
-    Reads the TOKEN-Corpus!!!
 
     Args:
         doc_ids: The ids of the document belongig that make up the
             corpus.
+        path_base_corpus: Path to the corpus file with all documents.
         cur_node_id: Id of the current node. Used for the name of the
             corpus file.
     Return:
-        The path to the corpus file:
+        The path to the generated corpus file:
         'processed_corpora/<cur_node_id>_corpus.txt'
     """
-    path_in = 'processed_corpus/pp_token_corpus.txt'
     path_out = 'processed_corpus/{}.txt'.format(cur_node_id)
 
     # Buffer to store n number of docs. (less writing operations)
     docs_str = ''
     # yields sentences as strings
     with open(path_out, 'w', encoding='utf8') as f_out:
-        for i, doc in enumerate(get_docs(path_in, word_tokenized=False)):
-            doc_str = ''
-            for sent in doc:
-                line = sent + '\n'
-                doc_str += line
-            doc_str += '\n'
-            docs_str += doc_str
+        for i, doc in enumerate(get_docs(path_base_corpus,
+                                         word_tokenized=False)):
+            if i in doc_ids:
+                doc_str = ''
+                for sent in doc:
+                    line = sent + '\n'
+                    doc_str += line
+                doc_str += '\n'
+                docs_str += doc_str
 
-            if i % 1000 == 0:
-                f_out.write(docs_str)
-                docs_str = ''
+                if i % 1000 == 0:
+                    f_out.write(docs_str)
+                    docs_str = ''
 
         f_out.write(docs_str)
 
@@ -130,53 +193,49 @@ def get_embeddings(term_ids: Set[int],
                    ) -> Dict[int, List[float]]:
     """Get the embeddings for the given terms.
 
+    TODO: implement generating the embedding file.
+
     Args:
         term_ids: The ids of the input terms.
         emb_path: The path to the given embedding file.
     Return:
         A dictionary of the form: {term_id: embedding}
     """
-    pass
+    term_id_to_emb = {}
+    with open(emb_path, 'r', encoding='utf8') as f:
+        embeddings = json.load(f)
+
+    for term_id in term_ids:
+        term_id_to_emb[term_id] = embeddings[term_id]
+
+    return term_id_to_emb
 
 
-def cluster(term_ids_to_embs: Dict[int, List[float]]) -> List[Set[int]]:
+def cluster(term_ids_to_embs: Dict[int, List[float]]) -> Dict[int, Set[int]]:
     """Cluster the given terms into 5 clusters.
 
     Args:
         term_ids_to_embs: A dictionary mapping term-ids to their
             embeddings.
     Return:
-        A list of clusters. Each cluster is a set of term-ids.
+        A dictionary of mapping each cluster label to it0s cluster.
+        Each cluster is a set of term-ids.
     """
-    pass
-
-
-def get_least_concentrated_terms(clusters: List[Set[int]]):
-    """Get the terms the most spread over topics.
-
-    Args:
-        clusters: A list of clusters as sets of term-ids.
-    Return:
-        A set of term ids.
-    """
-    pass
-
-
-def get_repr_terms(clus: Set[int],
-                   term_ids_to_embs: Dict[int, List[float]]
-                   )-> Tuple[List[Tuple[int, float]], List[Tuple[int, float]]]:
-    """Get the most representative terms.
-
-    Args:
-        clus: The cluster as a set of term indices.
-        term_ids_to_embs: A dictionary mapping term-ids to their
-            embeddings.
-    """
-    pass
+    c = Clustering()
+    term_ids_embs_items = term_ids_to_embs.items()
+    results = c.fit(it[1] for it in term_ids_embs_items)
+    labels = results['labels']
+    print('density:', results['density'])
+    clusters = defaultdict(set)
+    for i in range(len(term_ids_embs_items)):
+        term_id = term_ids_embs_items[i][0]
+        label = labels[i]
+        clusters[label].add(term_id)
+    return clusters
 
 
 def remove(clus: Set[int],
-           terms_to_remove: List[Tuple[int, float]
+           terms_to_remove: List[Tuple[int, float]]
            ) -> Set[int]:
     """Remove terms_to_remove from cluster.
 
@@ -186,3 +245,22 @@ def remove(clus: Set[int],
     """
     ids_to_remove = set([t[0] for t in terms_to_remove])
     return clus-ids_to_remove
+
+
+def load_term_ids(path_term_ids: str) -> Set[int]:
+    """Load the ids of all candidate terms.
+
+    Args:
+        path_term_ids: The path to the file containing term_ids. The
+            file has one id per line.
+    """
+    term_ids = set()
+    with open(path_term_ids, 'r', encoding='utf8') as f:
+        for line in f:
+            term_ids.add(int(line.strip('\n')))
+    return term_ids
+
+
+def get_term_scores(clusters, tf, df):
+    """"""
+    pass
