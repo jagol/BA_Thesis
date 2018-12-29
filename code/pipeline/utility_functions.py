@@ -14,7 +14,7 @@ doc_type = Union[List[str], List[List[str]], str]
 # ------------------ functions to prepare environment ------------------
 
 def prep_output_dir(path: str) -> None:
-    """Prepare the output directory by creating needed subdirectories.
+    """Prepare the output directory by creating subdirectories.
 
     The following subdirectories are created:
     - embeddings/
@@ -122,17 +122,18 @@ def get_docs(fpath: str,
 
 
 def get_docs_list(fpath: str,
-                  word_tokenized: str,
-                  sent_tokenized: str
-                  ) -> None:
-    """Same as get_docs, but returns a list instead of a geneartor."""
+                  word_tokenized: bool,
+                  sent_tokenized: bool
+                  ) -> List[doc_type]:
+    """Same as get_docs, but returns a list instead of a generator."""
     with open(fpath, 'r', encoding='utf8') as f:
         docs = []
         doc = []
         for line in f:
             if line == '\n':
                 if doc:
-                    docs.append(format_doc(doc, word_tokenized, sent_tokenized))
+                    docs.append(
+                        format_doc(doc, word_tokenized, sent_tokenized))
                     doc = []
             else:
                 doc.append(line.strip('\n'))
