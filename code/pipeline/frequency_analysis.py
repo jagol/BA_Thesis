@@ -3,6 +3,7 @@ import json
 from collections import defaultdict
 from typing import *
 from numpy import mean
+from math import log
 from utility_functions import get_docs
 # from text_processing_unit import TextProcessingUnit
 
@@ -25,6 +26,8 @@ class FreqAnalyzer:
             path, 'frequencies/tf_tokens.json')
         self.path_df_tokens = os.path.join(
             path, 'frequencies/df_tokens.json')
+        self.path_tfidf_tokens = os.path.join(
+            path, 'frequencies/tfidf_tokens.json')
 
         self.path_lemma_idx_corpus = os.path.join(
             path, 'processed_corpus/lemma_idx_corpus.txt')
@@ -34,6 +37,8 @@ class FreqAnalyzer:
             path, 'frequencies/tf_lemmas.json')
         self.path_df_lemmas = os.path.join(
             path, 'frequencies/df_lemmas.json')
+        self.path_tfidf_lemmas = os.path.join(
+            path, 'frequencies/tfidf_lemmas.json')
 
         self.path_dl = os.path.join(
             path, 'frequencies/dl.json')
@@ -146,9 +151,9 @@ class FreqAnalyzer:
             t: index of term t
             d: index representation of document d
         """
+        t = str(t)
         for s in d:
-            s_int = [int(l) for l in s]
-            if t in s_int:
+            if t in s:
                 return True
         return False
 
@@ -175,6 +180,41 @@ class FreqAnalyzer:
 
         self._docs_processed = 0
 
+    def calc_tfidf(self, level: str) -> None:
+        """Calculate tfidf values.
+
+        Args:
+            level: 't' if tokens, 'l' if lemmas.
+        """
+        if level == 't':
+            path_tf = self.path_tf_tokens
+            path_df = self.path_df_tokens
+            path_tfidf = self.path_tfidf_tokens
+        if level == 'l':
+            path_tf = self.path_tf_lemmas
+            path_df = self.path_df_lemmas
+            path_tfidf = self.path_tfidf_lemmas
+
+        tf = {}  # {doc_id: {word_id: freq}}
+        with open(path_tf, 'r', encoding='utf8') as f:
+            for i, doc_freqs in enumerate(f):
+                tf[str(i)] = json.loads(doc_freqs.strip('\n'))
+        with open(path_df, 'r', encoding='utf8') as f:
+            df = json.load(f)  # {word_id: freq}
+        n = len(tf)
+
+        tfidf = defaultdict(dict)
+        for doc_id in tf:
+            tf_doc = tf[doc_id]
+            for word_id in tf_doc:
+                df_word = df[word_id]
+                tf_word_doc = tf_doc[word_id]
+                tfidf[doc_id][word_id] = tf_word_doc*log(n/df_word)
+
+        with open(path_tfidf, 'w', encoding='utf8') as f:
+            json.dump(tfidf, f)
+
+
     def _update_cmd_counter(self) -> None:
         """Update the information on the command line."""
         msg = '{} documents processed\r'
@@ -191,6 +231,8 @@ def main():
     fa.calc_tf('l')
     fa.calc_df('t')
     fa.calc_df('l')
+    fa.calc_tfidf('t')
+    fa.calc_tfidf('l')
     fa.calc_dl()
 
 
