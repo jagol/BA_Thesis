@@ -146,12 +146,14 @@ class Indexer:
                 idx_sent = [word_to_idx[word] for word in sent]
                 doc_idx.append(idx_sent)
             corpus_idx.append(doc_idx)
+            doc_idx = []
             self._docs_processed += 1
             self._update_cmd_counter()
 
             if self._docs_processed % self._file_write_threshhold == 0:
                 self._update_cmd_time_info()
                 self.write_corpus(corpus_idx, path_out)
+                corpus_idx = []
 
         self._update_cmd_time_info(end=True)
         self.write_corpus(corpus_idx, path_out)
