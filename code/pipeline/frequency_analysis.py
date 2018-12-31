@@ -69,8 +69,8 @@ class FreqAnalyzer:
             df = defaultdict(int)
             for sent in doc:
                 for lemma_idx in sent:
-                    lemma_idx = int(lemma_idx)
-                    if lemma_idx in term_idxs:
+                    # lemma_idx = int(lemma_idx)
+                    if lemma_idx in str(term_idxs):
                         df[lemma_idx] += 1
             dicts.append(df)
             self._docs_processed += 1
@@ -127,11 +127,11 @@ class FreqAnalyzer:
             path_idx_corpus = self.path_lemma_idx_corpus
 
         term_idxs = self._load_term_idxs(level)
-        df = defaultdict(int)
-        for doc in get_docs(path_idx_corpus):
+        df = defaultdict(list)
+        for i, doc in enumerate(get_docs(path_idx_corpus)):
             for t in term_idxs:
                 if self._is_in_doc(t, doc):
-                    df[t] += 1
+                    df[t].append(i)
 
             self._docs_processed += 1
             self._update_cmd_counter()
@@ -213,7 +213,6 @@ class FreqAnalyzer:
 
         with open(path_tfidf, 'w', encoding='utf8') as f:
             json.dump(tfidf, f)
-
 
     def _update_cmd_counter(self) -> None:
         """Update the information on the command line."""
