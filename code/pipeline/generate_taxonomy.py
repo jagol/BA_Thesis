@@ -5,7 +5,7 @@ from collections import defaultdict
 from typing import *
 from corpus import get_relevant_docs
 from clustering import Clustering
-# from score import Scorer
+from score import Scorer
 from utility_functions import *
 
 
@@ -67,7 +67,7 @@ def generate_taxonomy():
                       path_base_corpus=path_base_corpus,
                       cur_node_id=0, level=0, df_base=df_base,
                       tf_base=tf_base, path_out=path_out,
-                      tfidf_base=tfidf_base)
+                      tfidf_base=tfidf_base, cur_corpus=base_corpus)
 
 
 def rec_find_children(term_ids: Set[str],
@@ -77,6 +77,7 @@ def rec_find_children(term_ids: Set[str],
                       level: int,
                       base_corpus: Set[str],
                       path_base_corpus: str,
+                      cur_corpus: Set[str],
                       tfidf_base: Dict[str, Dict[str, float]],
                       path_out: str
                       ) -> None:
@@ -91,6 +92,7 @@ def rec_find_children(term_ids: Set[str],
             level 0.
         path_base_corpus: Path to the corpus file with all documents.
         base_corpus: All doc_ids of the documents in the base corpus.
+        cur_corpus: All doc_ids of the documents in the current corpus.
         df_base: df values for all terms in the base corpus, Form:
             {term_id: [doc1, ...]}
         tf_base: df values for all terms in the base corpus, Form:
@@ -104,30 +106,42 @@ def rec_find_children(term_ids: Set[str],
         return None
 
     n = int(len(base_corpus)/(5*level))
-    corpus = get_relevant_docs(term_ids, base_corpus, n, tfidf_base)
-    corpus_path = build_corpus_file(corpus, path_base_corpus, cur_node_id)
+    corpus_path = build_corpus_file(cur_corpus, path_base_corpus, cur_node_id)
     emb_path = train_embeddings(corpus_path, cur_node_id, path_out)
 
-    df_corpus = get_df_corpus(term_ids, corpus, df_base)
-    tf_corpus = get_tf_corpus(corpus, tf_base)
+    df_corpus = get_df_corpus(term_ids, cur_corpus, df_base)
+    tf_corpus = get_tf_corpus(cur_corpus, tf_base)
 
     term_ids_to_embs = get_embeddings(term_ids, emb_path)  # {id: embedding}
-    clusters = cluster(term_ids_to_embs)  # list[set(term_ids)] of len == 5
-    term_scores = get_term_scores(clusters, df_corpus, tf_corpus)
+    clusters = cluster(term_ids_to_embs)  # Dict[int, Set[int]]
+    subcorpora = get_subcorpora(clusters, base_corpus, n, tfidf_base)
+    # {label: doc-ids}
+
+    term_scores = get_term_scores(
+        clusters, subcorpora, df_corpus, tf_corpus, level)
     proc_clusters, concept_terms = process_clusters(clusters, term_scores)
 
     for label, clus in proc_clusters.items():
         node_id += 1
+        subcorpus = subcorpora[label]
         rec_find_children(term_ids=clus, base_corpus=base_corpus,
                           path_base_corpus=path_base_corpus,
                           cur_node_id=node_id, level=level+1,
                           df_base=df_base, tf_base=tf_base, path_out=path_out,
-                          tfidf_base=tfidf_base)
+                          tfidf_base=tfidf_base, cur_corpus=subcorpus)
 
 
-def process_clusters(clusters: Dict[str, Set[str]],
+def get_subcorpora(clusters, base_corpus, n, tfidf_base):
+    """Get the subcorpus for each cluster."""
+    subcorpora = {}
+    for label, clus in clusters.items():
+        subcorpora[label] = get_relevant_docs(clus, base_corpus, n, tfidf_base)
+    return subcorpora
+
+
+def process_clusters(clusters: Dict[int, Set[str]],
                      term_scores: Dict[str, Tuple[float, float]]
-                     ) -> Tuple[Dict[str, Set[str]], Set[str]]:
+                     ) -> Tuple[Dict[int, Set[str]], Set[str]]:
     """Remove general terms and unpopular terms from clusters.
 
     For each cluster remove the unpopular terms and push up and
@@ -243,7 +257,7 @@ def get_embeddings(term_ids: Set[str],
     return term_id_to_emb
 
 
-def cluster(term_ids_to_embs: Dict[str, List[float]]) -> Dict[str, Set[str]]:
+def cluster(term_ids_to_embs: Dict[str, List[float]]) -> Dict[int, Set[str]]:
     """Cluster the given terms into 5 clusters.
 
     Args:
@@ -292,9 +306,11 @@ def load_term_ids(path_term_ids: str) -> Set[str]:
     return term_ids
 
 
-def get_term_scores(clusters: Dict[str, Set[str]],
+def get_term_scores(clusters: Dict[int, Set[str]],
+                    subcorpora: Dict[int, Set[str]],
                     df: Dict[str, int],
-                    tf: Dict[str, Dict[str, int]]
+                    tf: Dict[str, Dict[str, int]],
+                    level: int
                     ) -> Dict[str, Tuple[float, float]]:
     """Get the popularity and concentration for each term in clusters.
 
@@ -303,12 +319,18 @@ def get_term_scores(clusters: Dict[str, Set[str]],
 
     Args:
         clusters: A list of clusters. Each cluster is a set of term-ids.
+        subcorpora: Maps each cluster label to the relevant doc-ids.
         tf: The term frequencies of the given terms in the given
             subcorpus. Form: {doc_id: {term_id: frequeny}}
         df: The document frequencies of the given terms for the given
             subcorpus. Form: {term_id: frequency}
+        level: The recursion level.
+    Return:
+        A dictionary mapping each term-id to a tuple of the form:
+        (popularity, concentration)
     """
-    pass
+    sc = Scorer(clusters, subcorpora, df, tf, level)
+    return sc.get_term_scores()
 
 
 def get_df_corpus(term_ids: Set[str],

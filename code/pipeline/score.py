@@ -17,8 +17,6 @@ from corpus import *
         -> use gensim's bm25 scorer to calculate rel(t, D_k)
     - hyp(t, S_k) = sum(sim(t, projection(z1...zn)*score(z1...zn)))
         -> z1...zn: labels of the parent cluster
-DO NEXT: implement get_topic_docs and check if implementation of get_tf 
-is even necessary -> think about file storage system
 """
 
 # ----------------------------------------------------------------------
@@ -32,53 +30,182 @@ corpus_type = List[Tuple[int, List[List[str]]]]
 
 # ----------------------------------------------------------------------
 
+
 class Scorer:
 
     def __init__(self,
-                 cluster: cluster_type,
-                 parent_corpus: Set[int],
-                 path_base_corpus: str
+                 clusters: Dict[int, cluster_type],
+                 subcorpora: Dict[int, Set[str]],
+                 # parent_corpus: Set[int],
+                 # path_base_corpus: str,
+                 level: int
                  ) -> None:
-        """Initialize a Scorer object.
+        """Initialize a Scorer object. Precompute all term scores.
 
         Args:
-            cluster: The clusters with the term-ids to be scored.
+            clusters: A list of clusters. Each cluster is a set of
+                term-ids.
+            subcorpora: Maps each cluster label to the relevant doc-ids.
             parent_corpus: The doc-ids of the document, that make up the
                 parent corpus (the corpus, to which the cluster belongs).
             path_base_corpus: The path to the original corpus file.
         """
-        self.cluster = cluster
-        self.parent_corpus = Corpus(parent_corpus, self.path_base_corpus)
-        self.parent_corpus.get_corpus_docs()
-        self.path_base_corpus = path_base_corpus
-        self.topic_corpus = Corpus(self.cluster, self.path_base_corpus)
-        self.topic_corpus.get_corpus_docs()
+        self.clusters = clusters
+        self.subcorpora = subcorpora
+        # self.parent_corpus = Corpus(parent_corpus, self.path_base_corpus)
+        # self.parent_corpus.get_corpus_docs()
+        # self.path_base_corpus = path_base_corpus
+        # self.topic_corpus = Corpus(self.cluster, self.path_base_corpus)
+        # self.topic_corpus.get_corpus_docs()
+        self.level = level
 
         # precompute term frequencies for all given terms
-        self.tf_topic_corpus = self.get_tf(cluster, self.topic_corpus.docs)
-        self.tf_parent_corpus = self.get_tf(cluster, self.parent_corpus.docs)
+        # self.tf_topic_corpus = self.get_tf(cluster, self.topic_corpus.docs)
+        # self.tf_parent_corpus = self.get_tf(cluster, self.parent_corpus.docs)
 
-    def get_tf(self,
-               cluster: cluster_type,
-               corpus: corpus_type
-               ) -> Dict[str, int]:
-        """Get term frequency of terms in the cluster for the corpus.
+    def get_term_scores(self,
+                        df: Dict[str, int],
+                        tf: Dict[str, Dict[str, int]],
+                        dl: Dict[str, Union[int, float]]
+                        ) -> Dict[str, Tuple[float, float]]:
+        """For all terms, compute and get popularity and concentration.
 
         Args:
-            cluster: A set of term-ids.
-            corpus: A list of document-ids and their documents.
+            df: The document frequencies of the terms in parent-corpus.
+                Form: {term-id: frequency}
+            tf: The term frequencies of the terms in parent-corpus.
+                Form: {doc-id: {term-id: frequency}}
+            dl: The document lengts. Form: {doc-id: length}
+
         Return:
-            A dictionary mapping each term-id in the cluster to it's
-            frequency in the corpus.
+            A dictionary mapping each term-id a tuple containing the
+            terms popularity and concentration. Form:
+            {term-id: (popularity, concentration)}
         """
-        tf_dict = defaultdict(int)
-        for id_, doc in corpus:
-            for sent in doc:
-                for word in sent:
-                    for term_id in cluster:
-                        if term_id == word:
-                            tf_dict[term_id] += 1
-        return tf_dict
+        pop_scores = self.get_pop_scores(tf, dl)  # {term-id: popularity}
+        con_scores = self.get_con_scores(df, tf, dl)  # {term-id:concentration}
+
+        term_scores = {}
+        for term_id in pop_scores:
+            pop = pop_scores[term_id]
+            con = con_scores[term_id]
+            term_scores[term_id] = (pop, con)
+
+        return term_scores
+
+    def get_pop_scores(self,
+                       tf: Dict[str, Dict[str, int]],
+                       dl: Dict[str, Union[int, float]]
+                       ) -> Dict[str, float]:
+        """Get the popularity scores for all terms in clusters.
+
+        Args:
+            tf: The term frequencies of the terms in parent-corpus.
+                Form: {doc-id: {term-id: frequency}}
+            dl: The document lengts. Form: {doc-id: length}
+
+        Return:
+            A dictionary mapping each term-id the terms popularity.
+            Form: {term-id: (popularity, concentration)}
+        """
+        pop_scores = {}
+        for label, clus in self.clusters.items():
+            subcorp = self.subcorpora[label]
+            num_tokens = sum([dl[doc_id] for doc_id in subcorp])
+            for term_id in clus:
+                num_occurences = sum([tf[d_id][term_id] for d_id in subcorp])
+                pop_score = (log(num_occurences) + 1) / log(num_tokens)
+                pop_scores[term_id] = pop_score
+        return pop_scores
+
+    def get_con_scores(self,
+                       df: Dict[str, int],
+                       tf: Dict[str, Dict[str, int]],
+                       dl: Dict[str, Union[int, float]]
+                       ) -> Dict[str, float]:
+        """Get the concentration scores for all terms in clusters.
+
+        Args:
+            df: The document frequencies of the terms in parent-corpus.
+                Form: {term-id: frequency}
+            tf: The term frequencies of the terms in parent-corpus.
+                Form: {doc-id: {term-id: frequency}}
+            dl: The document lengts. Form: {doc-id: length}
+
+        Return:
+            A dictionary mapping each term-id the terms concentration.
+            Form: {term-id: concentration}
+        """
+        bm25_scores = self.get_bm25_scores(df, tf, dl)
+        # {term-id: {label: bm25-score}}
+        bm25_scores_sum = self.sum_bm25_scores(bm25_scores)
+        # {term-id: sum_bm_25_scores}
+
+        con_scores = {}  # {term_id: concentration}
+        for label, clus in self.clusters.items():
+            for term_id in clus:
+                numerator = exp(bm25_scores[term_id][label])
+                denominator = 1+exp(bm25_scores_sum[term_id])
+                con_score = numerator/denominator
+                con_scores[term_id] = con_score
+        return con_scores
+
+    def get_bm25_scores(self,
+                        df: Dict[str, int],
+                        tf: Dict[str, Dict[str, int]],
+                        dl: Dict[str, Union[int, float]]
+                        ) -> Dict[str, Dict[int, float]]:
+        """Get the bm25 scores for all terms in clusters.
+
+        Args:
+            df: The document frequencies of the terms in parent-corpus.
+                Form: {term-id: frequency}
+            tf: The term frequencies of the terms in parent-corpus.
+                Form: {doc-id: {term-id: frequency}}
+            dl: The document lengts. Form: {doc-id: length}
+
+        Return:
+            A mapping of term's ids to their bm25 score in the form:
+            {term-id: {label: bm25-score}}
+        """
+        pass
+
+    def sum_bm25_scores(self,
+                        bm25_scores: Dict[str, Dict[int, float]]
+                        ) -> Dict[str, float]:
+        """Get the summed bm25-score for all terms over subcorpora.
+
+        Args:
+            bm25_scores: The bm25-scores of the terms.
+        Return:
+            {term-id: sum_bm_25_scores}
+        """
+        bm25_scores_sum = {}
+        for term_id in bm25_scores:
+            bm25_scores_sum = sum(bm25_scores[term_id].values())
+        return bm25_scores_sum
+
+    # def get_tf(self,
+    #            cluster: cluster_type,
+    #            corpus: corpus_type
+    #            ) -> Dict[str, int]:
+    #     """Get term frequency of terms in the cluster for the corpus.
+    #
+    #     Args:
+    #         cluster: A set of term-ids.
+    #         corpus: A list of document-ids and their documents.
+    #     Return:
+    #         A dictionary mapping each term-id in the cluster to it's
+    #         frequency in the corpus.
+    #     """
+    #     tf_dict = defaultdict(int)
+    #     for id_, doc in corpus:
+    #         for sent in doc:
+    #             for word in sent:
+    #                 for term_id in cluster:
+    #                     if term_id == word:
+    #                         tf_dict[term_id] += 1
+    #     return tf_dict
 
     def calc_term_score(self,
                         term_id: str,
@@ -97,7 +224,7 @@ class Scorer:
 
         Args:
             term_id: The id of the term for which the score is
-                calcualted.
+                calculated.
             cluster_id: The id of the cluster for which the term score
                 is calculated.
         Return:
@@ -115,7 +242,7 @@ class Scorer:
 
         Args:
             term_id: The id of the term for which the score is
-                calcualted.
+                calculated.
             cluster_id: The id of the cluster for which the term score
                 is calculated.
         Return:
@@ -190,5 +317,11 @@ class Scorer:
         """
         return 1-cosine(v1, v2)
 
-    def get_topic_docs(self):
+    def get_term_scores(self) -> Dict[str, Tuple[float, float]]:
+        """Get the term scores for all the terms in the given clusters.
+
+        Return:
+            A dictionary mapping each term-id to a tuple of the form:
+            (popularity, concentration)
+        """
         pass
