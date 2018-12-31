@@ -227,8 +227,6 @@ def get_embeddings(term_ids: Set[str],
                    ) -> Dict[str, List[float]]:
     """Get the embeddings for the given terms.
 
-    TODO: implement generating the embedding file.
-
     Args:
         term_ids: The ids of the input terms.
         emb_path: The path to the given embedding file.
@@ -256,7 +254,7 @@ def cluster(term_ids_to_embs: Dict[str, List[float]]) -> Dict[str, Set[str]]:
         Each cluster is a set of term-ids.
     """
     c = Clustering()
-    term_ids_embs_items = term_ids_to_embs.items()
+    term_ids_embs_items = [(k, v) for k, v in term_ids_to_embs.items()]
     results = c.fit([it[1] for it in term_ids_embs_items])
     labels = results['labels']
     print('density:', results['density'])
