@@ -5,7 +5,7 @@ from collections import defaultdict
 from typing import *
 from corpus import get_relevant_docs
 from clustering import Clustering
-from score import Scorer
+# from score import Scorer
 from utility_functions import *
 
 
@@ -39,28 +39,41 @@ def generate_taxonomy():
             path_out, 'indexing/lemma_idxs_to_terms.json')
         path_df = os.path.join(path_out, 'frequency_analysis/df_lemmas.json')
         path_tf = os.path.join(path_out, 'frequency_analysis/tf_lemmas.json')
+        path_tfidf = os.path.join(path_out, 'frequency_analysis/tfidf_lemmas.json')
     else:
         path_term_ids = os.path.join(
             path_out, 'indexing/token_idxs_to_terms.json')
         path_df = os.path.join(path_out, 'frequency_analysis/df_tokens.json')
         path_tf = os.path.join(path_out, 'frequency_analysis/tf_tokens.json')
+        path_tfidf = os.path.join(path_out,
+                                  'frequency_analysis/tfidf_tokens.json')
 
     # Define starting variables.
     term_ids = load_term_ids(path_term_ids)
     # base_corpus = set([i for i in range(get_num_docs(path_corpus))])
+    base_corpus = get_base_corpus(path_base_corpus)
+    tf_base = {}  # {doc_id: {word_id: freq}}
+    with open(path_tf, 'r', encoding='utf8') as f:
+        for i, doc_freqs in enumerate(f):
+            tf[str(i)] = json.loads(doc_freqs.strip('\n'))
+    with open(path_df, 'r', encoding='utf8') as f:
+        df_base = json.load(f)  # {word_id: freq}
 
     # Start recursive taxonomy generation.
-    rec_find_children(term_ids, path_base_corpus=path_base_corpus,
-                      cur_node_id=0, level=0, path_df=path_df,
-                      path_tf=path_tf, path_out=path_out)
+    rec_find_children(term_ids, base_corpus=base_corpus,
+                      path_base_corpus=path_base_corpus,
+                      cur_node_id=0, level=0, df_base=df_base,
+                      tf_base=tf_base, path_out=path_out)
 
 
 def rec_find_children(term_ids: Set[int],
+                      df_base: str,
+                      tf_base: str,
                       cur_node_id: int,
                       level: int,
+                      base_corpus: Set[int],
                       path_base_corpus: str,
-                      path_df: str,
-                      path_tf: str,
+                      path_tfidf: str,
                       path_out: str
                       ) -> None:
     """Recursive function to generate child nodes for parent node.
@@ -73,6 +86,7 @@ def rec_find_children(term_ids: Set[int],
         level: The level or deepness of the taxonomy. The root node has
             level 0.
         path_base_corpus: Path to the corpus file with all documents.
+        base_corpus: All doc_ids of the documents in the base corpus.
         path_df: Path to the document frequencies of the entire corpus.
         path_tf: Path to the term frequencies of the entire corpus.
         path_out: The path to the output directory.
@@ -81,14 +95,17 @@ def rec_find_children(term_ids: Set[int],
     if len(term_ids) <= 5:
         return None
 
-    corpus = get_relevant_docs(term_ids)  # set of doc ids
-    df = get_df_corpus(term_ids, corpus, path_df)
-    tf = get_tf_corpus(corpus, path_tf)
-    corpus_path = build_corpus_file(corpus, path_base_corpus, cur_node_id)
+    n = len(base_corpus)/(5*level)
+    corpus = get_relevant_docs(term_ids, base_corpus, n, path_tfidf)  # set of doc ids
+    corpus_path = build_corpus_file(corpus, base_corpus, cur_node_id)
     emb_path = train_embeddings(corpus_path, cur_node_id)
+
+    df_corpus = get_df_corpus(term_ids, corpus, df_base)
+    tf_corpus = get_tf_corpus(corpus, tf_base)
+
     term_ids_to_embs = get_embeddings(term_ids, emb_path)  # {id: embedding}
     clusters = cluster(term_ids_to_embs)  # list[set(term_ids)] of len == 5
-    term_scores = get_term_scores(clusters, df, tf)
+    term_scores = get_term_scores(clusters, df_corpus, tf_corpus)
     proc_clusters, concept_terms = process_clusters(clusters, term_scores)
 
     for label, clus in proc_clusters.items():
@@ -111,16 +128,21 @@ def process_clusters(clusters: Dict[int, Set[int]],
     Return:
         proc_cluster: Same as the input variable 'clusters', but with
             terms removed.
-        concept_terms: A set of term-ids beloning to the concept.
+        concept_terms: A set of term-ids belonging to the concept.
     """
     proc_clusters = {}  # {label: clus}
     concept_terms = set()
     for label, clus in clusters.items():
+
         terms_to_remove = get_terms_to_remove(clus, term_scores)
+        clus = remove(clus, terms_to_remove)
+
         concept_terms_clus = get_concept_terms(clus, term_scores)
         concept_terms.union(concept_terms_clus)
-        clus = remove(clus, terms_to_remove.union(concept_terms))
+        clus = remove(clus, concept_terms)
+
         proc_clusters[label] = clus
+
     return proc_clusters, concept_terms
 
 
@@ -223,7 +245,7 @@ def cluster(term_ids_to_embs: Dict[int, List[float]]) -> Dict[int, Set[int]]:
     """
     c = Clustering()
     term_ids_embs_items = term_ids_to_embs.items()
-    results = c.fit(it[1] for it in term_ids_embs_items)
+    results = c.fit([it[1] for it in term_ids_embs_items])
     labels = results['labels']
     print('density:', results['density'])
     clusters = defaultdict(set)
@@ -261,6 +283,109 @@ def load_term_ids(path_term_ids: str) -> Set[int]:
     return term_ids
 
 
-def get_term_scores(clusters, tf, df):
-    """"""
+def get_term_scores(clusters: Dict[int, Set[int]],
+                    tf: Dict[int, Dict[int]],
+                    df: Dict[int, int]
+                    ) -> Dict[int, Tuple[float, float]]:
+    """Get the popularity and concentration for each term in clusters.
+
+    The popularity of a term is always the popularity for the cluster
+    the term belongs to. The concentration is cluster-independent.
+
+    Args:
+        cluster: A list of clusters. Each cluster is a set of term-ids.
+        tf: The term frequencies of the given terms in the given
+            subcorpus. Form: {doc_id: {term_id: frequeny}}
+        df: The document frequencies of the given terms for the given
+            subcorpus. Form: {term_id: frequency}
+    """
     pass
+
+
+def get_df_corpus(term_ids: Set[int],
+                  corpus: Set[int],
+                  df_base: str
+                  ) -> Dict[int, int]:
+    """Get the document frequencies for given corpus and term-ids.
+
+    Args:
+        term_ids: The ids of the given terms.
+        corpus: The ids of the documents making up the corpus.
+        df_base: The document frequencies of the base corpus.
+        {term_id: [doc_id1, ...]}
+    Return:
+        {term_id: num_docs}
+    """
+    out_dict = defaultdict(int)
+    for term_id in term_ids:
+        for doc_id in df_base[term_id]:
+            if doc_id in corpus:
+                out_dict[term_id] += 1
+    return out_dict
+
+
+def get_tf_corpus(corpus: Set[int],
+                  tf_base: Dict[int: Dict[int, int]]
+                  ) -> Dict[int, Dict[int, int]]:
+    """Get the term frequencies for the given corpus.
+
+    Args:
+        corpus: The ids of the documents making up the corpus.
+        tf_base: The term frequencies of the base corpus.
+        {doc_id: {term_id: freq}}
+    """
+    out_dict = {}
+    for doc_id in corpus:
+        out_dict[doc_id] = tf_base[doc_id]
+    return out_dict
+
+
+def get_base_corpus(path_base_corpus: str):
+    """Get the set of indices making up the base corpus.
+
+    Args:
+        path_base_corpus: Path to the corpus file.
+    """
+    return set([i for i in range(get_num_docs(path_base_corpus))])
+
+
+def get_terms_to_remove(clus: Set[int],
+                        term_scores: Dict[int, Tuple[float, float]]
+                        ) -> Set[int]:
+    """Determine which terms to remove from the cluster.
+
+    Args:
+        clus: A set of doc-ids.
+        term_scores: Maps each term-idx to its popularity and
+            concentrations.
+    Return:
+        A set of term-ids of the terms to remove.
+    """
+    terms_to_remove = set()
+    threshhold = 0.5
+    for term_id in clus:
+        pop = term_scores[term_id][0]
+        if pop < threshhold:
+            terms_to_remove.add(term_id)
+    return terms_to_remove
+
+
+def get_concept_terms(clus: Set[int],
+                      term_scores: Dict[int, Tuple[float, float]]
+                      ) -> Set[int]:
+    """Determine the concept candidates in the cluster.
+
+    Args:
+        clus: A set of doc-ids.
+        term_scores: Maps each term-idx to its popularity and
+            concentrations.
+    Return:
+        A set of term-ids of the terms to remove.
+    """
+    concept_terms = set()
+    threshhold = 0.5
+    for term_id in clus:
+        con = term_scores[term_id][1]
+        if con < threshhold:
+            concept_terms.add(term_id)
+    return concept_terms
