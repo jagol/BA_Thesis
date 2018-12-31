@@ -25,7 +25,7 @@ class Corpus:
 
     def get_corpus_docs(self,
                         save_inside: bool = True,
-                        ) -> Generator[Tuple[int, List[List[str]]], None, None]:
+                        ) -> Generator[Tuple[int, List[List[str]]],None,None]:
         """Get all the documents belonging to the corpus.
 
         Yield a generator of documents. Each document is a list of
@@ -91,13 +91,12 @@ class Corpus:
         return [token for sent in doc for token in sent]
 
 
-def get_pseudo_corpus(term_ids: Set[str],
-                      base_corpus: Set[int],
+def get_relevant_docs(term_ids: Set[str],
+                      base_corpus: Set[str],
                       n: int,
-                      path_df: str,
-                      path_tf: str
-                      ) -> Set[int]:
-    """Generate a pseudo corpus for a given set of terms.
+                      tfidf_base: Dict[str, Dict[str, float]],
+                      ) -> Set[str]:
+    """Generate a pseudo corpus (relevant_docs) for given set of terms.
 
     Find the documents of the corpus using tfidf. The general idea is:
     Those documents, for which the given terms are important, belong
@@ -117,22 +116,26 @@ def get_pseudo_corpus(term_ids: Set[str],
             where num_docs denotes the number of documents in the base
             corpus and n_clus denotes the number of clusters (or just
             the number of parts) the base corpus is divided into.
+        tfidf_base: The tfidf values for the terms in the entire
+            base_corpus.
     Return:
         Set of indices which denote the documents beloning to the pseudo
         corpus.
     """
-    # tfidf_term: Dict[term_id, Dict[doc_id, tfidf]]]
-    # -> Dict[doc_id, List[tfidf_term1, tfidf_term2, ...]]
-    tfidf = get_tfidf(term_ids, base_corpus, path_df, path_tf, key='doc')
     tfidf_doc = {}
     for doc_id in tfidf_doc:
-        tfidf_doc[doc_id] = sum(tfidf[doc_id].values())
+        vals = [tfidf_base[t_id] for t_id in tfidf_base[doc_id]
+                if t_id in term_ids]
+        tfidf_doc[doc_id] = sum(vals)
     ranked_docs = sorted(
         tfidf_doc.items(), key=lambda tpl: tpl[1], reverse=True)
+
     return set(ranked_docs[:n])
 
 
-def get_tf_corpus(corpus: Set[int], path_tf: str) -> DefaultDict[int, dict[int, int]]:
+def get_tf_corpus(corpus: Set[int],
+                  path_tf: str
+                  ) -> DefaultDict[int, dict[int, int]]:
     """Get the term frequencies of a corpus.
 
     Args:
@@ -140,19 +143,13 @@ def get_tf_corpus(corpus: Set[int], path_tf: str) -> DefaultDict[int, dict[int, 
         path_tf: The path to the term frequencies per document of the
             base corpus.
     Return:
-        {doc_id: term_id: frequency}
+        {doc_id: {term_id: frequency}}
     """
     tf_corpus = defaultdict(dict)
     with open(path_tf, 'r', encoding='utf8') as f:
         for i, line in enumerate(f):
             if i in corpus:
-                tf_doc = json.load(line.strip('\n'))
-                for idx in term_ids:
-                    try:
-                        tf = tf_doc[idx]
-                        tf_corpus[i][idx] = tf
-                    except KeyError:
-                        pass
+                tf_corpus[i] = json.load(line.strip('\n'))
     return tf_corpus
 
 
