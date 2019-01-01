@@ -135,7 +135,7 @@ def get_relevant_docs(term_ids: Set[str],
 
 def get_tf_corpus(corpus: Set[int],
                   path_tf: str
-                  ) -> DefaultDict[int, dict[int, int]]:
+                  ) -> Dict[int, Dict[int, int]]:
     """Get the term frequencies of a corpus.
 
     Args:
