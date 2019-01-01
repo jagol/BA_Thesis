@@ -40,14 +40,15 @@ def generate_taxonomy():
         path_df = os.path.join(path_out, 'frequency_analysis/df_lemmas.json')
         path_tf = os.path.join(path_out, 'frequency_analysis/tf_lemmas.json')
         path_tfidf = os.path.join(
-            path_out, 'frequency_analysis/tfidf_lemmas.json')
+            path_out, 'frequencies/tfidf_lemmas.json')
+        path_dl = os.path.join(path_out, 'frequencies/dl_lemmas.json')
     else:
         path_term_ids = os.path.join(
             path_out, 'indexing/token_idxs_to_terms.json')
-        path_df = os.path.join(path_out, 'frequency_analysis/df_tokens.json')
-        path_tf = os.path.join(path_out, 'frequency_analysis/tf_tokens.json')
-        path_tfidf = os.path.join(path_out,
-                                  'frequency_analysis/tfidf_tokens.json')
+        path_df = os.path.join(path_out, 'frequencies/df_tokens.json')
+        path_tf = os.path.join(path_out, 'frequencies/tf_tokens.json')
+        path_tfidf = os.path.join(path_out, 'frequencies/tfidf_tokens.json')
+        path_dl = os.path.join(path_out, 'frequencies/dl_tokens.json')
 
     # Define starting variables.
     term_ids = load_term_ids(path_term_ids)
@@ -58,21 +59,24 @@ def generate_taxonomy():
         for i, doc_freqs in enumerate(f):
             tf_base[str(i)] = json.loads(doc_freqs.strip('\n'))
     with open(path_df, 'r', encoding='utf8') as f:
-        df_base = json.load(f)  # {word_id: freq}
+        df_base = json.load(f)  # {word_id: [doc_id1, ...]}
     with open(path_tfidf, 'r', encoding='utf8') as f:
         tfidf_base = json.load(f)
+    with open(path_dl, 'r', encoding='utf8') as f:
+        dl = json.load(f)
 
     # Start recursive taxonomy generation.
     rec_find_children(term_ids, base_corpus=base_corpus,
                       path_base_corpus=path_base_corpus,
                       cur_node_id=0, level=0, df_base=df_base,
-                      tf_base=tf_base, path_out=path_out,
+                      tf_base=tf_base, path_out=path_out, dl=dl,
                       tfidf_base=tfidf_base, cur_corpus=base_corpus)
 
 
 def rec_find_children(term_ids: Set[str],
-                      df_base: Dict[str, int],
+                      df_base: Dict[str, List[str]],
                       tf_base: Dict[str, Dict[str, int]],
+                      dl: Dict[str, Union[int, float]],
                       cur_node_id: int,
                       level: int,
                       base_corpus: Set[str],
@@ -97,6 +101,9 @@ def rec_find_children(term_ids: Set[str],
             {term_id: [doc1, ...]}
         tf_base: df values for all terms in the base corpus, Form:
             {doc_id: term_id: val}
+        dl: Maps the document ids to their document's length. Form:
+            {doc-id: length}
+            The average length is stored at key '-1'.
         tfidf_base: tfidf values for all terms in the base corpus, Form:
             {doc_id: term_id: tfidf}
         path_out: The path to the output directory.
@@ -109,16 +116,15 @@ def rec_find_children(term_ids: Set[str],
     corpus_path = build_corpus_file(cur_corpus, path_base_corpus, cur_node_id)
     emb_path = train_embeddings(corpus_path, cur_node_id, path_out)
 
-    df_corpus = get_df_corpus(term_ids, cur_corpus, df_base)
-    tf_corpus = get_tf_corpus(cur_corpus, tf_base)
+    # df_corpus = get_df_corpus(term_ids, cur_corpus, df_base)
+    tf_corpus = get_tf_corpus(term_ids, cur_corpus, tf_base)
 
     term_ids_to_embs = get_embeddings(term_ids, emb_path)  # {id: embedding}
     clusters = cluster(term_ids_to_embs)  # Dict[int, Set[int]]
     subcorpora = get_subcorpora(clusters, base_corpus, n, tfidf_base)
     # {label: doc-ids}
 
-    term_scores = get_term_scores(
-        clusters, subcorpora, df_corpus, tf_corpus, level)
+    term_scores = get_term_scores(clusters, subcorpora, dl, tf_corpus, level)
     proc_clusters, concept_terms = process_clusters(clusters, term_scores)
 
     for label, clus in proc_clusters.items():
@@ -126,7 +132,7 @@ def rec_find_children(term_ids: Set[str],
         subcorpus = subcorpora[label]
         rec_find_children(term_ids=clus, base_corpus=base_corpus,
                           path_base_corpus=path_base_corpus,
-                          cur_node_id=node_id, level=level+1,
+                          cur_node_id=node_id, level=level+1, dl=dl,
                           df_base=df_base, tf_base=tf_base, path_out=path_out,
                           tfidf_base=tfidf_base, cur_corpus=subcorpus)
 
@@ -308,7 +314,9 @@ def load_term_ids(path_term_ids: str) -> Set[str]:
 
 def get_term_scores(clusters: Dict[int, Set[str]],
                     subcorpora: Dict[int, Set[str]],
-                    df: Dict[str, int],
+                    # df_base: Dict[str, List[str]],
+                    # df: Dict[str, int],
+                    dl: Dict[str, Union[int, float]],
                     tf: Dict[str, Dict[str, int]],
                     level: int
                     ) -> Dict[str, Tuple[float, float]]:
@@ -322,15 +330,21 @@ def get_term_scores(clusters: Dict[int, Set[str]],
         subcorpora: Maps each cluster label to the relevant doc-ids.
         tf: The term frequencies of the given terms in the given
             subcorpus. Form: {doc_id: {term_id: frequeny}}
-        df: The document frequencies of the given terms for the given
-            subcorpus. Form: {term_id: frequency}
+        dl: Maps the document ids to their document's length. Form:
+            {doc-id: length}
+            The average length is stored at key '-1'.
         level: The recursion level.
     Return:
         A dictionary mapping each term-id to a tuple of the form:
         (popularity, concentration)
+    (Old Args:
+        df_base: Maps each term-id to a list of all the document-ids
+            of the document in which it appears.
+        df: The document frequencies of the given terms for the given
+            subcorpus. Form: {term_id: frequency})
     """
-    sc = Scorer(clusters, subcorpora, df, tf, level)
-    return sc.get_term_scores()
+    sc = Scorer(clusters, subcorpora, level)
+    return sc.get_term_scores(tf, dl)
 
 
 def get_df_corpus(term_ids: Set[str],
@@ -355,19 +369,26 @@ def get_df_corpus(term_ids: Set[str],
     return out_dict
 
 
-def get_tf_corpus(corpus: Set[str],
+def get_tf_corpus(term_ids: Set[str],
+                  corpus: Set[str],
                   tf_base: Dict[str: Dict[str, int]]
                   ) -> Dict[str, Dict[str, int]]:
     """Get the term frequencies for the given corpus.
 
     Args:
+        term_ids: The term-ids in the current subcategory.
         corpus: The ids of the documents making up the corpus.
         tf_base: The term frequencies of the base corpus.
         {doc_id: {term_id: freq}}
     """
     out_dict = {}
     for doc_id in corpus:
-        out_dict[doc_id] = tf_base[doc_id]
+        # out_dict[doc_id] = tf_base[doc_id]
+        out_dict[doc_id] = {}
+        tf_doc = tf_base[doc_id]
+        for term_id in tf_doc:
+            if term_id in term_ids:
+                out_dict[doc_id][term_id] = tf_base[doc_id][term_id]
     return out_dict
 
 
