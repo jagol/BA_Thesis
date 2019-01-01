@@ -31,12 +31,12 @@ def generate_taxonomy():
     args = get_cmd_args()
 
     # Get paths.
-    path_base_corpus = config['paths'][args.location][args.corpus]['path_in']
+    # path_base_corpus = config['paths'][args.location][args.corpus]['path_in']
     path_out = config['paths'][args.location][args.corpus]['path_out']
     lemmatized = config['lemmatized']
     if lemmatized:
         path_term_ids = os.path.join(
-            path_out, 'indexing/lemma_idxs_to_terms.json')
+            path_out, 'indexing/idx_to_lemma.json')
         path_df = os.path.join(path_out, 'frequency_analysis/df_lemmas.json')
         path_tf = os.path.join(path_out, 'frequency_analysis/tf_lemmas.json')
         path_tfidf = os.path.join(
@@ -44,11 +44,14 @@ def generate_taxonomy():
         path_dl = os.path.join(path_out, 'frequencies/dl_lemmas.json')
     else:
         path_term_ids = os.path.join(
-            path_out, 'indexing/token_idxs_to_terms.json')
+            path_out, 'indexing/idx_to_token.json')
         path_df = os.path.join(path_out, 'frequencies/df_tokens.json')
         path_tf = os.path.join(path_out, 'frequencies/tf_tokens.json')
         path_tfidf = os.path.join(path_out, 'frequencies/tfidf_tokens.json')
         path_dl = os.path.join(path_out, 'frequencies/dl_tokens.json')
+
+    path_base_corpus = os.path.join(
+        path_out, 'processed_corpus/pp_token_corpus.txt')
 
     # Define starting variables.
     term_ids = load_term_ids(path_term_ids)
