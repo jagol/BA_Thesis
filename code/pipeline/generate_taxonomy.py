@@ -349,7 +349,7 @@ def get_term_scores(clusters: Dict[int, Set[str]],
 
 def get_df_corpus(term_ids: Set[str],
                   corpus: Set[str],
-                  df_base: Dict[str: int]
+                  df_base: Dict[str, int]
                   ) -> Dict[str, int]:
     """Get the document frequencies for given corpus and term-ids.
 
@@ -371,7 +371,7 @@ def get_df_corpus(term_ids: Set[str],
 
 def get_tf_corpus(term_ids: Set[str],
                   corpus: Set[str],
-                  tf_base: Dict[str: Dict[str, int]]
+                  tf_base: Dict[str, Dict[str, int]]
                   ) -> Dict[str, Dict[str, int]]:
     """Get the term frequencies for the given corpus.
 
