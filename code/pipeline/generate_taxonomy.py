@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import subprocess
 from collections import defaultdict
 from typing import *
@@ -27,53 +28,63 @@ def generate_taxonomy():
         - start again at beginning using the resulting cluster
     """
     # Load cmd args and configs.
+    print('Load and parse cmd args...')
     config = get_config()
     args = get_cmd_args()
 
-    # Get paths.
+    # Set paths.
     # path_base_corpus = config['paths'][args.location][args.corpus]['path_in']
+    print('Set paths...')
     path_out = config['paths'][args.location][args.corpus]['path_out']
     lemmatized = config['lemmatized']
     if lemmatized:
         path_term_ids = os.path.join(
-            path_out, 'indexing/idx_to_lemma.json')
+            path_out, 'processed_corpus/lemma_terms_idxs.txt')
         path_df = os.path.join(path_out, 'frequency_analysis/df_lemmas.json')
         path_tf = os.path.join(path_out, 'frequency_analysis/tf_lemmas.json')
         path_tfidf = os.path.join(
             path_out, 'frequencies/tfidf_lemmas.json')
-        path_dl = os.path.join(path_out, 'frequencies/dl_lemmas.json')
+        # path_dl = os.path.join(path_out, 'frequencies/dl_lemmas.json')
     else:
         path_term_ids = os.path.join(
-            path_out, 'indexing/idx_to_token.json')
+            path_out, 'processed_corpus/token_terms_idxs.txt')
         path_df = os.path.join(path_out, 'frequencies/df_tokens.json')
         path_tf = os.path.join(path_out, 'frequencies/tf_tokens.json')
         path_tfidf = os.path.join(path_out, 'frequencies/tfidf_tokens.json')
-        path_dl = os.path.join(path_out, 'frequencies/dl_tokens.json')
+        # path_dl = os.path.join(path_out, 'frequencies/dl_tokens.json')
 
     path_base_corpus = os.path.join(
         path_out, 'processed_corpus/pp_token_corpus.txt')
+    path_dl = os.path.join(path_out, 'frequencies/dl.json')
 
     # Define starting variables.
+    print('load term-ids...')
     term_ids = load_term_ids(path_term_ids)
     # base_corpus = set([i for i in range(get_num_docs(path_corpus))])
+    print('load base corpus...')
     base_corpus = get_base_corpus(path_base_corpus)
+    print('load tf-base...')
     tf_base = {}  # {doc_id: {word_id: freq}}
     with open(path_tf, 'r', encoding='utf8') as f:
         for i, doc_freqs in enumerate(f):
             tf_base[str(i)] = json.loads(doc_freqs.strip('\n'))
+    print('load df-base...')
     with open(path_df, 'r', encoding='utf8') as f:
         df_base = json.load(f)  # {word_id: [doc_id1, ...]}
+    print('load tfidf-base...')
     with open(path_tfidf, 'r', encoding='utf8') as f:
         tfidf_base = json.load(f)
+    print('load dl-base...')
     with open(path_dl, 'r', encoding='utf8') as f:
         dl = json.load(f)
 
     # Start recursive taxonomy generation.
     rec_find_children(term_ids, base_corpus=base_corpus,
                       path_base_corpus=path_base_corpus,
-                      cur_node_id=0, level=0, df_base=df_base,
+                      cur_node_id=0, level=1, df_base=df_base,
                       tf_base=tf_base, path_out=path_out, dl=dl,
                       tfidf_base=tfidf_base, cur_corpus=base_corpus)
+    print('Done.')
 
 
 def rec_find_children(term_ids: Set[str],
@@ -111,25 +122,41 @@ def rec_find_children(term_ids: Set[str],
             {doc_id: term_id: tfidf}
         path_out: The path to the output directory.
     """
+    print(10*'-'+'level '+str(level)+10*'-')
+    msg = 'start recursion on level {} with node id {}...'.format(level,
+                                                                  cur_node_id)
+    print(msg)
     node_id = cur_node_id
     if len(term_ids) <= 5:
         return None
 
     n = int(len(base_corpus)/(5*level))
-    corpus_path = build_corpus_file(cur_corpus, path_base_corpus, cur_node_id)
+    print('build corpus file...')
+    corpus_path = build_corpus_file(cur_corpus, path_base_corpus, cur_node_id,
+                                    path_out)
+    print('train embeddings...')
     emb_path = train_embeddings(corpus_path, cur_node_id, path_out)
 
     # df_corpus = get_df_corpus(term_ids, cur_corpus, df_base)
+    print('get term-frequencies...')
     tf_corpus = get_tf_corpus(term_ids, cur_corpus, tf_base)
 
+    print('get term embeddings...')
+    print(term_ids)
+    print(emb_path)
     term_ids_to_embs = get_embeddings(term_ids, emb_path)  # {id: embedding}
+    print('cluster terms...')
     clusters = cluster(term_ids_to_embs)  # Dict[int, Set[int]]
+    print('get subcorpora for clusters...')
     subcorpora = get_subcorpora(clusters, base_corpus, n, tfidf_base)
     # {label: doc-ids}
 
+    print('compute term scores...')
     term_scores = get_term_scores(clusters, subcorpora, dl, tf_corpus, level)
+    print('remove terms from clusters...')
     proc_clusters, concept_terms = process_clusters(clusters, term_scores)
 
+    print('start new recursion...')
     for label, clus in proc_clusters.items():
         node_id += 1
         subcorpus = subcorpora[label]
@@ -183,7 +210,8 @@ def process_clusters(clusters: Dict[int, Set[str]],
 
 def build_corpus_file(doc_ids: Set[str],
                       path_base_corpus: str,
-                      cur_node_id: int
+                      cur_node_id: int,
+                      path_out: str
                       ) -> str:
     """Generate corpus file from document ids.
 
@@ -193,19 +221,21 @@ def build_corpus_file(doc_ids: Set[str],
         path_base_corpus: Path to the corpus file with all documents.
         cur_node_id: Id of the current node. Used for the name of the
             corpus file.
+        path_out: Path to the output directory.
     Return:
         The path to the generated corpus file:
         'processed_corpora/<cur_node_id>_corpus.txt'
     """
-    path_out = 'processed_corpus/{}.txt'.format(cur_node_id)
+    p_out = os.path.join(path_out, 'processed_corpus/{}.txt'.format(
+        cur_node_id))
 
     # Buffer to store n number of docs. (less writing operations)
     docs_str = ''
     # yields sentences as strings
-    with open(path_out, 'w', encoding='utf8') as f_out:
+    with open(p_out, 'w', encoding='utf8') as f_out:
         for i, doc in enumerate(get_docs(path_base_corpus,
                                          word_tokenized=False)):
-            if i in doc_ids:
+            if str(i) in doc_ids:
                 doc_str = ''
                 for sent in doc:
                     line = sent + '\n'
@@ -219,7 +249,7 @@ def build_corpus_file(doc_ids: Set[str],
 
         f_out.write(docs_str)
 
-    return path_out
+    return p_out
 
 
 def train_embeddings(path_corpus: str,
@@ -257,11 +287,16 @@ def get_embeddings(term_ids: Set[str],
         A dictionary of the form: {term_id: embedding}
     """
     term_id_to_emb = {}
+    print(term_ids)
     with open(emb_path, 'r', encoding='utf8') as f:
-        embeddings = json.load(f)
-
-    for term_id in term_ids:
-        term_id_to_emb[term_id] = embeddings[term_id]
+        next(f)
+        for line in f:
+            vals = line.strip(' \n').split(' ')
+            term_id = vals[0]
+            print(term_id, term_id in term_ids)
+            if term_id in term_ids:
+                emb = [float(f) for f in vals[1:]]
+                term_id_to_emb[term_id] = emb
 
     return term_id_to_emb
 
@@ -354,7 +389,7 @@ def get_df_corpus(term_ids: Set[str],
                   corpus: Set[str],
                   df_base: Dict[str, int]
                   ) -> Dict[str, int]:
-    """Get the document frequencies for given corpus and term-ids.
+    """Get the document frequencies for a given corpus and term-ids.
 
     Args:
         term_ids: The ids of the given terms.
