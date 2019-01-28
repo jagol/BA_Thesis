@@ -413,11 +413,11 @@ class Scorer:
         """
         return 1-cosine(v1, v2)
 
-    def get_term_scores(self) -> Dict[str, Tuple[float, float]]:
-        """Get the term scores for all the terms in the given clusters.
-
-        Return:
-            A dictionary mapping each term-id to a tuple of the form:
-            (popularity, concentration)
-        """
-        pass
+    # def get_term_scores(self) -> Dict[str, Tuple[float, float]]:
+    #     """Get the term scores for all the terms in the given clusters.
+    #
+    #     Return:
+    #         A dictionary mapping each term-id to a tuple of the form:
+    #         (popularity, concentration)
+    #     """
+    #     pass

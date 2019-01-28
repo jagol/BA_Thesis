@@ -44,17 +44,21 @@ def generate_taxonomy():
         path_tf = os.path.join(path_out, 'frequency_analysis/tf_lemmas.json')
         path_tfidf = os.path.join(
             path_out, 'frequencies/tfidf_lemmas.json')
-        # path_dl = os.path.join(path_out, 'frequencies/dl_lemmas.json')
+        path_base_corpus = os.path.join(
+            path_out, 'processed_corpus/pp_lemma_corpus.txt')
+        path_base_corpus_ids = os.path.join(
+            path_out, 'processed_corpus/lemma_idx_corpus.txt')
     else:
         path_term_ids = os.path.join(
             path_out, 'processed_corpus/token_terms_idxs.txt')
         path_df = os.path.join(path_out, 'frequencies/df_tokens.json')
         path_tf = os.path.join(path_out, 'frequencies/tf_tokens.json')
         path_tfidf = os.path.join(path_out, 'frequencies/tfidf_tokens.json')
-        # path_dl = os.path.join(path_out, 'frequencies/dl_tokens.json')
+        path_base_corpus = os.path.join(
+            path_out, 'processed_corpus/pp_token_corpus.txt')
+        path_base_corpus_ids = os.path.join(
+            path_out, 'processed_corpus/token_idx_corpus.txt')
 
-    path_base_corpus = os.path.join(
-        path_out, 'processed_corpus/pp_token_corpus.txt')
     path_dl = os.path.join(path_out, 'frequencies/dl.json')
 
     # Define starting variables.
@@ -80,7 +84,7 @@ def generate_taxonomy():
 
     # Start recursive taxonomy generation.
     rec_find_children(term_ids, base_corpus=base_corpus,
-                      path_base_corpus=path_base_corpus,
+                      path_base_corpus_ids=path_base_corpus_ids,
                       cur_node_id=0, level=1, df_base=df_base,
                       tf_base=tf_base, path_out=path_out, dl=dl,
                       tfidf_base=tfidf_base, cur_corpus=base_corpus)
@@ -94,7 +98,7 @@ def rec_find_children(term_ids: Set[str],
                       cur_node_id: int,
                       level: int,
                       base_corpus: Set[str],
-                      path_base_corpus: str,
+                      path_base_corpus_ids: str,
                       cur_corpus: Set[str],
                       tfidf_base: Dict[str, Dict[str, float]],
                       path_out: str
@@ -108,7 +112,8 @@ def rec_find_children(term_ids: Set[str],
             term_ids.
         level: The level or deepness of the taxonomy. The root node has
             level 0.
-        path_base_corpus: Path to the corpus file with all documents.
+        path_base_corpus_ids: Path to the corpus file with all documents
+            in index-representation.
         base_corpus: All doc_ids of the documents in the base corpus.
         cur_corpus: All doc_ids of the documents in the current corpus.
         df_base: df values for all terms in the base corpus, Form:
@@ -132,8 +137,8 @@ def rec_find_children(term_ids: Set[str],
 
     n = int(len(base_corpus)/(5*level))
     print('build corpus file...')
-    corpus_path = build_corpus_file(cur_corpus, path_base_corpus, cur_node_id,
-                                    path_out)
+    corpus_path = build_corpus_file(cur_corpus, path_base_corpus_ids,
+                                    cur_node_id, path_out)
     print('train embeddings...')
     emb_path = train_embeddings(corpus_path, cur_node_id, path_out)
 
@@ -161,7 +166,7 @@ def rec_find_children(term_ids: Set[str],
         node_id += 1
         subcorpus = subcorpora[label]
         rec_find_children(term_ids=clus, base_corpus=base_corpus,
-                          path_base_corpus=path_base_corpus,
+                          path_base_corpus_ids=path_base_corpus_ids,
                           cur_node_id=node_id, level=level+1, dl=dl,
                           df_base=df_base, tf_base=tf_base, path_out=path_out,
                           tfidf_base=tfidf_base, cur_corpus=subcorpus)
@@ -293,7 +298,6 @@ def get_embeddings(term_ids: Set[str],
         for line in f:
             vals = line.strip(' \n').split(' ')
             term_id = vals[0]
-            print(term_id, term_id in term_ids)
             if term_id in term_ids:
                 emb = [float(f) for f in vals[1:]]
                 term_id_to_emb[term_id] = emb
