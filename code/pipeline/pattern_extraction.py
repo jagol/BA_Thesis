@@ -70,15 +70,11 @@ class PatternExtractor:
             for sent in doc:
                 # Extract hierarchical relations on token level.
                 hierarch_rels = HearstExtractor.get_hierarch_rels(sent, 't')
-                hierarch_rels_concat = HearstExtractor.concat_rels(
-                    hierarch_rels)
-                self.add_hierarch_rels(hierarch_rels_concat, 't')
+                self.add_hierarch_rels(hierarch_rels, 't')
 
                 # Extract hierarchical relations on lemma level.
                 hierarch_rels = HearstExtractor.get_hierarch_rels(sent, 'l')
-                hierarch_rels_concat = HearstExtractor.concat_rels(
-                    hierarch_rels)
-                self.add_hierarch_rels(hierarch_rels_concat, 'l')
+                self.add_hierarch_rels(hierarch_rels, 'l')
 
                 # Find terms and get their indices in the sentence.
                 term_indices, term_heads = TermExtractor.get_term_indices(sent)
@@ -406,6 +402,8 @@ class HearstExtractor:
         """
         rel_dict = {}
         rels = cls._get_hypernyms(nlp_sent, level)
+        # if rels:
+        #     print(rels)
         for rel in rels:
             hyper, hypo = rel[0], rel[1]
             if hyper in rel_dict:
@@ -459,37 +457,41 @@ class HearstExtractor:
             hypos_matches = re.split(r',\d+', match['hypos'])
         else:
             hypos_matches = []
-        hyper_indices = cls._get_hyp_indices(match['hyper'])
-        hypos_indices = [cls._get_hyp_indices(match['hypo'])]
-        hypos_indices.extend([cls._get_hyp_indices(m) for m in hypos_matches])
+
+        hyper_index = cls._get_hyp_index(match['hyper'])
+        hypos_indices = [cls._get_hyp_index(match['hypo'])]
+        hypos_indices.extend([cls._get_hyp_index(m) for m in hypos_matches])
+
         rel_inds = []
         for hypo_inds in hypos_indices:
-            rel_inds.append([hyper_indices, hypo_inds])
+            rel_inds.append([hyper_index, hypo_inds])
 
         results = []
-        for reli in rel_inds:
-            i0 = reli[0]
-            i1 = reli[1]
+        for rel_i in rel_inds:
+            hyper_idx = rel_i[0]
+            hypo_idx = rel_i[1]
             if level == 't':
                 # Additionally lowercase all tokens
-                hyper = ' '.join([sent[i][0].lower() for i in i0])
-                hypo = ' '.join([sent[i][0].lower() for i in i1])
+                hyper = sent[hyper_idx][0].lower()
+                hypo = sent[hypo_idx][0].lower()
             elif level == 'l':
-                hyper = ' '.join([sent[i][2] for i in i0])
-                hypo = ' '.join([sent[i][2] for i in i1])
+                hyper = sent[hyper_idx][2]
+                hypo = sent[hypo_idx][2]
             results.append((hyper, hypo))
         return results
 
     @staticmethod
-    def _get_hyp_indices(match: str) -> List[int]:
-        """Get the indices of one match."""
+    def _get_hyp_index(pos_np: str) -> int:
+        """Get the index at the end of pos_np.
+
+        Args:
+            pos_np: A np-pos-tag with it's index at the end.
+        Return:
+            The index of the hypernym.
+        """
         pattern = re.compile(r'(\w+?)(\d+)')
-        indices = []
-        for pos in match.split(' '):
-            if pos and pos[-1].isdigit():
-                index = int(re.search(pattern, pos).group(2))
-                indices.append(index)
-        return indices
+        index = int(re.search(pattern, pos_np).group(2))
+        return index
 
     @staticmethod
     def _get_poses_words(sent: List[List[str]]) -> str:
@@ -511,24 +513,6 @@ class HearstExtractor:
                 poses_words.append(word[0])
         poses_words = ' '.join(poses_words)
         return poses_words
-
-    @staticmethod
-    def concat_rels(rel_dict: Dict[str, List[str]]
-                    ) -> Dict[str, List[str]]:
-        """Replace ' ' by '_' in all terms in the relation dictionary.
-
-        Args:
-            rel_dict: relation dictionary of the form:
-            {hyponym: [hypernym1, hypernym2]}
-        """
-        rel_dict_c = {}
-        p = re.compile(r' ')
-        for hyper in rel_dict:
-            hyper_c = re.sub(p, '_', hyper)
-            hypos = rel_dict[hyper]
-            hypos_c = [re.sub(p, '_', hypo) for hypo in hypos]
-            rel_dict_c[hyper_c] = hypos_c
-        return rel_dict_c
 
 
 def get_pp_corpus(fpath: str) -> Generator[List[List[List[str]]], None, None]:
