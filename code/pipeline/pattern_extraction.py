@@ -386,6 +386,9 @@ class HearstExtractor:
 
     hearst_patterns = [pattern1, pattern2, pattern3_4, pattern5_6]
 
+    hyp_idx_pattern = re.compile(r'(\w+?)(\d+)')
+    head_idx_pattern = re.compile(r'(\d+)(\w+)')
+
     @classmethod
     def get_hierarch_rels(cls,
                           nlp_sent: List[List[str]],
@@ -402,8 +405,7 @@ class HearstExtractor:
         """
         rel_dict = {}
         rels = cls._get_hypernyms(nlp_sent, level)
-        # if rels:
-        #     print(rels)
+
         for rel in rels:
             hyper, hypo = rel[0], rel[1]
             if hyper in rel_dict:
@@ -475,13 +477,35 @@ class HearstExtractor:
                 hyper = sent[hyper_idx][0].lower()
                 hypo = sent[hypo_idx][0].lower()
             elif level == 'l':
-                hyper = sent[hyper_idx][2]
-                hypo = sent[hypo_idx][2]
+                hyper = cls._get_lemma_form(hyper_idx, sent)
+                hypo = cls._get_lemma_form(hypo_idx, sent)
             results.append((hyper, hypo))
+
         return results
 
-    @staticmethod
-    def _get_hyp_index(pos_np: str) -> int:
+    @classmethod
+    def _get_lemma_form(cls, term_idx: int, sent: List[List[str]]) -> str:
+        """Get the lemmatized form of the given term.
+
+        Args:
+            term_idx: The index of the term to lemmatize.
+            sent: The preprocessed sentence.
+        Return:
+            The lemmatized form of the term.
+        """
+        term_head_idx = cls._get_term_head(term_idx, sent)
+        term_tokens = sent[term_idx][0].split('_')
+        term_lemmas = sent[term_idx][2].split('_')
+        term_tokens[term_head_idx] = term_lemmas[term_head_idx]
+        return '_'.join(term_tokens)
+
+    @classmethod
+    def _get_term_head(cls, term_idx: int, sent: List[List[str]]) -> int:
+        pos = sent[term_idx][1]
+        return int(re.search(cls.head_idx_pattern, pos).group(1))
+
+    @classmethod
+    def _get_hyp_index(cls, pos_np: str) -> int:
         """Get the index at the end of pos_np.
 
         Args:
@@ -489,8 +513,7 @@ class HearstExtractor:
         Return:
             The index of the hypernym.
         """
-        pattern = re.compile(r'(\w+?)(\d+)')
-        index = int(re.search(pattern, pos_np).group(2))
+        index = int(re.search(cls.hyp_idx_pattern, pos_np).group(2))
         return index
 
     @staticmethod
