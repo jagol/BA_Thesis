@@ -68,6 +68,7 @@ class Scorer:
     def get_term_scores(self,
                         # df_base: Dict[str, int],
                         tf: Dict[str, Dict[str, int]],
+                        tf_base: Dict[str, Dict[str, int]],
                         dl: Dict[str, Union[int, float]]
                         ) -> Dict[str, Tuple[float, float]]:
         """For all terms, compute and get popularity and concentration.
@@ -75,6 +76,7 @@ class Scorer:
         Args:
             tf: The term frequencies of the terms in parent-corpus.
                 Form: {doc-id: {term-id: frequency}}
+            tf_base:
             dl: The document lengts. Form: {doc-id: length}
 
         Return:
@@ -86,7 +88,7 @@ class Scorer:
                 Form: {term-id: frequency})
         """
         pop_scores = self.get_pop_scores(tf, dl)  # {term-id: popularity}
-        con_scores = self.get_con_scores(tf, dl)
+        con_scores = self.get_con_scores(tf, tf_base, dl)
         # {term-id:concentration}
 
         term_scores = {}
@@ -106,21 +108,20 @@ class Scorer:
         Args:
             tf: The term frequencies of the terms in parent-corpus.
                 Form: {doc-id: {term-id: frequency}}
-            dl: The document lengts. Form: {doc-id: length}
+            dl: The document lengths. Form: {doc-id: length}
 
         Return:
             A dictionary mapping each term-id the terms popularity.
             Form: {term-id: (popularity, concentration)}
         """
         pop_scores = {}
-        print('tf:', tf)
         for label, clus in self.clusters.items():
             subcorp = self.subcorpora[label]
             num_tokens = sum([dl[doc_id] for doc_id in subcorp])
             for term_id in clus:
-                # num_occurences = sum([tf[d_id][term_id] for d_id in subcorp if
-                #                       term_id in tf[d_id]])
-                num_occurences = sum([tf[doc_id][term_id] for doc_id in subcorp if doc_id in tf and term_id in tf[doc_id]])
+                num_occurences = sum([tf[doc_id][term_id] for doc_id in subcorp
+                                      if doc_id in tf
+                                      and term_id in tf[doc_id]])
                 pop_score = (log(num_occurences+1) + 1) / (log(num_tokens+1)+1)
                 pop_scores[term_id] = pop_score
         return pop_scores
@@ -128,6 +129,7 @@ class Scorer:
     def get_con_scores(self,
                        # df_base: Dict[str, List[str]],
                        tf: Dict[str, Dict[str, int]],
+                       tf_base: Dict[str, Dict[str, int]],
                        dl: Dict[str, Union[int, float]]
                        ) -> Dict[str, float]:
         """Get the concentration scores for all terms in clusters.
@@ -135,6 +137,7 @@ class Scorer:
         Args:
             tf: The term frequencies of the terms in parent-corpus.
                 Form: {doc-id: {term-id: frequency}}
+            tf_base:
             dl: The document lengts. Form: {doc-id: length}
 
         Return:
@@ -144,7 +147,7 @@ class Scorer:
             df_base: The document frequencies of the terms in parent-
                 corpus. Form: {term-id: frequency})
         """
-        bm25_scores = self.get_bm25_scores(tf, dl)
+        bm25_scores = self.get_bm25_scores(tf, tf_base, dl)
         # {term-id: {label: bm25-score}}
         bm25_scores_sum = self.sum_bm25_scores(bm25_scores)
         # {term-id: sum_bm_25_scores}
@@ -160,6 +163,7 @@ class Scorer:
 
     def get_bm25_scores(self,
                         tf: Dict[str, Dict[str, int]],
+                        tf_base: Dict[str, Dict[str, int]],
                         dl: Dict[str, Union[int, float]]
                         ) -> Dict[str, Dict[int, float]]:
         """Get the bm25 scores for all terms in clusters.
@@ -170,6 +174,7 @@ class Scorer:
         Args:
             tf: The term frequencies of the terms in parent-corpus.
                 Form: {doc-id: {term-id: frequency}}
+            tf_base:
             dl: The document lengts. Form: {doc-id: length}
 
         Return:
@@ -185,7 +190,7 @@ class Scorer:
         avgdl = mean(list(len_pseudo_docs.values()))
         for label, clus in self.clusters.items():
             pseudo_doc = self.subcorpora[label]
-            tf_pseudo_doc = self.get_tf_pseudo_doc(pseudo_doc, tf)
+            tf_pseudo_doc = self.get_tf_pseudo_doc(pseudo_doc, tf_base)
             # {term-id: tf}
             len_pseudo_doc = len_pseudo_docs[label]
             for term_id in clus:
@@ -234,8 +239,9 @@ class Scorer:
         for label, sc in self.subcorpora.items():
             pd_bof[label] = set()
             for doc_id in sc:
-                if doc_id in sc:
-                    pd_bof[label].union(set([term_id for term_id in tf[doc_id]]))
+                if doc_id in tf:
+                    s = set([term_id for term_id in tf[doc_id]])
+                    pd_bof[label].union(s)
         return pd_bof
 
     @staticmethod
@@ -268,21 +274,21 @@ class Scorer:
 
     @staticmethod
     def get_tf_pseudo_doc(pseudo_doc: Set[str],
-                          tf: Dict[str, Dict[str, int]]
+                          tf_base: Dict[str, Dict[str, int]]
                           )-> Dict[str, int]:
         """Get term frequencies for the given pseudo-document.
 
         Args:
             pseudo_doc: A set of document ids.
-            tf: The term frequencies of the terms in parent-corpus.
+            tf_base: The term frequencies of the terms in the base-corpus.
                 Form: {doc-id: {term-id: frequency}}
         Return:
             {term_id: frequency}
         """
         tf_pseudo_doc = defaultdict(int)
         for doc_id in pseudo_doc:
-            for term_id in tf[doc_id]:
-                tf_pseudo_doc[term_id] += tf[doc_id][term_id]
+            for term_id in tf_base[doc_id]:
+                tf_pseudo_doc[term_id] += tf_base[doc_id][term_id]
         return tf_pseudo_doc
 
     # def get_tf(self,
