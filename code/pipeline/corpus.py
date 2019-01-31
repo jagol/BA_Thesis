@@ -21,11 +21,11 @@ class Corpus:
         self.num_docs = len(self.doc_ids)
         self.docs_read = set()
         self.path = path
-        self.docs = []  #  List of tuples (doc_id, doc)
+        self.docs = []  # List of tuples (doc_id, doc)
 
     def get_corpus_docs(self,
                         save_inside: bool = True,
-                        ) -> Generator[Tuple[int, List[List[str]]],None,None]:
+                        ) -> Generator[Tuple[int, List[List[str]]], None,None]:
         """Get all the documents belonging to the corpus.
 
         Yield a generator of documents. Each document is a list of
@@ -123,17 +123,25 @@ def get_relevant_docs(term_ids: Set[str],
         corpus.
     """
     tfidf_doc = {}
-    for doc_id in tfidf_doc:
-        vals = [tfidf_base[t_id] for t_id in tfidf_base[doc_id]
-                if t_id in term_ids]
+    # Calculate document scores.
+    for doc_id in base_corpus:
+        vals = []  # The importances of a (cluster)terms for a document.
+        for term_id in term_ids:
+            try:
+                vals.append(tfidf_base[doc_id][term_id])
+            except KeyError:
+                pass
         tfidf_doc[doc_id] = sum(vals)
+
+    # Rank documents by score.
     ranked_docs = sorted(
         tfidf_doc.items(), key=lambda tpl: tpl[1], reverse=True)
 
-    return set(ranked_docs[:n])
+    # Return only the ids of the n highest scored documents.
+    return set(d[0] for d in ranked_docs[:n])
 
 
-def get_tf_corpus(corpus: Set[int],
+def get_tf_corpus(corpus: Set[str],
                   path_tf: str
                   ) -> Dict[int, Dict[int, int]]:
     """Get the term frequencies of a corpus.
@@ -153,13 +161,14 @@ def get_tf_corpus(corpus: Set[int],
     return tf_corpus
 
 
-def get_df_corpus(term_ids: Set[int],
-                  corpus: Set[int],
+def get_df_corpus(term_ids: Set[str],
+                  corpus: Set[str],
                   path_df: str
                   ) -> DefaultDict[int, int]:
     """Get the document frequencies of a corpus.
 
     Args:
+        term_ids: A set of indices of terms.
         corpus: A set of document indices.
         path_df: The path to the document frequencies per document of
         the base corpus. This is a json file of the form:
@@ -179,7 +188,7 @@ def get_df_corpus(term_ids: Set[int],
 
 
 def get_tfidf(term_ids: Set[str],
-              corpus: Set[int],
+              corpus: Set[str],
               path_tf: str,
               path_df: str,
               key: str = 'doc',
@@ -190,7 +199,9 @@ def get_tfidf(term_ids: Set[str],
         term_ids: The lemma-ids of the lemmas for which tfidf is computed.
         corpus: The document-ids of the documents which make up the
             corpus.
-        path_doc_freq: Path to the frequencies of terms per document.
+        path_tf: Path to the frequencies of terms per document.
+        path_df: Path to json-file of the form:
+        {term_id: [doc term appears in]}
         key: either 'term' or 'doc'.
             If 'term', then the tfidf is returned in the
             following structure: Dict[term_id, Dict[term_id, tfidf]
@@ -210,73 +221,3 @@ def get_tfidf(term_ids: Set[str],
             df_word = df[term_id]
             tfidf[doc_id][term_id] = tf_word*log(n/df_word)
     return tfidf
-
-
-
-
-
-
-
-
-
-# def get_tfidf(term_ids: Set[str],
-#               corpus: Set[int],
-#               key: str = 'doc'
-#               ) -> DefaultDict[int, Dict[str, float]]:
-#     """Compute the tfidf score for the given terms in the given corpus.
-#
-#     Args:
-#         term_ids: The lemma-ids of the lemmas for which tfidf is computed.
-#         corpus: The document-ids of the documents which make up the
-#             corpus.
-#         key: either 'term' or 'doc'.
-#             If 'term', then the tfidf is returned in the
-#             following structure: Dict[term_id, Dict[term_id, tfidf]
-#             If 'doc', then the tfidf is returned in the following
-#             structure: Dict[doc_id, Dict[term_id, tfidf]]
-#             NOTE: at the moment the method always returns as if key='doc'
-#     """
-#     fpath = 'preprocessed_corpora/dblp/lemma_idx_corpus.txt'
-#     c = Corpus(corpus, fpath)
-#     docs = c.get_corpus_docs()
-#     df = defaultdict(int)  # Dict[term_id, document-frequency]
-#     tf = {}                # Dict[doc_id, Dict[term_id, frequency]]
-#     for doc_id, doc in docs:
-#         # calc tf for a doc
-#         tf_doc = defaultdict(int)
-#         doc = c.flatten_doc(doc)
-#         num_tokens = len(doc)
-#         for term_id in term_ids:
-#             for lemma_id in doc:
-#                 if lemma_id == term_id:
-#                     tf_doc[term_id] += 1
-#
-#         # normalize for document length
-#         for term_id in tf_doc:
-#             tf_doc[term_id] = tf_doc[term_id]/num_tokens
-#
-#         tf[doc_id] = tf_doc
-#
-#         # update df
-#         for term_id in term_ids:
-#             if term_id in tf_doc:
-#                 df[term_id] += 1
-#
-#     # calc idf with +1-smoothing
-#     idf = {}
-#     for term_id in df:
-#         idf[term_id] = log(c.num_docs/(1+df[term_id]))
-#
-#     # calc tfidf
-#     tfidf = defaultdict(dict)
-#     for doc_id in tf:
-#         for term_id in tf[doc_id]:
-#             tf_term_doc = tf[doc_id][term_id]
-#             idf_term = idf[term_id]
-#             tfidf[doc_id][term_id] = tf_term_doc*idf_term
-#
-#     return tfidf
-
-
-def get_pseudo_corpora():
-    pass
