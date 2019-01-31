@@ -130,9 +130,9 @@ class FreqAnalyzer:
         df = defaultdict(list)
         for i, doc in enumerate(get_docs(path_idx_corpus,
                                          sent_tokenized=False)):
-            for t in term_idxs:
-                if t in doc:
-                    df[t].append(i)
+            for word_id in set(doc):
+                if word_id in term_idxs:
+                    df[word_id].append(i)
 
             self._docs_processed += 1
             self._update_cmd_counter()
@@ -230,13 +230,21 @@ def main():
     args = get_cmd_args()
     path = config['paths'][args.location][args.corpus]['path_out']
     fa = FreqAnalyzer(path)
+    print('Calculate token term frequencies...')
     fa.calc_tf('t')
+    print('Calculate lemma term frequencies...')
     fa.calc_tf('l')
+    print('Calculate token document frequencies...')
     fa.calc_df('t')
+    print('Calculate lemma document frequencies...')
     fa.calc_df('l')
+    print('Calculate token tfidf-values...')
     fa.calc_tfidf('t')
+    print('Calculate lemma tfidf-values...')
     fa.calc_tfidf('l')
+    print('Calculate document lengths...')
     fa.calc_dl()
+    print('Done')
 
 
 if __name__ == '__main__':
