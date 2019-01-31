@@ -70,14 +70,14 @@ class FreqAnalyzer:
             for sent in doc:
                 for lemma_idx in sent:
                     # lemma_idx = int(lemma_idx)
-                    if lemma_idx in str(term_idxs):
+                    if lemma_idx in term_idxs:
                         df[lemma_idx] += 1
             dicts.append(df)
             self._docs_processed += 1
             # self._update_cmd_counter()
             if self._docs_processed % self._file_write_threshhold == 0:
                 msg = '{} documents processed, writing to file...'
-                print(msg.format(self._docs_processed))
+                print(msg.format(self._docs_processed), end='\r')
                 mode = self._get_write_mode()
                 with open(path_out, mode, encoding='utf8') as f:
                     for d in dicts:
@@ -86,7 +86,7 @@ class FreqAnalyzer:
 
         self._docs_processed = 0
 
-    def _load_term_idxs(self, level: str) -> Set[int]:
+    def _load_term_idxs(self, level: str) -> Set[str]:
         """Load term indices from file.
 
         Args:
@@ -100,7 +100,7 @@ class FreqAnalyzer:
 
         with open(path, 'r', encoding='utf8') as f:
             for line in f:
-                term_idxs.add(int(line.strip('\n')))
+                term_idxs.add(line.strip('\n'))
         return term_idxs
 
     def _get_write_mode(self) -> str:
@@ -114,7 +114,7 @@ class FreqAnalyzer:
 
         Do plus one smoothing to avoid zero division errors. Write
         output to 'frequency_analysis/df_lemmas.json' in form
-        of a dict: {<term_id>: df}
+        of a dict: {<term_id>: [doc_id1, ...]}
 
         Args:
             level: 't' if tokens, 'l' if lemmas.
@@ -128,9 +128,10 @@ class FreqAnalyzer:
 
         term_idxs = self._load_term_idxs(level)
         df = defaultdict(list)
-        for i, doc in enumerate(get_docs(path_idx_corpus)):
+        for i, doc in enumerate(get_docs(path_idx_corpus,
+                                         sent_tokenized=False)):
             for t in term_idxs:
-                if self._is_in_doc(t, doc):
+                if t in doc:
                     df[t].append(i)
 
             self._docs_processed += 1
@@ -172,7 +173,7 @@ class FreqAnalyzer:
         msg = '{} documents processed'
         print(msg.format(self._docs_processed))
 
-        print('calculate mean length...')
+        print('Calculate mean length...')
         dl[-1] = mean([dl[i] for i in dl])
 
         with open(self.path_dl, 'w', encoding='utf8') as f:
@@ -200,7 +201,10 @@ class FreqAnalyzer:
             for i, doc_freqs in enumerate(f):
                 tf[str(i)] = json.loads(doc_freqs.strip('\n'))
         with open(path_df, 'r', encoding='utf8') as f:
-            df = json.load(f)  # {word_id: freq}
+            df_raw = json.load(f)  # {word_id: List of docs}
+            df = {}
+            for term_id in df_raw:
+                df[term_id] = len(df_raw[term_id])
         n = len(tf)
 
         tfidf = defaultdict(dict)
