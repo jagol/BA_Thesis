@@ -117,8 +117,9 @@ class Scorer:
             subcorp = self.subcorpora[label]
             num_tokens = sum([dl[doc_id] for doc_id in subcorp])
             for term_id in clus:
-                num_occurences = sum([tf[d_id][term_id] for d_id in subcorp])
-                pop_score = (log(num_occurences) + 1) / log(num_tokens)
+                num_occurences = sum([tf[d_id][term_id] for d_id in subcorp if
+                                      term_id in tf[d_id]])
+                pop_score = (log(num_occurences+1) + 1) / (log(num_tokens+1)+1)
                 pop_scores[term_id] = pop_score
         return pop_scores
 
@@ -179,7 +180,7 @@ class Scorer:
         b = 0.75
         len_pseudo_docs = self.get_len_pseudo_docs(dl)  # {label: len}
         # tf = self.get_tf(tf)  # {term-id: {pseudo_doc-id/label: tf}}
-        avgdl = mean(len_pseudo_docs.values())
+        avgdl = mean(list(len_pseudo_docs.values()))
         for label, clus in self.clusters.items():
             pseudo_doc = self.subcorpora[label]
             tf_pseudo_doc = self.get_tf_pseudo_doc(pseudo_doc, tf)
@@ -209,11 +210,11 @@ class Scorer:
         """
         pd_bof = self.form_pseudo_docs_bag_of_words(tf)
         # {label: set(term-ids)}
-        idf = defaultdict(int)
+        idf = defaultdict(float)
         for label, clus in self.clusters.items():
             for term_id in clus:
                 df_t = len([1 for label in pd_bof if term_id in pd_bof[label]])
-                idf[term_id] = log(5/df_t)
+                idf[term_id] = log(5/(df_t+1))
         return idf
 
     def form_pseudo_docs_bag_of_words(self,
@@ -246,7 +247,7 @@ class Scorer:
         """
         bm25_scores_sum = {}
         for term_id in bm25_scores:
-            bm25_scores_sum = sum(bm25_scores[term_id].values())
+            bm25_scores_sum[term_id] = sum(bm25_scores[term_id].values())
         return bm25_scores_sum
 
     def get_len_pseudo_docs(self,
@@ -278,7 +279,7 @@ class Scorer:
         tf_pseudo_doc = defaultdict(int)
         for doc_id in pseudo_doc:
             for term_id in tf[doc_id]:
-                tf_pseudo_doc[term_id] += tf[term_id]
+                tf_pseudo_doc[term_id] += tf[doc_id][term_id]
         return tf_pseudo_doc
 
     # def get_tf(self,
