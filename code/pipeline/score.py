@@ -113,12 +113,14 @@ class Scorer:
             Form: {term-id: (popularity, concentration)}
         """
         pop_scores = {}
+        print('tf:', tf)
         for label, clus in self.clusters.items():
             subcorp = self.subcorpora[label]
             num_tokens = sum([dl[doc_id] for doc_id in subcorp])
             for term_id in clus:
-                num_occurences = sum([tf[d_id][term_id] for d_id in subcorp if
-                                      term_id in tf[d_id]])
+                # num_occurences = sum([tf[d_id][term_id] for d_id in subcorp if
+                #                       term_id in tf[d_id]])
+                num_occurences = sum([tf[doc_id][term_id] for doc_id in subcorp if doc_id in tf and term_id in tf[doc_id]])
                 pop_score = (log(num_occurences+1) + 1) / (log(num_tokens+1)+1)
                 pop_scores[term_id] = pop_score
         return pop_scores
@@ -232,7 +234,8 @@ class Scorer:
         for label, sc in self.subcorpora.items():
             pd_bof[label] = set()
             for doc_id in sc:
-                pd_bof[label].union(set([term_id for term_id in tf[doc_id]]))
+                if doc_id in sc:
+                    pd_bof[label].union(set([term_id for term_id in tf[doc_id]]))
         return pd_bof
 
     @staticmethod
