@@ -79,9 +79,9 @@ class PatternExtractor:
                 # Find terms and get their indices in the sentence.
                 term_indices, term_heads = TermExtractor.get_term_indices(sent)
 
-                # Lowercase all tokens. Lemmas are already lowercased.
+                # Lowercase all tokens and lemmas.
                 tokens = [w[0].lower() for w in sent]
-                lemmas = [w[2] for w in sent]
+                lemmas = [w[2].lower() for w in sent]
 
                 # Get terms.
                 token_terms, tokens = self._get_token_terms(
@@ -485,7 +485,7 @@ class HearstExtractor:
 
     @classmethod
     def _get_lemma_form(cls, term_idx: int, sent: List[List[str]]) -> str:
-        """Get the lemmatized form of the given term.
+        """Get the lowercased, lemmatized form of the given term.
 
         Args:
             term_idx: The index of the term to lemmatize.
@@ -497,7 +497,7 @@ class HearstExtractor:
         term_tokens = sent[term_idx][0].split('_')
         term_lemmas = sent[term_idx][2].split('_')
         term_tokens[term_head_idx] = term_lemmas[term_head_idx]
-        return '_'.join(term_tokens)
+        return '_'.join(term_tokens).lower()
 
     @classmethod
     def _get_term_head(cls, term_idx: int, sent: List[List[str]]) -> int:
