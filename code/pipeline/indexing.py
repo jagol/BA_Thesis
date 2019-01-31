@@ -66,6 +66,7 @@ class Indexer:
 
         self._file_write_threshhold = 10000
         self._docs_processed = 0
+        self._already_written_to_file = False
         self._start_time = 0
         self._upper_bound = None
 
@@ -157,6 +158,7 @@ class Indexer:
 
         self._update_cmd_time_info(end=True)
         self.write_corpus(corpus_idx, path_out)
+        self._already_written_to_file = False
         return word_to_idx, idx_to_word
 
     @staticmethod
@@ -177,9 +179,10 @@ class Indexer:
 
     def _get_write_mode(self) -> str:
         """Return the mode in which the file should be written to."""
-        if self._docs_processed <= self._file_write_threshhold:
-            return 'w'
-        return 'a'
+        if self._already_written_to_file:
+            return 'a'
+        self._already_written_to_file = True
+        return 'w'
 
     def _terms_to_idxs(self,
                        level: str,
@@ -204,8 +207,10 @@ class Indexer:
             for line in fin:
                 terms.add(line.strip('\n'))
 
+        term_cmd = []
         with open(path_out, 'w', encoding='utf8') as fout:
             for t in terms:
+                term_cmd.append(term_to_idx[t])
                 fout.write(str(term_to_idx[t]) + '\n')
 
     def hierarch_rels_to_token_idx(self) -> None:
