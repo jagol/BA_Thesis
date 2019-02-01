@@ -183,8 +183,9 @@ class Scorer:
         """
         bm25_scores = defaultdict(dict)
         idf = self.get_idf_scores(tf)  # {term-id: idf}
-        k1 = 1.6
-        b = 0.75
+        k1 = 1.2
+        b = 0.5
+        multiplier = 3
         len_pseudo_docs = self.get_len_pseudo_docs(dl)  # {label: len}
         # tf = self.get_tf(tf)  # {term-id: {pseudo_doc-id/label: tf}}
         avgdl = mean(list(len_pseudo_docs.values()))
@@ -198,7 +199,7 @@ class Scorer:
                 numerator = idf[term_id]*(tf_td*(k1+1))
                 denominator = (tf_td+k1*(1-b+b*(len_pseudo_doc/avgdl)))
                 bm25_score = numerator/denominator
-                bm25_scores[term_id][label] = bm25_score
+                bm25_scores[term_id][label] = bm25_score*multiplier
         return bm25_scores
 
     def get_idf_scores(self,
