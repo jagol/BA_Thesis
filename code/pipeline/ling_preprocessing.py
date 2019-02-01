@@ -155,13 +155,24 @@ class LingPreprocessor(TextProcessingUnit):
                 The root index is relative to the noun phrase.
             sent: A spacy slice object representing a sentence.
         """
-        articles = {'a', 'A', 'the', 'The'}
+        determiners = {'a', 'A', 'the', 'The'}
         for npi in np_indices:
             start_idx = npi[0]
-            if sent[start_idx].text in articles:
+            if sent[start_idx].text in determiners:
                 npi[0] += 1
-                npi[2] -= 1
-        return np_indices
+                if npi[2] > 0:
+                    # Only set subtract from root if it is bigger than
+                    # zero to avoid negative root indexing. This
+                    # can occur through the determiner wrongly being
+                    # marked as the root of the phrase.
+                    npi[2] -= 1
+
+        # Go a second time through indices and filter out empty lists.
+        np_indices_f = []
+        for start, end, root in np_indices:
+            if start != end:
+                np_indices_f.append([start, end, root])
+        return np_indices_f
 
     @staticmethod
     def _concat_np(np_indices: List[List[int]],
@@ -198,11 +209,19 @@ class LingPreprocessor(TextProcessingUnit):
             lemmas[start: end] = [concat_lemmas]
             is_stop[start: end] = [concat_is_stop]
 
-        proc_sent = []
+        proc_sent_cnp = []
         for t in zip(tokens, tags, lemmas, is_stop):
-            proc_sent.append(tuple(t))
+            proc_sent_cnp.append(tuple(t))
 
-        return proc_sent
+        # for t in tokens:
+        #     if not t:
+        #         print(30*'-')
+        #         print('tokens:', tokens)
+        #         print('lemmas:', lemmas)
+        #         print('proc_sent:', proc_sent)
+        #         print('proc_sent_concat_nps:', proc_sent_cnp)
+
+        return proc_sent_cnp
 
     def _write_pp_corpus_to_file(self) -> None:
         mode = self._get_write_mode()
@@ -342,7 +361,7 @@ def main():
     path_in = config['paths'][args.location][args.corpus]['path_in']
     path_out = config['paths'][args.location][args.corpus]['path_out']
     path_lang_model = config['paths'][args.location]['path_lang_model']
-    max_docs = 1000
+    max_docs = 10000
     # prep_output_dir(path_out)
     if args.corpus == 'dblp':
         dp = DBLPLingPreprocessor(
