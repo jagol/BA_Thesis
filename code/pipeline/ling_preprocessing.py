@@ -52,6 +52,8 @@ class LingPreprocessor(TextProcessingUnit):
         self._nlp = spacy.load(path_lang_model)
         self._start_time = 0
         self._file_write_threshhold = 10000
+        self._start_doc = 0  # Change this variable to skip docs.
+        self._start_docs_skipped = 0
         self._pp_corpus = []
         self.f_out_name = 'ling_pp_corpus.txt'
         self.f_out = os.path.join(self.path_out_dir, self.f_out_name)
@@ -73,6 +75,11 @@ class LingPreprocessor(TextProcessingUnit):
         path_infile = os.path.join(self.path_in)
         with gzip.open(path_infile, 'r') as f:
             for doc in self._doc_getter(f):
+
+                if self._start_docs_skipped < self._start_doc:
+                    self._start_docs_skipped += 1
+                    continue
+
                 self._process_doc(doc, concat_nps=True)
 
                 if self._docs_processed >= self._upper_bound:
