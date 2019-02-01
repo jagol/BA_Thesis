@@ -52,8 +52,7 @@ class LingPreprocessor(TextProcessingUnit):
         self._nlp = spacy.load(path_lang_model)
         self._start_time = 0
         self._file_write_threshhold = 10000
-        self._start_doc = 0  # Change this variable to skip docs.
-        self._start_docs_skipped = 0
+        self._skip_to_doc = 0  # Change this variable to skip docs.
         self._pp_corpus = []
         self.f_out_name = 'ling_pp_corpus.txt'
         self.f_out = os.path.join(self.path_out_dir, self.f_out_name)
@@ -74,10 +73,9 @@ class LingPreprocessor(TextProcessingUnit):
         self._start_time = time.time()
         path_infile = os.path.join(self.path_in)
         with gzip.open(path_infile, 'r') as f:
-            for doc in self._doc_getter(f):
+            for i, doc in enumerate(self._doc_getter(f)):
 
-                if self._start_docs_skipped < self._start_doc:
-                    self._start_docs_skipped += 1
+                if i < self._skip_to_doc:
                     continue
 
                 self._process_doc(doc, concat_nps=True)
@@ -333,6 +331,7 @@ class DBLPLingPreprocessor(LingPreprocessor):
             if match:
                 tag, content = match.groups()
                 if tag == 'title' and content != 'Home Page':
+                    content = content.strip(' ')
                     yield content
 
 
