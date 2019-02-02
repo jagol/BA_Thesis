@@ -1,7 +1,9 @@
 from math import log
 import json
-from typing import Generator, List, Set, Tuple, Dict, DefaultDict
+from typing import *
 from collections import defaultdict
+from utility_functions import get_sim
+from numpy import mean
 
 
 class Corpus:
@@ -95,8 +97,109 @@ def get_relevant_docs(term_ids: Set[str],
                       base_corpus: Set[str],
                       n: int,
                       tfidf_base: Dict[str, Dict[str, float]],
+                      doc_embeddings: Dict[str, List[float]],
+                      topic_embedding: List[float],
+                      only_tfidf: bool=False
                       ) -> Set[str]:
     """Generate a pseudo corpus (relevant_docs) for given set of terms.
+
+    Find the documents for the pseudo-corpus by calculating a document
+    embedding. The doc-embedding is TFIDF-weighted average of all its
+    terms. Use the average cluster-direction as a query vector. Find
+    the n most closest documents to the query vector. n is determined as
+    the |D|/5*level where |D| is the number of all documents and level
+    is the depth of the taxonomy tree. Multiplicated with 5 since at
+    every level the every branch gets 5 subbranches.
+
+    Args:
+        term_ids: The lemma-ids of the terms that define the corpus.
+        base_corpus: The document ids, that form the document collection
+            from which to choose from.
+        n: The top n scored documents are chosen for the pseudo corpus.
+            n should be chosen as num_docs / n_clus
+            where num_docs denotes the number of documents in the base
+            corpus and n_clus denotes the number of clusters (or just
+            the number of parts) the base corpus is divided into.
+        tfidf_base: The tfidf values for the terms in the entire
+            base_corpus.
+        doc_embeddings: The document embeddings.
+        topic_embedding: The topic embedding.
+        only_tfidf: Don't use embeddings but only the summed tfidf
+            scores for documents to rank them.
+    Return:
+        Set of indices which denote the documents beloning to the pseudo
+        corpus.
+    """
+    if only_tfidf:
+        return get_relevant_docs_only_tfidf(
+            term_ids, base_corpus, n, tfidf_base)
+
+    doc_sims = []
+    for doc_id, doc_emb in doc_embeddings.items():
+        doc_sims.append((doc_id, get_sim(topic_embedding, doc_emb)))
+
+    top_n = sorted(doc_sims, key=lambda t: t[1], reverse=True)[:n]
+    return set([t[0] for t in top_n])
+
+
+def get_doc_embeddings(tfidf_base: Dict[str, Dict[str, float]],
+                       term_ids_to_embs: Dict[str, List[float]]
+                       ) -> Dict[str, Any]:
+    """Compute document embeddings using term-embeddings and tfidf.
+
+    Compute document embeddings though average of tfidf weighted term
+    embeddings.
+
+    The embedding for each document d_e is computed as:
+    d_e = avg(tfidf(t1..tn)*emb(t1..tn))
+    where t is a term in d.
+
+    Args:
+        tfidf_base: The tfidf values for the terms in the entire
+            base_corpus (global).
+        term_ids_to_embs: Maps term-ids to their global embeddings.
+    Return:
+        doc_embeddings: {doc-id: embedding}
+    """
+    doc_embeddings = {}
+    for doc_id in tfidf_base:
+        doc_emb = []
+        tfidf_doc = tfidf_base[doc_id]
+        for term_id in tfidf_doc:
+            term_emb = term_ids_to_embs[term_id]
+            tfidf = tfidf_base[doc_id][term_id]
+            term_emb = [tfidf*d for d in term_emb]
+            doc_emb.append(term_emb)
+        doc_embeddings[doc_id] = mean(doc_emb, axis=0)
+    return doc_embeddings
+
+
+def get_topic_embeddings(clusters: Dict[int, Set[str]],
+                         term_ids_to_embs: Dict[str, List[float]]
+                         )-> Dict[int, Any]:
+    """Compute embeddings for topics/clusters by averaging terms-embs.
+
+    Args:
+        clusters: Each cluster is a set of terms.
+        term_ids_to_embs: Maps terms to their global embeddings.
+    Return:
+        topic_embeddings: {cluster-label: embedding}
+    """
+    topic_embeddings = {}
+    for label, clus in clusters.items():
+        embs = [term_ids_to_embs[term_id] for term_id in clus]
+        topic_embeddings[label] = mean(embs, axis=0)
+    return topic_embeddings
+
+
+def get_relevant_docs_only_tfidf(term_ids: Set[str],
+                                 base_corpus: Set[str],
+                                 n: int,
+                                 tfidf_base: Dict[str, Dict[str, float]]
+                                 ) -> Set[str]:
+    """Generate a pseudo corpus (relevant_docs) for given set of terms.
+
+    This is the tfidf-only version without usage of embeddings.
 
     Find the documents of the corpus using tfidf. The general idea is:
     Those documents, for which the given terms are important, belong

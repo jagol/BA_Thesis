@@ -3,7 +3,9 @@ import os
 import json
 import argparse
 import shutil
-from typing import Dict, List, Tuple, Generator, Union, Any
+from typing import *
+from scipy.spatial.distance import cosine
+
 
 # ----------------------------------------------------------------------
 # type definitions
@@ -177,6 +179,18 @@ def get_num_docs(path: str) -> int:
             if line == '\n':
                 counter += 1
     return counter
+
+
+def get_sim(v1: Iterator[float], v2: Iterator[float]) -> float:
+    """Calcualte the consine similarity between vectors v1 and v2.
+
+    Args:
+        v1: vector 1
+        v2: vector 2
+    Return:
+        The cosine similarity.
+    """
+    return 1-cosine(v1, v2)
 
 
 def split_corpus(path_in: str,
