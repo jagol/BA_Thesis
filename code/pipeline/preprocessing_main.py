@@ -1,10 +1,10 @@
-import os
+# import os
 from utility_functions import *
 from ling_preprocessing import DBLPLingPreprocessor, SPLingPreprocessor
 from pattern_extraction import PatternExtractor
 from indexing import Indexer
 from frequency_analysis import FreqAnalyzer
-from embeddings import train_fasttext
+from embeddings import Word2VecE
 
 """
 Main script to execute all preprocessing steps.
@@ -40,10 +40,10 @@ def main():
         'Start tokenization, tagging, lemmatization and marking stop-words...')
     if args.corpus == 'dblp':
         lpp = DBLPLingPreprocessor(
-            path_in, path_out, path_lang_model, max_docs=1000)
+            path_in, path_out, path_lang_model, max_docs=10000)
     elif args.corpus == 'sp':
         lpp = SPLingPreprocessor(
-            path_in, path_out, path_lang_model, max_docs=1000)
+            path_in, path_out, path_lang_model, max_docs=10000)
     lpp.preprocess_corpus()
     print('Done.')
 
@@ -85,12 +85,19 @@ def main():
 
     # train embeddings
     # os.system('cd ./output/dblp/processed_corpus')
-    os.system('head -n 1000 ./output/dblp/processed_corpus/pp_token_corpus.txt > ./output/dblp/processed_corpus/pp_token_corpus_1000.txt')
-    os.system('head -n 1000 ./output/dblp/processed_corpus/pp_lemma_corpus.txt > ./output/dblp/processed_corpus/pp_lemma_corpus_1000.txt')
-    print('Train fasttext token embeddings...')
-    train_fasttext(path_out, 't')
-    print('Train fasttext lemma embeddings...')
-    train_fasttext(path_out, 'l')
+    # os.system('head -n 1000 ./output/dblp/processed_corpus/pp_token_corpus.txt > ./output/dblp/processed_corpus/pp_token_corpus_1000.txt')
+    # os.system('head -n 1000 ./output/dblp/processed_corpus/pp_lemma_corpus.txt > ./output/dblp/processed_corpus/pp_lemma_corpus_1000.txt')
+    w2v = Word2VecE()
+    print('Train word2vec token embeddings...')
+    path_input = os.path.join(path_out,
+                              'processed_corpus/token_idx_corpus.txt')
+    embs_fname = w2v.train(path_input, 'token_embeddings_global', path_out)
+    print('Embeddings written to: {}'.format(embs_fname))
+    print('Train word2vec lemma embeddings...')
+    path_input = os.path.join(path_out,
+                              'processed_corpus/lemma_idx_corpus.txt')
+    embs_fname = w2v.train(path_input, 'lemma_embeddings_global', path_out)
+    print('Embeddings written to: {}'.format(embs_fname))
     # embs.calc_combined_term_vecs()
 
     # # train hyponym projector
