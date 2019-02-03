@@ -1,9 +1,9 @@
 from typing import *
 from collections import defaultdict
 import json
-import torch
 import numpy as np
-import fasttext
+# import fasttext
+import subprocess
 import os
 from allennlp.commands.elmo import ElmoEmbedder
 from allennlp.modules.similarity_functions.cosine import CosineSimilarity
@@ -17,7 +17,7 @@ embeddings_type = List[Iterator[float]]
 class Embeddings:
     """Interface to all embeddings used in the pipeline."""
 
-    def get_embeddings(self, sent: List[str]) -> List[torch.Tensor]:
+    def get_embeddings(self, sent: List[str]) -> List[List[float]]:
         raise NotImplementedError
 
 
@@ -52,7 +52,7 @@ class ElmoE(Embeddings):
         elif mode == 1:
             return embeddings[2]
         elif mode == 2:
-            concatenation = [torch.cat((tpl[0], tpl[1]), 0)
+            concatenation = [np.concatenate((tpl[0], tpl[1]), 0)
                              for tpl in zip(embeddings[0], embeddings[2])]
             return concatenation
 
@@ -174,24 +174,46 @@ class Word2VecE(Embeddings):
     #     self._model = gensim.models.KeyedVectors.load_word2vec_format(
     #         self._mpath, binary=True)
 
-    def get_embedding(self, word: str) -> Iterator[float]:
-        """Get the word2vec embeddings for all tokens in <sent>."""
-        return self._model.wv[word]
+    # def get_embedding(self, word: str) -> Iterator[float]:
+    #     """Get the word2vec embeddings for all tokens in <sent>."""
+    #     return self._model.wv[word]
+    #
+    # def get_embeddings(self, sent: List[str]) -> embeddings_type:
+    #     """Get the word2vec embeddings for all tokens in <sent>."""
+    #     return [self._model.wv[word] for word in sent]
+    #
+    # def train(self, input_data: str, path_model: str) -> None:
+    #     """Train word2vec embeddings.
+    #
+    #     Args:
+    #         input_data: The path to the text file used for training.
+    #         path_model: Name/path under which the model is saved.
+    #     """
+    #     sentences = get_docs(input_data)
+    #     model = gensim.models.Word2Vec(sentences, min_count=1, workers = 4)
+    #     model.wv.save(path_model)
 
-    def get_embeddings(self, sent: List[str]) -> embeddings_type:
-        """Get the word2vec embeddings for all tokens in <sent>."""
-        return [self._model.wv[word] for word in sent]
+    def train(self,
+              path_corpus: str,
+              fname: str,
+              path_out_dir: str
+              ) -> str:
+        """Train word2vec embeddings on the given corpus.
 
-    def train(self, input_data: str, path_model: str) -> None:
-        """Train word2vec embeddings.
-
-        Args:
-            input_data: The path to the text file used for training.
-            path_model: Name/path under which the model is saved.
-        """
-        sentences = get_docs(input_data)
-        model = gensim.models.Word2Vec(sentences, min_count=1, workers = 4)
-        model.wv.save(path_model)
+            Args:
+                path_corpus: The path to the corpus file.
+                fname: The filename for the embedding file.
+                path_out_dir: The path to the output directory.
+            Return:
+                The path to the embedding file:
+                'embeddings/<cur_node_id>_w2v.vec'
+            """
+        raw_path = 'embeddings/{}_w2v.vec'.format(fname)
+        path_out = os.path.join(path_out_dir, raw_path)
+        subprocess.call(
+            ["./word2vec", "-threads", "12", "-train", path_corpus, "-output",
+             path_out, "-min-count", "1"])
+        return path_out
 
 
 class CombinedEmbeddings(Embeddings):
