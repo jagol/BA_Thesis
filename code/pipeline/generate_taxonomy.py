@@ -1,5 +1,5 @@
 # import os
-# import json
+import json
 # import re
 import csv
 import subprocess
@@ -14,7 +14,7 @@ from utility_functions import *
 
 # Define global variables.
 node_counter = 0
-
+idx_to_term = {}
 
 def generate_taxonomy():
     """Generate a taxonomy for a preprocessed corpus.
@@ -33,6 +33,7 @@ def generate_taxonomy():
         - remove them from cluster
         - start again at beginning using the resulting cluster
     """
+    global idx_to_term
     # Load cmd args and configs.
     print('Load and parse cmd args...')
     config = get_config()
@@ -46,8 +47,10 @@ def generate_taxonomy():
     if lemmatized:
         path_term_ids = os.path.join(
             path_out, 'processed_corpus/lemma_terms_idxs.txt')
-        path_df = os.path.join(path_out, 'frequency_analysis/df_lemmas.json')
-        path_tf = os.path.join(path_out, 'frequency_analysis/tf_lemmas.json')
+        path_idx_to_term = os.path.join(
+            path_out, 'indexing/idx_to_lemma.json')
+        path_df = os.path.join(path_out, 'frequencies/df_lemmas.json')
+        path_tf = os.path.join(path_out, 'frequencies/tf_lemmas.json')
         path_tfidf = os.path.join(
             path_out, 'frequencies/tfidf_lemmas.json')
         path_base_corpus = os.path.join(
@@ -55,10 +58,12 @@ def generate_taxonomy():
         path_base_corpus_ids = os.path.join(
             path_out, 'processed_corpus/lemma_idx_corpus.txt')
         path_embeddings_global = os.path.join(
-            path_out, 'embeddings/token_embeddings_global.vec')
+            path_out, 'embeddings/token_embeddings_global_w2v.vec')
     else:
         path_term_ids = os.path.join(
             path_out, 'processed_corpus/token_terms_idxs.txt')
+        path_idx_to_term = os.path.join(
+            path_out, 'indexing/idx_to_token.json')
         path_df = os.path.join(path_out, 'frequencies/df_tokens.json')
         path_tf = os.path.join(path_out, 'frequencies/tf_tokens.json')
         path_tfidf = os.path.join(path_out, 'frequencies/tfidf_tokens.json')
@@ -67,7 +72,7 @@ def generate_taxonomy():
         path_base_corpus_ids = os.path.join(
             path_out, 'processed_corpus/token_idx_corpus.txt')
         path_embeddings_global = os.path.join(
-            path_out, 'embeddings/lemma_embeddings_global.vec')
+            path_out, 'embeddings/lemma_embeddings_global_w2v.vec')
 
     path_dl = os.path.join(path_out, 'frequencies/dl.json')
     path_taxonomy = os.path.join(path_out, 'hierarchy/taxonomy.csv')
@@ -78,6 +83,9 @@ def generate_taxonomy():
     # Define starting variables.
     print('load term-ids...')
     term_ids = load_term_ids(path_term_ids)
+    print('load idx-term mappings...')
+    with open(path_idx_to_term, 'r', encoding='utf8') as f:
+        idx_to_term = json.load(f)
     print('load global embeddings...')
     term_ids_to_embs_global = get_embeddings(term_ids, path_embeddings_global)
     print('load base corpus...')
@@ -235,7 +243,10 @@ def write_tax_to_file(cur_node_id: int,
                       csv_writer: Any
                       ) -> None:
     """Write the current node with terms and child-nodes to file."""
-    row = [cur_node_id] + list(child_ids.values()) + list(concept_terms)
+    # Map indices to words.
+    concept_terms = [idx_to_term[i] for i in concept_terms]
+    child_terms = [idx_to_term[i] for i in child_ids.values()]
+    row = [cur_node_id] + child_terms + concept_terms
     csv_writer.writerow(row)
 
 
@@ -355,7 +366,7 @@ def train_embeddings(path_corpus: str,
     path_out = os.path.join(path_out_dir, raw_path)
     subprocess.call(
         ["./word2vec", "-threads", "12", "-train", path_corpus, "-output",
-         path_out])
+         path_out, "-min-count", "1"])
     return path_out
 
 
@@ -379,6 +390,12 @@ def get_embeddings(term_ids: Set[str],
             if term_id in term_ids:
                 emb = [float(f) for f in vals[1:]]
                 term_id_to_emb[term_id] = emb
+    if len(term_id_to_emb) != len(term_ids):
+        msg_raw = ('Error! Not all term-ids have embeddings.\nNum term-ids: {}'
+                   '\nNum embeddings: {}\nNo embeddings for: {}')
+        no_emb = sorted([e for e in term_ids if e not in term_id_to_emb])
+        msg = msg_raw.format(len(term_ids), len(term_id_to_emb), no_emb)
+        raise Exception(msg)
 
     return term_id_to_emb
 
@@ -404,7 +421,7 @@ def cluster(term_ids_to_embs: Dict[str, List[float]]) -> Dict[int, Set[str]]:
         label = labels[i]
         clusters[label].add(term_id)
     # print('Cluster sizes: {}'.format([len(c) for c in clusters]))
-    print('Cluster sizes: {}'.format(clusters))
+    # print('Cluster sizes: {}'.format(clusters))
     return clusters
 
 
