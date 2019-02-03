@@ -160,7 +160,7 @@ class LingPreprocessor(TextProcessingUnit):
                 The root index is relative to the noun phrase.
             sent: A spacy slice object representing a sentence.
         """
-        determiners = {'a', 'A', 'the', 'The'}
+        determiners = {'a', 'A', 'an', 'An', 'the', 'The'}
         for npi in np_indices:
             start_idx = npi[0]
             if sent[start_idx].text in determiners:
