@@ -16,6 +16,7 @@ from utility_functions import *
 node_counter = 0
 idx_to_term = {}
 
+
 def generate_taxonomy():
     """Generate a taxonomy for a preprocessed corpus.
 
@@ -169,6 +170,9 @@ def rec_find_children(term_ids_local: Set[str],
     print('Number of candidate terms: {}'.format(len(term_ids_local)))
     if len(term_ids_local) <= 5:
         print('Less than 5 terms. Stop recursion...')
+        print('write concept terms to file...')
+        child_ids = {i: None for i in range(5)}
+        write_tax_to_file(cur_node_id, child_ids, term_ids_local, csv_writer)
         return None
 
     n = int(len(base_corpus)/(5*level))
@@ -238,15 +242,15 @@ def get_child_ids(proc_clusters: Dict[int, Set[str]]) -> Dict[int, int]:
 
 
 def write_tax_to_file(cur_node_id: int,
-                      child_ids: Dict[int, int],
+                      child_ids: Union[Dict[int, int], List[None]],
                       concept_terms: Set[str],
                       csv_writer: Any
                       ) -> None:
     """Write the current node with terms and child-nodes to file."""
     # Map indices to words.
     concept_terms = [idx_to_term[i] for i in concept_terms]
-    child_terms = [idx_to_term[i] for i in child_ids.values()]
-    row = [cur_node_id] + child_terms + concept_terms
+    child_nodes = list(child_ids.values())
+    row = [cur_node_id] + child_nodes + concept_terms
     csv_writer.writerow(row)
 
 
@@ -577,7 +581,7 @@ def get_concept_terms(clus: Set[str],
     """
     concept_terms = set()
     # threshhold = 0.25 # According to TaxoGen.
-    threshhold = 0.75
+    threshhold = 0.5
     for term_id in clus:
         con = term_scores[term_id][1]
         pop = term_scores[term_id][0]
