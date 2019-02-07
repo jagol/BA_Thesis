@@ -6,6 +6,7 @@ from utility_functions import get_config, get_cmd_args
 
 
 nodes_type = Dict[str, Dict[str, List[str]]]
+node_type = Dict[str, List[str]]
 
 
 def get_paths() -> Dict[str, str]:
@@ -40,6 +41,22 @@ def read_csv(path_tax_csv: str) -> nodes_type:
     return nodes
 
 
+def rec_remove_empty_child_ids(parent: node_type,
+                               nodes: nodes_type
+                               ) -> nodes_type:
+    child_ids_clean = []
+    for chid in parent['child_ids']:
+        if chid in nodes and nodes[chid]['terms']:
+            child_ids_clean.append(chid)
+
+    parent['child_ids'] = child_ids_clean
+
+    for chid in parent['child_ids']:
+        rec_remove_empty_child_ids(nodes[chid], nodes)
+
+    return nodes
+
+
 def make_dot_tree(fpath, nodes: nodes_type) -> None:
     graph = Digraph(comment='The taxonomy')
     rec_add_nodes('0', nodes, graph)
@@ -56,10 +73,13 @@ def rec_add_nodes(source_id: str,
     graph.node(source_id, source_text)
     if source['child_ids']:
         for child_id in source['child_ids']:
-            child = nodes[child_id]
-            child_text = ' '.join(child['terms'])
-            graph.node(child_id, child_text)
-            graph.edge(source_id, child_id)
+            try:
+                child = nodes[child_id]
+                child_text = ' '.join(child['terms'])
+                graph.node(child_id, child_text)
+                graph.edge(source_id, child_id)
+            except KeyError:
+                pass
         for child_id in source['child_ids']:
             rec_add_nodes(child_id, nodes, graph)
 
@@ -67,6 +87,7 @@ def rec_add_nodes(source_id: str,
 def main():
     paths = get_paths()
     nodes = read_csv(paths['tax_csv'])
+    nodes = rec_remove_empty_child_ids(nodes['0'], nodes)
     make_dot_tree(paths['tax_png'], nodes)
 
 
