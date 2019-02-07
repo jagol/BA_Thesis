@@ -122,7 +122,7 @@ class Scorer:
                 num_occurences = sum([tf[doc_id][term_id] for doc_id in subcorp
                                       if doc_id in tf
                                       and term_id in tf[doc_id]])
-                pop_score = (log(num_occurences+1) + 1) / (log(num_tokens+1)+1)
+                pop_score = log(num_occurences + 1) / log(num_tokens)
                 pop_scores[term_id] = pop_score
         return pop_scores
 
@@ -214,7 +214,7 @@ class Scorer:
             tf: The term frequencies of the terms in parent-corpus.
                 Form: {doc-id: {term-id: frequency}}
         Return:
-            {term_id: idf}
+            {term_id: idf_score}
         """
         pd_bof = self.form_pseudo_docs_bag_of_words(tf)
         # {label: set(term-ids)}
