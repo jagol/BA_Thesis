@@ -5,6 +5,7 @@ import csv
 import subprocess
 from collections import defaultdict
 from math import sqrt
+from numpy import mean, median
 from typing import *
 from corpus import get_relevant_docs, get_doc_embeddings, get_topic_embeddings
 from clustering import Clustering
@@ -162,18 +163,11 @@ def rec_find_children(term_ids_local: Set[str],
         path_out: The path to the output directory.
         csv_writer: csv-writer-object used to write taxonomy to file.
     """
-    print(10*'-'+' level {} node {} '.format(level, cur_node_id) + 10*'-')
+    print(15*'-'+' level {} node {} '.format(level, cur_node_id) + 15*'-')
     msg = 'start recursion on level {} with node id {}...'.format(level,
                                                                   cur_node_id)
     print(msg)
-    # node_id = cur_node_id
     print('Number of candidate terms: {}'.format(len(term_ids_local)))
-    if len(term_ids_local) <= 5:
-        print('Less than 5 terms. Stop recursion...')
-        print('write concept terms to file...')
-        child_ids = {i: None for i in range(5)}
-        write_tax_to_file(cur_node_id, child_ids, term_ids_local, csv_writer)
-        return None
 
     n = int(len(base_corpus)/(5*level))
     print('build corpus file...')
@@ -188,29 +182,58 @@ def rec_find_children(term_ids_local: Set[str],
     else:
         term_ids_to_embs_local = term_ids_to_embs_global
 
-    print('cluster terms...')
-    clusters = cluster(term_ids_to_embs_local)  # Dict[int, Set[int]]
-    print('get subcorpora for clusters...')
-    subcorpora = get_subcorpora(clusters, base_corpus, n, tfidf_base,
-                                term_ids_to_embs_global)
-    # {label: doc-ids}
+    concept_terms = set()
+    print('Start finding general terms...')
+    i = 0
+    while True:
+        i += 1
+        print(5*'-' + ' iteration {} '.format(i) + 5*'-')
 
-    print('get term-frequencies...')
-    tf_corpus = get_tf_corpus(term_ids_local, cur_corpus, tf_base)
-    # TODO: modifiy get_tf_corpus. Get the tf for all docs in cur_docs
-    print('compute term scores...')
-    term_scores = get_term_scores(clusters, subcorpora, dl, tf_corpus, tf_base,
-                                  level)
-    print('remove terms from clusters...')
-    proc_clusters, concept_terms = process_clusters(clusters, term_scores)
-    print('concept terms:', concept_terms)
-    child_ids = get_child_ids(proc_clusters)
+        print('cluster terms...')
+        clusters = perform_clustering(term_ids_to_embs_local)
+        # Dict[int, Set[int]]
+
+        print('get subcorpora for clusters...')
+        subcorpora = get_subcorpora(clusters, base_corpus, n, tfidf_base,
+                                    term_ids_to_embs_global)
+        # {label: doc-ids}
+
+        print('get term-frequencies...')
+        tf_corpus = get_tf_corpus(term_ids_local, cur_corpus, tf_base)
+        # TODO: modifiy get_tf_corpus. Get the tf for all docs in cur_docs
+
+        print('compute term scores...')
+        term_scores = get_term_scores(clusters, subcorpora, dl, tf_corpus,
+                                      tf_base, level)
+
+        print('get average and median score...')
+        avg_pop, avg_con, avg_total = get_avg_score(term_scores)
+        median_pop, median_con, median_total = get_median_score(term_scores)
+        msg_avg = ('avg popularity: {:.3f}, avg concentation: {:.3f}, '
+                   'avg score: {:.3f}')
+        msg_median = ('median popularity: {:.3f}, median concentation: {:.3f},'
+                      ' median score: {:.3f}')
+        print(msg_avg.format(avg_pop, avg_con, avg_total))
+        print(msg_median.format(median_pop, median_con, median_total))
+
+        print('remove terms from clusters...')
+        clusters, general_terms = separate_gen_terms(clusters, term_scores)
+        concept_terms = concept_terms.union(general_terms)
+        cluster_sizes = [len(clus) for label, clus in clusters.items()]
+        print('terms pushed up: {}'.format(len(general_terms)))
+        print('cluster_sizes: {}'.format(cluster_sizes))
+        if len(general_terms) == 0:
+            break
+        term_ids_to_embs_local = update_title(term_ids_to_embs_local, clusters)
+
+    # Start preparation of next iteration.
+    child_ids = get_child_ids(clusters)
     print('The child ids of {} are {}'.format(cur_node_id, str(child_ids)))
     print('write concept terms to file...')
     write_tax_to_file(cur_node_id, child_ids, concept_terms, csv_writer)
 
     print('start new recursion...')
-    for label, clus in proc_clusters.items():
+    for label, clus in clusters.items():
         node_id = child_ids[label]
         subcorpus = subcorpora[label]
         rec_find_children(term_ids_local=clus, base_corpus=base_corpus,
@@ -273,9 +296,9 @@ def get_subcorpora(clusters: Dict[int, Set[str]],
     return subcorpora
 
 
-def process_clusters(clusters: Dict[int, Set[str]],
-                     term_scores: Dict[str, Tuple[float, float]]
-                     ) -> Tuple[Dict[int, Set[str]], Set[str]]:
+def separate_gen_terms(clusters: Dict[int, Set[str]],
+                       term_scores: Dict[str, Tuple[float, float]]
+                       ) -> Tuple[Dict[int, Set[str]], Set[str]]:
     """Remove general terms and unpopular terms from clusters.
 
     For each cluster remove the unpopular terms and push up and
@@ -404,7 +427,8 @@ def get_embeddings(term_ids: Set[str],
     return term_id_to_emb
 
 
-def cluster(term_ids_to_embs: Dict[str, List[float]]) -> Dict[int, Set[str]]:
+def perform_clustering(term_ids_to_embs: Dict[str, List[float]]
+                       ) -> Dict[int, Set[str]]:
     """Cluster the given terms into 5 clusters.
 
     Args:
@@ -414,6 +438,15 @@ def cluster(term_ids_to_embs: Dict[str, List[float]]) -> Dict[int, Set[str]]:
         A dictionary of mapping each cluster label to it0s cluster.
         Each cluster is a set of term-ids.
     """
+    # Case less than 5 terms to cluster.
+    num_terms = len(term_ids_to_embs)
+    if num_terms < 5:
+        clusters = {}
+        for i, tid in enumerate(term_ids_to_embs):
+            clusters[i] = {tid}
+        return clusters
+
+    # Case more than 5 terms to cluster.
     c = Clustering()
     term_ids_embs_items = [(k, v) for k, v in term_ids_to_embs.items()]
     results = c.fit([it[1] for it in term_ids_embs_items])
@@ -453,6 +486,49 @@ def load_term_ids(path_term_ids: str) -> Set[str]:
         for line in f:
             term_ids.add(line.strip('\n'))
     return term_ids
+
+
+def update_title(term_ids_to_embs_local: Dict[str, List[float]],
+                 clusters: Dict[int, Set[str]]
+                 ) -> Dict[str, List[float]]:
+    """Update the term_ids_to_embs-variable (title).
+
+    Create a new variable that only contains the terms given in
+    clusters.
+
+    Args:
+        term_ids_to_embs_local: A dict mapping term_ids to embeddings.
+        clusters: A dict mapping each cluster label to a cluster.
+    """
+    updated_title = {}
+    for label, clus in clusters.items():
+        for tid in clus:
+            updated_title[tid] = term_ids_to_embs_local[tid]
+    return updated_title
+
+
+def get_avg_score(term_scores: Dict[str, Tuple[float, float]]
+                  ) -> Tuple[float, float, float]:
+    """Get the average popularity and concentration score."""
+    pop_scores = [sc[0] for id_, sc in term_scores.items()]
+    con_scores = [sc[1] for id_, sc in term_scores.items()]
+    total_scores = [sqrt(p * c) for p, c in zip(pop_scores, con_scores)]
+    avg_pop = float(mean(pop_scores))
+    avg_con = float(mean(con_scores))
+    avg_total = float(mean(total_scores))
+    return avg_pop, avg_con, avg_total
+
+
+def get_median_score(term_scores: Dict[str, Tuple[float, float]]
+                     ) -> Tuple[float, float, float]:
+    """Get the median popularity and concentration score."""
+    pop_scores = [sc[0] for id_, sc in term_scores.items()]
+    con_scores = [sc[1] for id_, sc in term_scores.items()]
+    total_scores = [sqrt(p * c) for p, c in zip(pop_scores, con_scores)]
+    median_pop = float(median(pop_scores))
+    median_con = float(median(con_scores))
+    median_total = float(median(total_scores))
+    return median_pop, median_con, median_total
 
 
 def get_term_scores(clusters: Dict[int, Set[str]],
@@ -581,11 +657,11 @@ def get_concept_terms(clus: Set[str],
     """
     concept_terms = set()
     # threshhold = 0.25 # According to TaxoGen.
-    threshhold = 0.5
+    threshhold = 0.75
     for term_id in clus:
-        con = term_scores[term_id][1]
         pop = term_scores[term_id][0]
-        score = sqrt(con*pop)
+        con = term_scores[term_id][1]
+        score = sqrt(pop*con)
         # if con < threshhold:
         if score < threshhold:
             concept_terms.add(term_id)
