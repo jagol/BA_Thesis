@@ -7,7 +7,7 @@ from collections import defaultdict
 from math import sqrt
 from numpy import mean, median
 from typing import *
-from corpus import get_relevant_docs, get_doc_embeddings, get_topic_embeddings
+from corpus import *
 from clustering import Clustering
 from score import Scorer
 from utility_functions import *
@@ -16,6 +16,7 @@ from utility_functions import *
 # Define global variables.
 node_counter = 0
 idx_to_term = {}
+max_depth = 3
 
 
 def generate_taxonomy():
@@ -163,6 +164,8 @@ def rec_find_children(term_ids_local: Set[str],
         path_out: The path to the output directory.
         csv_writer: csv-writer-object used to write taxonomy to file.
     """
+    if level >= max_depth:
+        return None
     print(15*'-'+' level {} node {} '.format(level, cur_node_id) + 15*'-')
     msg = 'start recursion on level {} with node id {}...'.format(level,
                                                                   cur_node_id)
@@ -194,7 +197,9 @@ def rec_find_children(term_ids_local: Set[str],
         # Dict[int, Set[int]]
 
         print('get subcorpora for clusters...')
-        subcorpora = get_subcorpora(clusters, base_corpus, n, tfidf_base,
+        # subcorpora = get_subcorpora(clusters, base_corpus, n, tfidf_base,
+        #                             term_ids_to_embs_global)
+        subcorpora = get_subcorpora(clusters, tfidf_base,
                                     term_ids_to_embs_global)
         # {label: doc-ids}
 
@@ -278,21 +283,28 @@ def write_tax_to_file(cur_node_id: int,
 
 
 def get_subcorpora(clusters: Dict[int, Set[str]],
-                   base_corpus: Set[str],
-                   n: int,
+                   # base_corpus: Set[str],
+                   # n: int,
                    tfidf_base: Dict[str, Dict[str, float]],
                    term_ids_to_embs: Dict[str, List[float]]
                    ) -> Dict[int, Set[str]]:
     """Get the subcorpus for each cluster."""
-    subcorpora = {}
+    # subcorpora = {}
     doc_embeddings = get_doc_embeddings(tfidf_base, term_ids_to_embs)
     # {doc_id: embedding}
     topic_embeddings = get_topic_embeddings(clusters, term_ids_to_embs)
     # {cluster/topic_label: embedding}
-    for label, clus in clusters.items():
-        subcorpora[label] = get_relevant_docs(clus, base_corpus, n, tfidf_base,
-                                              doc_embeddings,
-                                              topic_embeddings[label])
+    doc_topic_sims = get_doc_topic_sims(doc_embeddings, topic_embeddings)
+    # {doc-id: {topic-label: sim}}
+    subcorpora = get_topic_docs(doc_topic_sims)
+    # {cluster/topic_label: {set of doc-ids}}
+
+    # for label, clus in clusters.items():
+    #     subcorpora[label] = get_relevant_docs(
+    #         clus, base_corpus, n, tfidf_base,
+    #         doc_embeddings,
+    #         topic_embeddings[label])
+
     return subcorpora
 
 
@@ -568,26 +580,29 @@ def get_term_scores(clusters: Dict[int, Set[str]],
     return sc.get_term_scores(tf, tf_base, dl)
 
 
-def get_df_corpus(term_ids: Set[str],
-                  corpus: Set[str],
-                  df_base: Dict[str, int]
-                  ) -> Dict[str, int]:
-    """Get the document frequencies for a given corpus and term-ids.
-
-    Args:
-        term_ids: The ids of the given terms.
-        corpus: The ids of the documents making up the corpus.
-        df_base: The document frequencies of the base corpus.
-        {term_id: [doc_id1, ...]}
-    Return:
-        {term_id: num_docs}
-    """
-    out_dict = defaultdict(int)
-    for term_id in term_ids:
-        for doc_id in df_base[term_id]:
-            if doc_id in corpus:
-                out_dict[term_id] += 1
-    return out_dict
+# def get_df_corpus(term_ids: Set[str],
+#                   corpus: Set[str],
+#                   df_base: Dict[str, int]
+#                   ) -> Dict[str, int]:
+#     """Get the document frequencies for a given corpus and term-ids.
+#
+#     Args:
+#         term_ids: The ids of the given terms.
+#         corpus: The ids of the documents making up the corpus.
+#         df_base: The document frequencies of the base corpus.
+#         {term_id: [doc_id1, ...]}
+#     Return:
+#         {term_id: num_docs}
+#     """
+#     out_dict = defaultdict(int)
+#     print(100*'-')
+#     print(type(df_base))
+#     for term_id in term_ids:
+#         print(type(df_base[term_id]))
+#         for doc_id in df_base[term_id]:
+#             if doc_id in corpus:
+#                 out_dict[term_id] += 1
+#     return out_dict
 
 
 def get_tf_corpus(term_ids: Set[str],
@@ -657,7 +672,7 @@ def get_concept_terms(clus: Set[str],
     """
     concept_terms = set()
     # threshhold = 0.25 # According to TaxoGen.
-    threshhold = 0.75
+    threshhold = 0.1
     for term_id in clus:
         pop = term_scores[term_id][0]
         con = term_scores[term_id][1]
