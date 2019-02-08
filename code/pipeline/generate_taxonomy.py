@@ -172,7 +172,7 @@ def rec_find_children(term_ids_local: Set[str],
     print(msg)
     print('Number of candidate terms: {}'.format(len(term_ids_local)))
 
-    n = int(len(base_corpus)/(5*level))
+    m = int(len(base_corpus)/(5*level))
     print('build corpus file...')
     corpus_path = build_corpus_file(cur_corpus, path_base_corpus_ids,
                                     cur_node_id, path_out)
@@ -200,7 +200,7 @@ def rec_find_children(term_ids_local: Set[str],
         # subcorpora = get_subcorpora(clusters, base_corpus, n, tfidf_base,
         #                             term_ids_to_embs_global)
         subcorpora = get_subcorpora(clusters, tfidf_base,
-                                    term_ids_to_embs_global)
+                                    term_ids_to_embs_global, m=m)
         # {label: doc-ids}
 
         print('get term-frequencies...')
@@ -284,9 +284,9 @@ def write_tax_to_file(cur_node_id: int,
 
 def get_subcorpora(clusters: Dict[int, Set[str]],
                    # base_corpus: Set[str],
-                   # n: int,
                    tfidf_base: Dict[str, Dict[str, float]],
-                   term_ids_to_embs: Dict[str, List[float]]
+                   term_ids_to_embs: Dict[str, List[float]],
+                   m: Union[int, None]=None
                    ) -> Dict[int, Set[str]]:
     """Get the subcorpus for each cluster."""
     # subcorpora = {}
@@ -296,7 +296,7 @@ def get_subcorpora(clusters: Dict[int, Set[str]],
     # {cluster/topic_label: embedding}
     doc_topic_sims = get_doc_topic_sims(doc_embeddings, topic_embeddings)
     # {doc-id: {topic-label: sim}}
-    subcorpora = get_topic_docs(doc_topic_sims)
+    subcorpora = get_topic_docs(doc_topic_sims, m)
     # {cluster/topic_label: {set of doc-ids}}
 
     # for label, clus in clusters.items():
