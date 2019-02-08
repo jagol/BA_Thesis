@@ -27,7 +27,8 @@ class Corpus:
 
     def get_corpus_docs(self,
                         save_inside: bool = True,
-                        ) -> Generator[Tuple[int, List[List[str]]], None,None]:
+                        ) -> Generator[Tuple[int, List[List[str]]],
+                                       None, None]:
         """Get all the documents belonging to the corpus.
 
         Yield a generator of documents. Each document is a list of
@@ -242,6 +243,44 @@ def get_relevant_docs_only_tfidf(term_ids: Set[str],
 
     # Return only the ids of the n highest scored documents.
     return set(d[0] for d in ranked_docs[:n])
+
+
+def get_doc_topic_sims(doc_embeddings: Dict[str, List[float]],
+                       topic_embeddings: Dict[int, List[float]]
+                       ) -> Dict[str, Dict[int, float]]:
+    """Get the similarities between topic and document vectors.
+
+    Args:
+        doc_embeddings: Maps doc-ids to their embeddings.
+        topic_embeddings: Maps topic-ids to their embeddings.
+    Return:
+        A dict of the form: {doc-id: {topic/cluster-label: similarity}}
+    """
+    doc_topic_sims = defaultdict(dict)
+    for topic, temb in topic_embeddings.items():
+        for doc, demb in doc_embeddings.items():
+            doc_topic_sims[doc][topic] = get_sim(temb, demb)
+    return doc_topic_sims
+
+
+def get_topic_docs(doc_topic_sims: Dict[str, Dict[int, float]]
+                   ) -> Dict[int, Set[str]]:
+    """Get the topic/cluster for each document.
+
+    Match all documents to a topic by choosing the max similarity.
+
+    Args:
+        doc_topic_sims: Maps doc-ids to a dict of the form:
+        {cluster-label: similarity}
+    Return:
+        A dict of the form: {cluster-label: {A set of doc-ids}}
+    """
+    topic_docs = defaultdict(set)
+    for doc in doc_topic_sims:
+        topic_sims = doc_topic_sims[doc]
+        topic = max(topic_sims.keys(), key=(lambda key: topic_sims[key]))
+        topic_docs[topic].add(doc)
+    return topic_docs
 
 
 def get_tf_corpus(corpus: Set[str],
