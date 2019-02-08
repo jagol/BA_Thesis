@@ -263,7 +263,8 @@ def get_doc_topic_sims(doc_embeddings: Dict[str, List[float]],
     return doc_topic_sims
 
 
-def get_topic_docs(doc_topic_sims: Dict[str, Dict[int, float]]
+def get_topic_docs(doc_topic_sims: Dict[str, Dict[int, float]],
+                   m: Union[int, None]=None
                    ) -> Dict[int, Set[str]]:
     """Get the topic/cluster for each document.
 
@@ -272,14 +273,26 @@ def get_topic_docs(doc_topic_sims: Dict[str, Dict[int, float]]
     Args:
         doc_topic_sims: Maps doc-ids to a dict of the form:
         {cluster-label: similarity}
+        m: If not None, only the m most similar docs are returned.
     Return:
         A dict of the form: {cluster-label: {A set of doc-ids}}
     """
-    topic_docs = defaultdict(set)
+    td_sc = defaultdict(list)  # {topic: [(doc_id, score), ...]}
     for doc in doc_topic_sims:
         topic_sims = doc_topic_sims[doc]
         topic = max(topic_sims.keys(), key=(lambda key: topic_sims[key]))
-        topic_docs[topic].add(doc)
+        td_sc[topic].append((doc, topic_sims[topic]))
+    topic_docs = defaultdict(set)
+
+    # If m is defined only use the top m docs.
+    if m:
+        for tc in td_sc:
+            docs_sort = sorted(td_sc[tc], key=(lambda t: t[1]), reverse=True)
+            topic_docs[tc] = set([tpl[0] for tpl in docs_sort[:m]])
+    else:
+        for tc in td_sc:
+            doc_ids = [doc_id for doc_id, score in td_sc[tc]]
+            topic_docs[tc] = set(doc_ids)
     return topic_docs
 
 
