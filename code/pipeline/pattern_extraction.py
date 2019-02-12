@@ -58,13 +58,20 @@ class PatternExtractor:
         self._lemma_terms = set()
 
         self._start_time = 0
+        self._start_doc = 0
         self._max_docs = max_docs
         self._upper_bound = self._max_docs
 
     def extract(self) -> None:
         """Extract terms and hierarchical relations."""
         self._start_time = time.time()
-        for doc in get_pp_corpus(self.path_in_file):
+        for i, doc in enumerate(get_pp_corpus(self.path_in_file)):
+
+            # Option to skip documents.
+            if i < self._start_doc:
+                i += 1
+                continue
+
             doc_concat_tokens = []
             doc_concat_lemmas = []
             for sent in doc:
@@ -154,8 +161,9 @@ class PatternExtractor:
 
         return [token_terms, tokens]
 
-    @staticmethod
-    def _get_lemma_terms(tokens: List[str],
+    @classmethod
+    def _get_lemma_terms(cls,
+                         tokens: List[str],
                          lemmas: List[str],
                          term_indices: List[List[int]],
                          term_heads: List[int]
@@ -173,24 +181,51 @@ class PatternExtractor:
         lemma_terms = []
 
         # Loop backwards through term-indices.
-        for i in range(len(term_indices)-1, 0, -1):
+        for i in range(len(term_indices)-1, -1, -1):
             term_idx = term_indices[i][0]
             term_head_idx = term_heads[i]
 
             token_term = tokens[term_idx]
             lemma_term = lemmas[term_idx]
 
-            token_term_words = token_term.split('_')
-            lemma_term_words = lemma_term.split('_')
-
-            # As head, use lemma, tokens for everything else.
-            token_term_words[term_head_idx] = lemma_term_words[term_head_idx]
-            lemma_term = '_'.join(token_term_words)
+            lemma_term = cls._exchange_head(token_term, lemma_term,
+                                            term_head_idx)
 
             lemma_terms.append(lemma_term)
             lemmas[term_idx] = lemma_term
 
         return [lemma_terms, lemmas]
+
+    @staticmethod
+    def _exchange_head(token_term: str,
+                       lemma_term: str,
+                       term_head_idx: int
+                       ) -> str:
+        """Exchange the token head with lemma head.
+
+        Args:
+            token_term: The tokenized term.
+            lemma_term: The lemmatized term.
+            term_head_idx: The index of the head word of the np/term.
+
+        """
+        # Avoid errors by skipping missparsed cases.
+        token_term_words = token_term.split('_')
+        lemma_term_words = lemma_term.split('_')
+
+        error = False
+        if len(lemma_term_words) != len(token_term_words):
+            error = True
+        if term_head_idx >= len(token_term_words):
+            error = True
+        if not token_term_words:
+            error = True
+
+        # As head, use lemma, tokens for everything else.
+        if not error:
+            token_term_words[term_head_idx] = lemma_term_words[term_head_idx]
+        lemma_term = '_'.join(token_term_words)
+        return lemma_term
 
     def add_hierarch_rels(self, rels: rels_type, level: str) -> None:
         """Add given hierarchical relations to relation dictionary.
@@ -457,6 +492,7 @@ class HearstExtractor:
         """
         if match['hypos']:
             hypos_matches = re.split(r',\d+', match['hypos'])
+            hypos_matches = cls._clean_matches(hypos_matches)
         else:
             hypos_matches = []
 
@@ -482,6 +518,20 @@ class HearstExtractor:
             results.append((hyper, hypo))
 
         return results
+
+    @classmethod
+    def _clean_matches(cls, matches: List[str]) -> List[str]:
+        """In case a comma is at the end of the match remove commna.
+
+        Remove comman by only taking the part before empty space as
+        a match.
+        """
+        matches_out = []
+        for match in matches:
+            if ' ' in match:
+                match = match.split(' ')[0]
+                matches.append(match)
+        return matches_out
 
     @classmethod
     def _get_lemma_form(cls, term_idx: int, sent: List[List[str]]) -> str:
