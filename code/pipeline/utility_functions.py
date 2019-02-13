@@ -252,6 +252,27 @@ def concat_corpus(paths_in: List[str], path_out) -> None:
     os.system('cat {0} > {1}'.format(paths_in_str, path_out))
 
 
+def load_embeddings(emb_path: str) -> Dict[str, List[float]]:
+    """Get the embeddings for the given terms.
+
+    Args:
+        term_ids: The ids of the input terms.
+        emb_path: The path to the given embedding file.
+    Return:
+        A dictionary of the form: {term_id: embedding}
+    """
+    term_id_to_emb = {}
+    with open(emb_path, 'r', encoding='utf8') as f:
+        next(f)
+        for line in f:
+            vals = line.strip(' \n').split(' ')
+            term_id = vals[0]
+            emb = [float(f) for f in vals[1:]]
+            term_id_to_emb[term_id] = emb
+
+    return term_id_to_emb
+
+
 def main():
     path = 'output/dblp/processed_corpus/pp_lemma_corpus.txt'
     split_corpus(path, 8)
