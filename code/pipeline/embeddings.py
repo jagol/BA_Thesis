@@ -7,7 +7,9 @@ import subprocess
 import os
 from allennlp.commands.elmo import ElmoEmbedder
 from allennlp.modules.similarity_functions.cosine import CosineSimilarity
-import gensim
+from gensim.models import Word2Vec, KeyedVectors
+from gensim.test.utils import datapath, get_tmpfile
+from gensim.scripts.glove2word2vec import glove2word2vec
 from utility_functions import get_docs
 
 
@@ -17,8 +19,27 @@ embeddings_type = List[Iterator[float]]
 class Embeddings:
     """Interface to all embeddings used in the pipeline."""
 
-    def get_embeddings(self, sent: List[str]) -> List[List[float]]:
+    @staticmethod
+    def train(path_corpus: str, fname: str, path_out_dir: str) -> str:
         raise NotImplementedError
+
+    @staticmethod
+    def load_term_embeddings(term_ids: Set[str],
+                             emb_path: str
+                             ) -> Dict[str, List[float]]:
+        """Get all embeddings for the given terms from the given file.
+
+        Args:
+            term_ids: The ids of the input terms.
+            emb_path: The path to the given embedding file.
+        Return:
+            A dictionary of the form: {term_id: embedding}
+        """
+        model = KeyedVectors.load(emb_path)
+        term_id_to_emb = {}
+        for term_id in term_ids:
+            term_id_to_emb[term_id] = model.wv[term_id]
+        return term_id_to_emb
 
 
 class ElmoE(Embeddings):
@@ -132,39 +153,95 @@ class ElmoE(Embeddings):
     #         json.dump(avg_embs, f)
 
 
-class GloveE(Embeddings):
-    pass
+class GloVeE(Embeddings):
 
+    @staticmethod
+    def train(path_corpus: str, fname: str, path_out_dir: str) -> str:
+        """Train GloVe embeddings.
 
-class FastTextE(Embeddings):
-
-    def __init__(self):
-        self.mpath = 'fasttext_model.bin'
-        self.model = None
-
-    def train(self, input_data: str, path_model: str) -> None:
-        """Train a fasttext model.
+        All setting are default (as in demo-script) except for the
+        min-count which is set to one, such that all terms get
+        embeddings.
 
         Args:
-            input_data: The path to the text file used for training.
-            path_model: Name under which the model is saved.
-        Output:
-            The model is saved in self.model.
-            The model is saved as a binary file in <model_name>.bin.
-            The model is saved as a vector text file in <model_name>.vec.
+            path_corpus: The path to the text file used for training.
+            fname: The filename for the embedding file.
+            path_out_dir: The path to the output directory.
+        Return:
+            The path to the embedding file.
         """
-        self.model = fasttext.skipgram(input_data, path_model)
+        # path_glove = './glove_github/glove/build/'
+        path_glove = './glove/'
+        raw_fout_glove = 'embeddings/glove_format_'+fname
+        raw_fout_w2v = 'embeddings/embs' + fname
+        path_glove_format = os.path.join(path_out_dir, raw_fout_glove)
+        path_w2v_format = os.path.join(path_out_dir, raw_fout_w2v)
 
-    def load_model(self, fpath: Union[None, str] = None) -> None:
-        if fpath:
-            self.mpath = fpath
-        self.model = fasttext.load_model(self.mpath)
+        call_vocab_count = ('{}vocab_count -min-count 1 -verbose 2 < {} > '
+                            'vocab.txt')
+        call_coocur = ('{}cooccur -memory 4.0 -vocab-file vocab.txt -verbose 2'
+                       ' -window-size 15 < {} > cooccurrence.bin')
+        call_shuffle = ('{}shuffle -memory 4.0 -verbose 2 < cooccurrence.bin >'
+                        ' cooccurrence.shuf.bin')
+        call_glove = ('{}glove -save-file {} -threads 10 -input-file '
+                      'cooccurrence.shuf.bin -x-max 10 -iter 15 -vector-size '
+                      '100 -binary 0 -vocab-file vocab.txt -verbose 2')
+        # path_corpus = 'output/dblp/processed_corpus/pp_lemma_corpus.txt'
+        os.system(call_vocab_count.format(path_glove, path_corpus))
+        os.system(call_coocur.format(path_glove, path_corpus))
+        os.system(call_shuffle.format(path_glove))
+        print(call_glove.format(path_glove, path_glove_format))
+        os.system(call_glove.format(path_glove, path_glove_format))
+        print('raw_fout_glove:', raw_fout_glove)
+        print('raw_fout_w2v:', raw_fout_w2v)
+        print('path_glove_format:', path_glove_format)
+        print('path_w2v_format:', path_w2v_format)
+        print('path_corpus:', path_corpus)
+        print('fname', fname)
+        print('path_out_dir:', path_out_dir)
 
-    def get_embeddings(self, sent: List[str]) -> embeddings_type:
-        return [self.model[word] for word in sent]
+        # Turn glove format to w2v format.
+        _ = glove2word2vec(path_glove_format+'.txt', path_w2v_format+'.txt')
+        model = KeyedVectors.load_word2vec_format(path_w2v_format+'.txt')
+        model.save(path_w2v_format+'.vec')
+        # if '16945' not in model.wv.vocab and '16945' in
 
-    def get_embedding(self, word: str):
-        return self.model[word]
+        # Remove GloVe format files.
+        cmd = os.path.join(path_out_dir, 'embeddings/glove*')
+        os.system('rm {}'.format(cmd))
+
+        return path_w2v_format+'.vec'
+
+
+# class FastTextE(Embeddings):
+#
+#     def __init__(self):
+#         self.mpath = 'fasttext_model.bin'
+#         self.model = None
+#
+#     def train(self, input_data: str, path_model: str) -> None:
+#         """Train a fasttext model.
+#
+#         Args:
+#             input_data: The path to the text file used for training.
+#             path_model: Name under which the model is saved.
+#         Output:
+#             The model is saved in self.model.
+#             The model is saved as a binary file in <model_name>.bin.
+#             The model is saved as a vector text file in <model_name>.vec.
+#         """
+#         self.model = fasttext.skipgram(input_data, path_model)
+#
+#     def load_model(self, fpath: Union[None, str] = None) -> None:
+#         if fpath:
+#             self.mpath = fpath
+#         self.model = fasttext.load_model(self.mpath)
+#
+#     def get_embeddings(self, sent: List[str]) -> embeddings_type:
+#         return [self.model[word] for word in sent]
+#
+#     def get_embedding(self, word: str):
+#         return self.model[word]
 
 
 class Word2VecE(Embeddings):
@@ -173,7 +250,7 @@ class Word2VecE(Embeddings):
     #     self._mpath = 'GoogleNews-vectors-negative300.bin'
     #     self._model = gensim.models.KeyedVectors.load_word2vec_format(
     #         self._mpath, binary=True)
-
+    #
     # def get_embedding(self, word: str) -> Iterator[float]:
     #     """Get the word2vec embeddings for all tokens in <sent>."""
     #     return self._model.wv[word]
@@ -181,39 +258,80 @@ class Word2VecE(Embeddings):
     # def get_embeddings(self, sent: List[str]) -> embeddings_type:
     #     """Get the word2vec embeddings for all tokens in <sent>."""
     #     return [self._model.wv[word] for word in sent]
-    #
-    # def train(self, input_data: str, path_model: str) -> None:
-    #     """Train word2vec embeddings.
+
+    # @staticmethod
+    # def load_term_embeddings(term_ids: Set[str],
+    #                          emb_path: str
+    #                          )-> Dict[str, List[float]]:
+    #     """Get all embeddings for the given terms from the given file.
     #
     #     Args:
-    #         input_data: The path to the text file used for training.
-    #         path_model: Name/path under which the model is saved.
+    #         term_ids: The ids of the input terms.
+    #         emb_path: The path to the given embedding file.
+    #     Return:
+    #         A dictionary of the form: {term_id: embedding}
     #     """
-    #     sentences = get_docs(input_data)
-    #     model = gensim.models.Word2Vec(sentences, min_count=1, workers = 4)
-    #     model.wv.save(path_model)
+    #     # model = gensim.models.KeyedVectors.load_word2vec_format(
+    #     #     emb_path, binary=True)
+    #     # model = gensim.models.Word2Vec.load(emb_path)
+    #     model = KeyedVectors.load(emb_path)
+    #     term_id_to_emb = {}
+    #     for term_id in term_ids:
+    #         term_id_to_emb[term_id] = model.wv[term_id]
+    #     return term_id_to_emb
 
-    def train(self,
-              path_corpus: str,
-              fname: str,
-              path_out_dir: str
-              ) -> str:
-        """Train word2vec embeddings on the given corpus.
+    @staticmethod
+    def train(path_corpus: str, fname: str, path_out_dir: str) -> str:
+        """Train word2vec embeddings.
 
-            Args:
-                path_corpus: The path to the corpus file.
-                fname: The filename for the embedding file.
-                path_out_dir: The path to the output directory.
-            Return:
-                The path to the embedding file:
-                'embeddings/<cur_node_id>_w2v.vec'
-            """
-        raw_path = 'embeddings/{}_w2v.vec'.format(fname)
+        Args:
+            path_corpus: The path to the text file used for training.
+            fname: The filename for the embedding file.
+            path_out_dir: The path to the output directory.
+        Return:
+            The path to the embedding file.
+        """
+        raw_path = 'embeddings/{}.vec'.format(fname)
         path_out = os.path.join(path_out_dir, raw_path)
-        subprocess.call(
-            ["./word2vec", "-threads", "12", "-train", path_corpus, "-output",
-             path_out, "-min-count", "1"])
+        sentences = Sentences(path_corpus)
+        model = Word2Vec(sentences, min_count=1, workers=10)
+        model.wv.save(path_out)
         return path_out
+
+
+class Sentences:
+    """Class to feed input corpus to gensim.
+
+    Convert corpus from generator to iterator and feed one sentence
+    per iteration.
+    """
+
+    def __init__(self, path):
+        self.path = path
+
+    def __iter__(self):
+        for doc in get_docs(self.path):
+            for sent in doc:
+                yield sent
+
+
+def get_emb(emb_type: str) -> Any:
+    """Return an embedding class depending on the embedding type.
+
+    Args:
+        emb_type: The type of the embeddings: 'Word2Vec', 'GloVe'
+            or 'ELMo'.
+    Return:
+        An embedding object.
+    """
+    if emb_type == 'Word2Vec':
+        return Word2VecE
+    elif emb_type == 'GloVe':
+        return GloVeE
+    elif emb_type == 'ELMo':
+        raise NotImplementedError
+    else:
+        raise Exception('Error. Embedding type {} not known.'.format(emb_type))
 
 
 class CombinedEmbeddings(Embeddings):
@@ -226,8 +344,8 @@ class CombinedEmbeddings(Embeddings):
         self.model_paths = model_paths
         self.model_mapping = {
             'word2vec': Word2VecE,
-            'glove': GloveE,
-            'fasttext': FastTextE,
+            'glove': GloVeE,
+            # 'fasttext': FastTextE,
             'elmo': ElmoE
         }
         self.models = self._get_models()
@@ -285,26 +403,26 @@ class CombinedEmbeddings(Embeddings):
     #     return avg_embeddings
 
 
-def train_fasttext(path: str, level: str) -> None:
-    """Train fasttext models for tokens and lemmas.
-
-    Args:
-        path: Path to the output directory.
-        level: 't' if token, 'l' if lemma.
-    """
-    if level == 't':
-        path_corpus = 'processed_corpus/pp_token_corpus_1000.txt'
-        path_model = 'embeddings/fasttext_token_embeddings'
-    elif level == 'l':
-        path_corpus = 'processed_corpus/pp_lemma_corpus_1000.txt'
-        path_model = 'embeddings/fasttext_lemma_embeddings'
-
-    path_in = os.path.join(
-        path, path_corpus)
-    path_out = os.path.join(
-        path, path_model)
-    embedder = FastTextE()
-    embedder.train(path_in, path_out)
+# def train_fasttext(path: str, level: str) -> None:
+#     """Train fasttext models for tokens and lemmas.
+#
+#     Args:
+#         path: Path to the output directory.
+#         level: 't' if token, 'l' if lemma.
+#     """
+#     if level == 't':
+#         path_corpus = 'processed_corpus/pp_token_corpus_1000.txt'
+#         path_model = 'embeddings/fasttext_token_embeddings'
+#     elif level == 'l':
+#         path_corpus = 'processed_corpus/pp_lemma_corpus_1000.txt'
+#         path_model = 'embeddings/fasttext_lemma_embeddings'
+#
+#     path_in = os.path.join(
+#         path, path_corpus)
+#     path_out = os.path.join(
+#         path, path_model)
+#     embedder = FastTextE()
+#     embedder.train(path_in, path_out)
 
 
 # def train_w2v(path: str) -> None:
@@ -330,43 +448,43 @@ def train_fasttext(path: str, level: str) -> None:
 #     embedder.train(path_in, path_out)
 
 
-if __name__ == '__main__':
-    elmo = ElmoE()
-    this_embedding = elmo.get_embeddings(['This', 'is', 'a', 'man', '.'])[0]
-    is_embedding = elmo.get_embeddings(['This', 'is', 'a', 'man', '.'])[1]
-    man_embedding = elmo.get_embeddings(['This', 'is', 'a', 'man', '.'])[3]
-    woman_embedding = elmo.get_embeddings(['This', 'is', 'a', 'woman', '.'])[3]
-    sim_man_woman = CosineSimilarity().forward(man_embedding, woman_embedding)
-    sim_this_woman = CosineSimilarity().forward(
-        this_embedding, woman_embedding)
-    sim_is_woman = CosineSimilarity().forward(is_embedding, woman_embedding)
-    sim_this_is = CosineSimilarity().forward(this_embedding, is_embedding)
-    print('man vs woman:', sim_man_woman)
-    print('this vs woman:', sim_this_woman)
-    print('is vs woman:', sim_is_woman)
-    print('this vs is:', sim_this_is)
-    print('--------')
-    this_embedding = elmo.get_embeddings(['This', 'is', 'a', 'cat', '.'])[0]
-    is_embedding = elmo.get_embeddings(['This', 'is', 'a', 'dog', '.'])[1]
-    cat_embedding = elmo.get_embeddings(['This', 'is', 'a', 'cat', '.'])[3]
-    dog_embedding = elmo.get_embeddings(['This', 'is', 'a', 'dog', '.'])[3]
-    sim_cat_dog = CosineSimilarity().forward(cat_embedding, dog_embedding)
-    sim_this_dog = CosineSimilarity().forward(this_embedding, dog_embedding)
-    sim_is_dog = CosineSimilarity().forward(is_embedding, dog_embedding)
-    print('cat vs dog:', sim_cat_dog)
-    print('this vs dog:', sim_this_dog)
-    print('is vs dog:', sim_is_dog)
-    print('--------')
-    w2v = Word2VecE()
-    sent1 = ['woman']
-    sent2 = ['man']
-    woman_embedding = w2v.get_embeddings(sent1)[0]
-    man_embedding = w2v.get_embeddings(sent2)[0]
-    sim_man_woman = w2v._model.similarity('man', 'woman')
-    print('man vs woman:', sim_man_woman)
-    print(man_embedding)
-    print(len(man_embedding))
-    ft = FastTextE()
-    print(ft.get_embeddings(sent1)[0])
-    print(ft.get_embeddings(sent2)[0])
-    print(len(ft.get_embeddings(sent2)[0]))
+# if __name__ == '__main__':
+#     elmo = ElmoE()
+#     this_embedding = elmo.get_embeddings(['This', 'is', 'a', 'man', '.'])[0]
+#     is_embedding = elmo.get_embeddings(['This', 'is', 'a', 'man', '.'])[1]
+#     man_embedding = elmo.get_embeddings(['This', 'is', 'a', 'man', '.'])[3]
+#     woman_embedding = elmo.get_embeddings(['This', 'is', 'a', 'woman', '.'])[3]
+#     sim_man_woman = CosineSimilarity().forward(man_embedding, woman_embedding)
+#     sim_this_woman = CosineSimilarity().forward(
+#         this_embedding, woman_embedding)
+#     sim_is_woman = CosineSimilarity().forward(is_embedding, woman_embedding)
+#     sim_this_is = CosineSimilarity().forward(this_embedding, is_embedding)
+#     print('man vs woman:', sim_man_woman)
+#     print('this vs woman:', sim_this_woman)
+#     print('is vs woman:', sim_is_woman)
+#     print('this vs is:', sim_this_is)
+#     print('--------')
+#     this_embedding = elmo.get_embeddings(['This', 'is', 'a', 'cat', '.'])[0]
+#     is_embedding = elmo.get_embeddings(['This', 'is', 'a', 'dog', '.'])[1]
+#     cat_embedding = elmo.get_embeddings(['This', 'is', 'a', 'cat', '.'])[3]
+#     dog_embedding = elmo.get_embeddings(['This', 'is', 'a', 'dog', '.'])[3]
+#     sim_cat_dog = CosineSimilarity().forward(cat_embedding, dog_embedding)
+#     sim_this_dog = CosineSimilarity().forward(this_embedding, dog_embedding)
+#     sim_is_dog = CosineSimilarity().forward(is_embedding, dog_embedding)
+#     print('cat vs dog:', sim_cat_dog)
+#     print('this vs dog:', sim_this_dog)
+#     print('is vs dog:', sim_is_dog)
+#     print('--------')
+#     w2v = Word2VecE()
+#     sent1 = ['woman']
+#     sent2 = ['man']
+#     woman_embedding = w2v.get_embeddings(sent1)[0]
+#     man_embedding = w2v.get_embeddings(sent2)[0]
+#     sim_man_woman = w2v._model.similarity('man', 'woman')
+#     print('man vs woman:', sim_man_woman)
+#     print(man_embedding)
+#     print(len(man_embedding))
+#     ft = FastTextE()
+#     print(ft.get_embeddings(sent1)[0])
+#     print(ft.get_embeddings(sent2)[0])
+#     print(len(ft.get_embeddings(sent2)[0]))

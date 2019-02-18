@@ -8,6 +8,7 @@ from math import sqrt
 from numpy import mean, median
 from typing import *
 from corpus import *
+from embeddings import Embeddings, Word2VecE, GloVeE, get_emb
 from clustering import Clustering
 from score import Scorer
 from utility_functions import *
@@ -19,7 +20,7 @@ idx_to_term = {}
 max_depth = 3
 
 
-def generate_taxonomy():
+def generate_taxonomy() -> None:
     """Generate a taxonomy for a preprocessed corpus.
 
     Steps:
@@ -41,12 +42,14 @@ def generate_taxonomy():
     print('Load and parse cmd args...')
     config = get_config()
     args = get_cmd_args()
+    lemmatized = config['lemmatized']
+    emb_type = config['embeddings']
 
     # Set paths.
     # path_base_corpus = config['paths'][args.location][args.corpus]['path_in']
     print('Set paths...')
     path_out = config['paths'][args.location][args.corpus]['path_out']
-    lemmatized = config['lemmatized']
+
     if lemmatized:
         path_term_ids = os.path.join(
             path_out, 'processed_corpus/lemma_terms_idxs.txt')
@@ -61,7 +64,7 @@ def generate_taxonomy():
         path_base_corpus_ids = os.path.join(
             path_out, 'processed_corpus/lemma_idx_corpus.txt')
         path_embeddings_global = os.path.join(
-            path_out, 'embeddings/token_embeddings_global_w2v.vec')
+            path_out, 'embeddings/token_embeddings_global.vec')
     else:
         path_term_ids = os.path.join(
             path_out, 'processed_corpus/token_terms_idxs.txt')
@@ -75,7 +78,7 @@ def generate_taxonomy():
         path_base_corpus_ids = os.path.join(
             path_out, 'processed_corpus/token_idx_corpus.txt')
         path_embeddings_global = os.path.join(
-            path_out, 'embeddings/lemma_embeddings_global_w2v.vec')
+            path_out, 'embeddings/token_embeddings_global.vec')
 
     path_dl = os.path.join(path_out, 'frequencies/dl.json')
     path_taxonomy = os.path.join(path_out, 'hierarchy/taxonomy.csv')
@@ -90,7 +93,8 @@ def generate_taxonomy():
     with open(path_idx_to_term, 'r', encoding='utf8') as f:
         idx_to_term = json.load(f)
     print('load global embeddings...')
-    term_ids_to_embs_global = get_embeddings(term_ids, path_embeddings_global)
+    term_ids_to_embs_global = Embeddings.load_term_embeddings(
+        term_ids, path_embeddings_global)
     print('load base corpus...')
     base_corpus = get_base_corpus(path_base_corpus)
     print('load tf-base...')
@@ -116,7 +120,8 @@ def generate_taxonomy():
                       tf_base=tf_base, path_out=path_out, dl=dl,
                       tfidf_base=tfidf_base, cur_corpus=base_corpus,
                       csv_writer=csv_writer,
-                      term_ids_to_embs_global=term_ids_to_embs_global)
+                      term_ids_to_embs_global=term_ids_to_embs_global,
+                      emb_type=emb_type)
 
     print('Done.')
 
@@ -134,7 +139,8 @@ def rec_find_children(term_ids_local: Set[str],
                       cur_corpus: Set[str],
                       tfidf_base: Dict[str, Dict[str, float]],
                       path_out: str,
-                      csv_writer: Any
+                      csv_writer: Any,
+                      emb_type: str
                       ) -> None:
     """Recursive function to generate child nodes for parent node.
 
@@ -163,6 +169,7 @@ def rec_find_children(term_ids_local: Set[str],
             {doc_id: {term_id: tfidf}}
         path_out: The path to the output directory.
         csv_writer: csv-writer-object used to write taxonomy to file.
+        emb_type: The embedding type: 'Word2Vec', 'GloVe' or 'ELMo'.
     """
     if level >= max_depth:
         return None
@@ -178,9 +185,11 @@ def rec_find_children(term_ids_local: Set[str],
                                     cur_node_id, path_out)
     print('train embeddings...')
     if level != 1:
-        emb_path_local = train_embeddings(corpus_path, cur_node_id, path_out)
+        emb_path_local = train_embeddings(emb_type, corpus_path,
+                                          cur_node_id, path_out)
         print('get term embeddings...')
-        term_ids_to_embs_local = get_embeddings(term_ids_local, emb_path_local)
+        term_ids_to_embs_local = Embeddings.load_term_embeddings(
+            term_ids_local, emb_path_local)
         # {id: embedding}
     else:
         term_ids_to_embs_local = term_ids_to_embs_global
@@ -248,7 +257,7 @@ def rec_find_children(term_ids_local: Set[str],
                           tfidf_base=tfidf_base, cur_corpus=subcorpus,
                           csv_writer=csv_writer,
                           term_ids_to_embs_global=term_ids_to_embs_global,
-                          term_ids_global=term_ids_global)
+                          term_ids_global=term_ids_global, emb_type=emb_type)
 
 
 def get_child_ids(proc_clusters: Dict[int, Set[str]]) -> Dict[int, int]:
@@ -386,13 +395,15 @@ def build_corpus_file(doc_ids: Set[str],
     return p_out
 
 
-def train_embeddings(path_corpus: str,
+def train_embeddings(emb_type: str,
+                     path_corpus: str,
                      cur_node_id: int,
                      path_out_dir: str
                      ) -> str:
     """Train word2vec embeddings on the given corpus.
 
     Args:
+        emb_type: The type of the embeddings: 'Word2Vec', 'GloVe' or 'ELMo'.
         path_corpus: The path to the corpus file.
         cur_node_id: Id of the current node. Used for the name of the
             embedding file.
@@ -401,43 +412,37 @@ def train_embeddings(path_corpus: str,
         The path to the embedding file:
         'embeddings/<cur_node_id>_w2v.vec'
     """
-    raw_path = 'embeddings/{}.vec'.format(cur_node_id)
-    path_out = os.path.join(path_out_dir, raw_path)
-    subprocess.call(
-        ["./word2vec", "-threads", "12", "-train", path_corpus, "-output",
-         path_out, "-min-count", "1"])
-    return path_out
+    embedding = get_emb(emb_type)
+    return embedding.train(path_corpus, str(cur_node_id), path_out_dir)
 
 
-def get_embeddings(term_ids: Set[str],
-                   emb_path: str
-                   ) -> Dict[str, List[float]]:
-    """Get the embeddings for the given terms.
-
-    Args:
-        term_ids: The ids of the input terms.
-        emb_path: The path to the given embedding file.
-    Return:
-        A dictionary of the form: {term_id: embedding}
-    """
-    term_id_to_emb = {}
-    with open(emb_path, 'r', encoding='utf8') as f:
-        next(f)
-        for line in f:
-            vals = line.strip(' \n').split(' ')
-            term_id = vals[0]
-            if term_id in term_ids:
-                emb = [float(f) for f in vals[1:]]
-                term_id_to_emb[term_id] = emb
-    if len(term_id_to_emb) != len(term_ids):
-        msg_raw = ('Error! Not all term-ids have embeddings.\nNum term-ids: {}'
-                   '\nNum embeddings: {}\nNo embeddings for: {}')
-        no_emb = sorted([e for e in term_ids if e not in term_id_to_emb])
-        msg = msg_raw.format(len(term_ids), len(term_id_to_emb), no_emb)
-        raise Exception(msg)
-
-    return term_id_to_emb
-
+# def get_embeddings(term_ids: Set[str],
+#                    emb_path: str
+#                    ) -> Dict[str, List[float]]:
+#     """Get the embeddings for the given terms.
+#
+#     Args:
+#         term_ids: The ids of the input terms.
+#         emb_path: The path to the given embedding file.
+#     Return:
+#         A dictionary of the form: {term_id: embedding}
+#     """
+    # term_id_to_emb = {}
+    # with open(emb_path, 'r', encoding='utf8') as f:
+    #     next(f)
+    #     for line in f:
+    #         vals = line.strip(' \n').split(' ')
+    #         term_id = vals[0]
+    #         if term_id in term_ids:
+    #             emb = [float(f) for f in vals[1:]]
+    #             term_id_to_emb[term_id] = emb
+    # if len(term_id_to_emb) != len(term_ids):
+    #     msg_raw = ('Error! Not all term-ids have embeddings.\nNum term-ids: {}'
+    #                '\nNum embeddings: {}')# \nNo embeddings for: {}')
+    #     # no_emb = sorted([e for e in term_ids if e not in term_id_to_emb])
+    #     msg = msg_raw.format(len(term_ids), len(term_id_to_emb)) #, no_emb)
+    #     raise Exception(msg)
+    # return Word2VecE.load_term_embeddings(term_ids, emb_path)
 
 def perform_clustering(term_ids_to_embs: Dict[str, List[float]]
                        ) -> Dict[int, Set[str]]:
