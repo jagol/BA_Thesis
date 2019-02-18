@@ -4,7 +4,8 @@ from ling_preprocessing import DBLPLingPreprocessor, SPLingPreprocessor
 from pattern_extraction import PatternExtractor
 from indexing import Indexer
 from frequency_analysis import FreqAnalyzer
-from embeddings import Word2VecE
+from consistency_tests import *
+from embeddings import get_emb
 
 """
 Main script to execute all preprocessing steps.
@@ -32,6 +33,7 @@ def main():
     path_in = get_path_in(args, config)
     path_lang_model = config['paths'][args.location]['path_lang_model']
     prep_output_dir(path_out)
+    emb_type = config['embeddings']
 
     print('Start preprocessing...')
 
@@ -83,22 +85,26 @@ def main():
     fa.calc_dl()
     print('Done.')
 
-    # train embeddings
-    # os.system('cd ./output/dblp/processed_corpus')
-    # os.system('head -n 1000 ./output/dblp/processed_corpus/pp_token_corpus.txt > ./output/dblp/processed_corpus/pp_token_corpus_1000.txt')
-    # os.system('head -n 1000 ./output/dblp/processed_corpus/pp_lemma_corpus.txt > ./output/dblp/processed_corpus/pp_lemma_corpus_1000.txt')
-    w2v = Word2VecE()
+    Embedding = get_emb(emb_type)
     print('Train word2vec token embeddings...')
     path_input = os.path.join(path_out,
                               'processed_corpus/token_idx_corpus.txt')
-    embs_fname = w2v.train(path_input, 'token_embeddings_global', path_out)
+    embs_fname = Embedding.train(
+        path_input, 'token_embeddings_global', path_out)
     print('Embeddings written to: {}'.format(embs_fname))
     print('Train word2vec lemma embeddings...')
     path_input = os.path.join(path_out,
                               'processed_corpus/lemma_idx_corpus.txt')
-    embs_fname = w2v.train(path_input, 'lemma_embeddings_global', path_out)
+    embs_fname = Embedding.train(
+        path_input, 'lemma_embeddings_global', path_out)
     print('Embeddings written to: {}'.format(embs_fname))
     # embs.calc_combined_term_vecs()
+
+    print('Start consistency testing...')
+    print('test if all token terms have embeddings...')
+    test_all_token_terms_have_embeddings(path_out)
+    print('test if all lemma terms have embeddings...')
+    test_all_lemma_terms_have_embeddings(path_out)
 
     # # train hyponym projector
     # hp = HyponymProjector()
