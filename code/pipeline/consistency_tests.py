@@ -1,22 +1,23 @@
 import os
-from utility_functions import *
+from typing import *
+from embeddings import Embeddings
 
 
 def test_all_token_terms_have_embeddings(path_out: str) -> None:
     """Test if all token terms have embeddings."""
     path_token_terms = os.path.join(
-        path_out, 'processed_corpus/token_terms.txt')
+        path_out, 'processed_corpus/token_terms_idxs.txt')
     path_token_embeddings = os.path.join(
-        path_out, 'embeddings/token_embeddings_global_w2v.vec')
+        path_out, 'embeddings/token_embeddings_global.vec')
     test_all_terms_have_embeddings(path_token_terms, path_token_embeddings)
 
 
 def test_all_lemma_terms_have_embeddings(path_out: str) -> None:
     """Test if all lemma terms have embeddings."""
     path_lemma_terms = os.path.join(
-        path_out, 'processed_corpus/lemma_terms.txt')
+        path_out, 'processed_corpus/lemma_terms_idxs.txt')
     path_lemma_embeddings = os.path.join(
-        path_out, 'embeddings/lemma_embeddings_global_w2v.vec')
+        path_out, 'embeddings/lemma_embeddings_global.vec')
     test_all_terms_have_embeddings(path_lemma_terms, path_lemma_embeddings)
 
 
@@ -31,12 +32,14 @@ def test_all_terms_have_embeddings(path_terms: str,
             separated by space.
     """
     terms = load_terms(path_terms)
-    embeddings = load_embeddings(path_embeddings)
+    embeddings = Embeddings.load_term_embeddings(terms, path_embeddings)
     embedded_terms = set(embeddings)
     not_in_et = []
     for t in terms:
         if t not in embedded_terms:
             not_in_et.append(t)
+    print(path_terms)
+    print(path_embeddings)
     if len(not_in_et) != 0:
         msg1 = 'Error! Not all terms have embeddings. '
         msg2 = 'Num terms without embeddings: {}. '.format(len(not_in_et))
