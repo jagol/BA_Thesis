@@ -2,10 +2,11 @@
 import json
 # import re
 import csv
-import subprocess
-from collections import defaultdict
+import time
+# import subprocess
+# from collections import defaultdict
 from math import sqrt
-from numpy import mean, median
+from numpy import median
 from typing import *
 from corpus import *
 from embeddings import Embeddings, Word2VecE, GloVeE, get_emb
@@ -64,7 +65,7 @@ def generate_taxonomy() -> None:
         path_base_corpus_ids = os.path.join(
             path_out, 'processed_corpus/lemma_idx_corpus.txt')
         path_embeddings_global = os.path.join(
-            path_out, 'embeddings/token_embeddings_global.vec')
+            path_out, 'embeddings/embs_lemma_global_{}.vec'.format(emb_type))
     else:
         path_term_ids = os.path.join(
             path_out, 'processed_corpus/token_terms_idxs.txt')
@@ -78,7 +79,7 @@ def generate_taxonomy() -> None:
         path_base_corpus_ids = os.path.join(
             path_out, 'processed_corpus/token_idx_corpus.txt')
         path_embeddings_global = os.path.join(
-            path_out, 'embeddings/token_embeddings_global.vec')
+            path_out, 'embeddings/embs_token_global_{}.vec'.format(emb_type))
 
     path_dl = os.path.join(path_out, 'frequencies/dl.json')
     path_taxonomy = os.path.join(path_out, 'hierarchy/taxonomy.csv')
@@ -689,4 +690,9 @@ def get_concept_terms(clus: Set[str],
 
 
 if __name__ == '__main__':
+    start_time = time.time()
     generate_taxonomy()
+    end_time = time.time()
+    time_used = end_time - start_time
+    print('Time used: {}'.format(time_used))
+    print('Done.')
