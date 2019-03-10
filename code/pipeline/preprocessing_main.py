@@ -1,4 +1,5 @@
 # import os
+import time
 from utility_functions import *
 from ling_preprocessing import DBLPLingPreprocessor, SPLingPreprocessor
 from pattern_extraction import PatternExtractor
@@ -27,6 +28,7 @@ The preprocessing steps are:
 
 def main():
     # setting up paths and directories
+    start_time = time.time()
     args = get_cmd_args()
     config = get_config()
     path_out = get_path_out(args, config)
@@ -92,30 +94,35 @@ def main():
         print('Done.')
 
     if not args.skip_embeddings:
-        Embedding = get_emb(emb_type)
-        print('Train word2vec token embeddings...')
-        path_input = os.path.join(path_out,
-                                  'processed_corpus/token_idx_corpus.txt')
-        embs_fname = Embedding.train(
-            path_input, 'token_embeddings_global', path_out)
-        print('Embeddings written to: {}'.format(embs_fname))
-        print('Train word2vec lemma embeddings...')
-        path_input = os.path.join(path_out,
-                                  'processed_corpus/lemma_idx_corpus.txt')
-        embs_fname = Embedding.train(
-            path_input, 'lemma_embeddings_global', path_out)
-        print('Embeddings written to: {}'.format(embs_fname))
-        # embs.calc_combined_term_vecs()
+        emb_types = ['Word2Vec', 'GloVe']
+        for etype in emb_types:
+            Embedding = get_emb(etype)
+            print('Train {} token embeddings...'.format(etype))
+            path_input = os.path.join(path_out,
+                                      'processed_corpus/token_idx_corpus.txt')
+            embs_fname = Embedding.train(
+                path_input, 'embs_token_global_'+etype, path_out)
+            print('{} embeddings written to: {}'.format(etype, embs_fname))
+            print('Train {} lemma embeddings...'.format(etype))
+            path_input = os.path.join(path_out,
+                                      'processed_corpus/lemma_idx_corpus.txt')
+            embs_fname = Embedding.train(
+                path_input, 'embs_lemma_global_'+etype, path_out)
+            print('{} embeddings written to: {}'.format(etype, embs_fname))
+            # embs.calc_combined_term_vecs()
 
-        print('Start consistency testing...')
-        print('test if all token terms have embeddings...')
-        test_all_token_terms_have_embeddings(path_out)
-        print('test if all lemma terms have embeddings...')
-        test_all_lemma_terms_have_embeddings(path_out)
-
+    print('Start consistency testing...')
+    print('Test if all token terms have embeddings...')
+    test_all_token_terms_have_embeddings(path_out)
+    print('Test if all lemma terms have embeddings...')
+    test_all_lemma_terms_have_embeddings(path_out)
     # # train hyponym projector
     # hp = HyponymProjector()
     # hp.train()
+    end_time = time.time()
+    time_used = end_time - start_time
+    print('Time used: {}'.format(time_used))
+    print('Done.')
 
 
 if __name__ == '__main__':

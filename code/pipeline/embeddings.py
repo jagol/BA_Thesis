@@ -173,7 +173,7 @@ class GloVeE(Embeddings):
         # path_glove = './glove_github/glove/build/'
         path_glove = './glove/'
         raw_fout_glove = 'embeddings/glove_format_'+fname
-        raw_fout_w2v = 'embeddings/embs' + fname
+        raw_fout_w2v = 'embeddings/' + fname
         path_glove_format = os.path.join(path_out_dir, raw_fout_glove)
         path_w2v_format = os.path.join(path_out_dir, raw_fout_w2v)
 
@@ -188,21 +188,20 @@ class GloVeE(Embeddings):
                       '100 -binary 0 -vocab-file vocab.txt -verbose 2')
         # path_corpus = 'output/dblp/processed_corpus/pp_lemma_corpus.txt'
         os.system(call_vocab_count.format(path_glove, path_corpus))
-        os.system(call_coocur.format(path_glove, path_corpus))
-        os.system(call_shuffle.format(path_glove))
-        print(call_glove.format(path_glove, path_glove_format))
-        os.system(call_glove.format(path_glove, path_glove_format))
-        print('raw_fout_glove:', raw_fout_glove)
-        print('raw_fout_w2v:', raw_fout_w2v)
-        print('path_glove_format:', path_glove_format)
-        print('path_w2v_format:', path_w2v_format)
-        print('path_corpus:', path_corpus)
-        print('fname', fname)
-        print('path_out_dir:', path_out_dir)
+        os.system(call_coocur.format(path_glove, path_corpus, path_glove))
+        os.system(call_shuffle.format(path_glove, path_glove, path_glove))
+        os.system(call_glove.format(path_glove, path_glove_format, path_glove))
+        # print('raw_fout_glove:', raw_fout_glove)
+        # print('raw_fout_w2v:', raw_fout_w2v)
+        # print('path_glove_format:', path_glove_format)
+        # print('path_w2v_format:', path_w2v_format)
+        # print('path_corpus:', path_corpus)
+        # print('fname', fname)
+        # print('path_out_dir:', path_out_dir)
 
         # Turn glove format to w2v format.
-        _ = glove2word2vec(path_glove_format+'.txt', path_w2v_format+'.txt')
-        model = KeyedVectors.load_word2vec_format(path_w2v_format+'.txt')
+        _ = glove2word2vec(path_glove_format+'.txt', path_w2v_format+'.vec')
+        model = KeyedVectors.load_word2vec_format(path_w2v_format+'.vec')
         model.save(path_w2v_format+'.vec')
         # if '16945' not in model.wv.vocab and '16945' in
 
@@ -210,7 +209,7 @@ class GloVeE(Embeddings):
         cmd = os.path.join(path_out_dir, 'embeddings/glove*')
         os.system('rm {}'.format(cmd))
 
-        return path_w2v_format+'.vec'
+        return path_w2v_format+'_GloVe.vec'
 
 
 # class FastTextE(Embeddings):
