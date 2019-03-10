@@ -8,7 +8,10 @@ def test_all_token_terms_have_embeddings(path_out: str) -> None:
     path_token_terms = os.path.join(
         path_out, 'processed_corpus/token_terms_idxs.txt')
     path_token_embeddings = os.path.join(
-        path_out, 'embeddings/token_embeddings_global.vec')
+        path_out, 'embeddings/embs_token_global_Word2Vec.vec')
+    test_all_terms_have_embeddings(path_token_terms, path_token_embeddings)
+    path_token_embeddings = os.path.join(
+        path_out, 'embeddings/embs_token_global_GloVe.vec')
     test_all_terms_have_embeddings(path_token_terms, path_token_embeddings)
 
 
@@ -17,7 +20,10 @@ def test_all_lemma_terms_have_embeddings(path_out: str) -> None:
     path_lemma_terms = os.path.join(
         path_out, 'processed_corpus/lemma_terms_idxs.txt')
     path_lemma_embeddings = os.path.join(
-        path_out, 'embeddings/lemma_embeddings_global.vec')
+        path_out, 'embeddings/embs_lemma_global_Word2Vec.vec')
+    test_all_terms_have_embeddings(path_lemma_terms, path_lemma_embeddings)
+    path_lemma_embeddings = os.path.join(
+        path_out, 'embeddings/embs_lemma_global_GloVe.vec')
     test_all_terms_have_embeddings(path_lemma_terms, path_lemma_embeddings)
 
 
