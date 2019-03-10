@@ -65,12 +65,24 @@ def get_cmd_args() -> Any:
         '--corpus',
         help='name of corpus to be processed: europarl; dblp; sp;'
     )
-    parser.add_argument('-spd', '--skip_prep', help='Skip preparation of output directories.', action='store_true')
-    parser.add_argument('-sl', '--skip_lingpp', help='Skip ling-preprocessing.', action='store_true')
-    parser.add_argument('-spe', '--skip_pattern_extr', help='Skip pattern-extraction.', action='store_true')
-    parser.add_argument('-sid', '--skip_idxer', help='Skip idxer.', action='store_true')
-    parser.add_argument('-sfa', '--skip_freq_an', help='Skip frequency analysis', action='store_true')
-    parser.add_argument('-se', '--skip_embeddings', help='Skip embedding training', action='store_true')
+    parser.add_argument('-spd', '--skip_prep',
+                        help='Skip preparation of output directories.',
+                        action='store_true')
+    parser.add_argument('-sl', '--skip_lingpp',
+                        help='Skip ling-preprocessing.',
+                        action='store_true')
+    parser.add_argument('-spe', '--skip_pattern_extr',
+                        help='Skip pattern-extraction.',
+                        action='store_true')
+    parser.add_argument('-sid', '--skip_idxer',
+                        help='Skip idxer.',
+                        action='store_true')
+    parser.add_argument('-sfa', '--skip_freq_an',
+                        help='Skip frequency analysis',
+                        action='store_true')
+    parser.add_argument('-se', '--skip_embeddings',
+                        help='Skip embedding training',
+                        action='store_true')
     args = parser.parse_args()
     return args
 
