@@ -38,7 +38,7 @@ class Embeddings:
         model = KeyedVectors.load(emb_path)
         term_id_to_emb = {}
         for term_id in term_ids:
-            term_id_to_emb[term_id] = model.wv[term_id]
+            term_id_to_emb[term_id] = model.wv[str(term_id)]
         return term_id_to_emb
 
 

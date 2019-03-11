@@ -102,16 +102,27 @@ def generate_taxonomy() -> None:
     tf_base = {}  # {doc_id: {word_id: freq}}
     with open(path_tf, 'r', encoding='utf8') as f:
         for i, doc_freqs in enumerate(f):
-            tf_base[str(i)] = json.loads(doc_freqs.strip('\n'))
+            doc_freqs_str = json.loads(doc_freqs.strip('\n'))
+            tf_base[i] = {int(k): v for k, v in doc_freqs_str.items()}
     print('load df-base...')
     with open(path_df, 'r', encoding='utf8') as f:
-        df_base = json.load(f)  # {word_id: [doc_id1, ...]}
+        # {word_id: [doc_id1, ...]}
+        df_base_str = json.load(f)
+        df_base = {int(k): [int(i) for i in v] for k, v in df_base_str.items()}
     print('load tfidf-base...')
     with open(path_tfidf, 'r', encoding='utf8') as f:
-        tfidf_base = json.load(f)
+        # {doc-id: {term-id: tfidf}}
+        tfidf_base_str = json.load(f)
+        tfidf_base = {}
+        for doc_id, doc_dict in tfidf_base_str.items():
+            tfidf_base[int(doc_id)] = {int(k): v for k, v in tfidf_base_str[doc_id].items()}
+            # print(doc_tfidfs)
+            # tfidf_base[int(doc_id)] =
     print('load dl-base...')
     with open(path_dl, 'r', encoding='utf8') as f:
-        dl = json.load(f)
+        dl_str = json.load(f)
+        dl = {int(k): v for k, v in dl_str.items()}
+        # {doc-id: length}
 
     # Start recursive taxonomy generation.
     rec_find_children(term_ids_local=term_ids, term_ids_global=term_ids,
@@ -502,7 +513,7 @@ def load_term_ids(path_term_ids: str) -> Set[str]:
     term_ids = set()
     with open(path_term_ids, 'r', encoding='utf8') as f:
         for line in f:
-            term_ids.add(line.strip('\n'))
+            term_ids.add(int(line.strip('\n')))
     return term_ids
 
 
@@ -640,7 +651,7 @@ def get_base_corpus(path_base_corpus: str):
     Args:
         path_base_corpus: Path to the corpus file.
     """
-    return set([str(i) for i in range(get_num_docs(path_base_corpus))])
+    return set([i for i in range(get_num_docs(path_base_corpus))])
 
 
 def get_terms_to_remove(clus: Set[str],
