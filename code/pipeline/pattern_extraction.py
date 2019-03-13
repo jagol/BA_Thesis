@@ -552,7 +552,13 @@ class HearstExtractor:
     @classmethod
     def _get_term_head(cls, term_idx: int, sent: List[List[str]]) -> int:
         pos = sent[term_idx][1]
-        return int(re.search(cls.head_idx_pattern, pos).group(1))
+        match = re.search(cls.head_idx_pattern, pos)
+        if match:
+            return int(match.group(1))
+        print('Warning! Could not extract term-head!')
+        print('sentence:', sent)
+        print('term_idx:', term_idx)
+        return 0
 
     @classmethod
     def _get_hyp_index(cls, pos_np: str) -> int:
