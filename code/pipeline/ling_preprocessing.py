@@ -125,6 +125,9 @@ class LingPreprocessor(TextProcessingUnit):
             # append processed sentences to doc
             pp_doc.append(proc_sent)
 
+        # don't add doc if empty
+        if self.get_num_words(pp_doc) == 0:
+            return
         # add processed doc to corpus
         self._pp_corpus.append(pp_doc)
 
@@ -311,6 +314,7 @@ class DBLPLingPreprocessor(LingPreprocessor):
         self._num_docs = 4327497
         self._num_sents = 4189903
         self._docs_processed = 0
+        self._more_than_white_space_pattern = re.compile(r'[^\s\r\n\t]')
         self._title_pattern = re.compile(r'<(\w+)>(.*)</\w+>')
         super().__init__(path_in, path_out, path_lang_model, max_docs)
 
@@ -320,7 +324,7 @@ class DBLPLingPreprocessor(LingPreprocessor):
         """Yield all titles (docs) of the dblp corpus file.
 
         All lines that do not have the tag title or that have the tag
-        but just the generic content 'Home Page' are filteret out.
+        but just the generic content 'Home Page' are filtered out.
 
         Args:
             f: input file
@@ -331,8 +335,23 @@ class DBLPLingPreprocessor(LingPreprocessor):
             if match:
                 tag, content = match.groups()
                 if tag == 'title' and content != 'Home Page':
-                    content = content.strip(' ')
-                    yield content
+                    if self.is_more_than_space(content):
+                        content = content.strip(' ')
+                        yield content
+
+
+    def is_more_than_space(self, content: str) -> bool:
+        """Check if content contains more than only whitespace."""
+        if re.search(self._more_than_white_space_pattern, content):
+            return True
+        return False
+
+
+    def get_num_words(self, pp_doc: List[List[Tuple[str, str, str, str]]]):
+        num_words = 0
+        for sent in pp_doc:
+            num_words += len(sent)
+        return num_words
 
 
 class SPLingPreprocessor(LingPreprocessor):
@@ -367,11 +386,12 @@ def main():
     path_in = config['paths'][args.location][args.corpus]['path_in']
     path_out = config['paths'][args.location][args.corpus]['path_out']
     path_lang_model = config['paths'][args.location]['path_lang_model']
+    # prep_output_dir(path_out)
     max_docs = 10000
     # prep_output_dir(path_out)
     if args.corpus == 'dblp':
         dp = DBLPLingPreprocessor(
-            path_in, path_out, path_lang_model, max_docs=max_docs)
+            path_in, path_out, path_lang_model, max_docs)
         dp.preprocess_corpus()
     elif args.corpus == 'sp':
         sp = SPLingPreprocessor(path_in, path_out, path_lang_model, max_docs)
