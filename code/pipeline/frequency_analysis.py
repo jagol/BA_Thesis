@@ -4,7 +4,7 @@ from collections import defaultdict
 from typing import *
 from numpy import mean
 from math import log
-from utility_functions import get_docs
+from utility_functions import get_docs, get_num_docs
 # from text_processing_unit import TextProcessingUnit
 
 
@@ -64,25 +64,30 @@ class FreqAnalyzer:
             path_in = self.path_lemma_idx_corpus
             path_out = self.path_tf_lemmas
 
-        dicts = []
-        for doc in get_docs(path_in):
-            df = defaultdict(int)
+        tf = {}
+        for doc_idx, doc in enumerate(get_docs(path_in)):
+            tf[doc_idx] = {}
+            tf_doc = tf[doc_idx]
             for sent in doc:
                 for lemma_idx in sent:
-                    # lemma_idx = int(lemma_idx)
                     if lemma_idx in term_idxs:
-                        df[lemma_idx] += 1
-            dicts.append(df)
-            self._docs_processed += 1
+                        if lemma_idx in tf_doc:
+                            tf_doc[lemma_idx] += 1
+                        else:
+                            tf_doc[lemma_idx] = 1
+                        # print(doc_idx, lemma_idx)
+                        # print(type(doc_idx), type(lemma_idx))
+                        # tf[doc_id][lemma_idx] += 1
+                        # tf_doc = tf[doc_idx]
+                        # tf_doc[lemma_idx]
+            # self._docs_processed += 1
             # self._update_cmd_counter()
-            if self._docs_processed % self._file_write_threshhold == 0:
-                msg = '{} documents processed, writing to file...'
-                print(msg.format(self._docs_processed), end='\r')
-                mode = self._get_write_mode()
-                with open(path_out, mode, encoding='utf8') as f:
-                    for d in dicts:
-                        f.write(json.dumps(d) + '\n')
-                dicts = []
+            # if self._docs_processed % self._file_write_threshhold == 0:
+            #     msg = '{} documents processed, writing to file...'
+            #     print(msg.format(self._docs_processed), end='\r')
+            #     mode = self._get_write_mode()
+        with open(path_out, 'w', encoding='utf8') as f:
+            json.dump(tf, f)
 
         self._docs_processed = 0
 
@@ -191,25 +196,28 @@ class FreqAnalyzer:
             path_tf = self.path_tf_tokens
             path_df = self.path_df_tokens
             path_tfidf = self.path_tfidf_tokens
+            path_idx_corpus = self.path_token_idx_corpus
         if level == 'l':
             path_tf = self.path_tf_lemmas
             path_df = self.path_df_lemmas
             path_tfidf = self.path_tfidf_lemmas
+            path_idx_corpus = self.path_lemma_idx_corpus
 
-        tf = {}  # {doc_id: {word_id: freq}}
         with open(path_tf, 'r', encoding='utf8') as f:
-            for i, doc_freqs in enumerate(f):
-                tf[str(i)] = json.loads(doc_freqs.strip('\n'))
+            tf = json.load(f)
+
         with open(path_df, 'r', encoding='utf8') as f:
             df_raw = json.load(f)  # {word_id: List of docs}
             df = {}
             for term_id in df_raw:
                 df[term_id] = len(df_raw[term_id])
         n = len(tf)
+        corpus_docs = [str(i) for i in range(get_num_docs(path_idx_corpus))]
 
-        tfidf = defaultdict(dict)
-        for doc_id in tf:
+        tfidf = {}
+        for doc_id in corpus_docs:
             tf_doc = tf[doc_id]
+            tfidf[doc_id] = {}
             for word_id in tf_doc:
                 df_word = df[word_id]
                 tf_word_doc = tf_doc[word_id]
