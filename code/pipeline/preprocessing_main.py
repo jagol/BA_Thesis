@@ -35,7 +35,7 @@ def main():
     path_in = get_path_in(args, config)
     path_lang_model = config['paths'][args.location]['path_lang_model']
     emb_type = config['embeddings']
-    print(args)
+
     if not args.skip_prep:
         prep_output_dir(path_out)
 
@@ -61,6 +61,13 @@ def main():
         te.extract()
         print('Done.')
 
+        print('Run consistency tests on corpus files...')
+        test_corpus_files(path_out)
+        print('Tests passed.')
+        print('Run consistency tests on term pattern files...')
+        test_term_pattern_files(path_out)
+        print('Tests passed.')
+
     # indexing of corpus
     if not args.skip_idxer:
         print('Start indexing...')
@@ -69,9 +76,15 @@ def main():
         idxer.index_tokens()
         print('index lemmas...')
         idxer.index_lemmas()
-        print('convert relations to index...')
+        print('convert lemma relations to index...')
         idxer.hierarch_rels_to_lemma_idx()
+        print('convert token relations to index...')
+        idxer.hierarch_rels_to_token_idx()
         print('Done.')
+
+        print('Run consistency tests on indexing files...')
+        test_indexing_files(path_out)
+        print('Tests passed.')
 
     # analyze lemma frequencies
     if not args.skip_freq_an:
@@ -111,11 +124,10 @@ def main():
             print('{} embeddings written to: {}'.format(etype, embs_fname))
             # embs.calc_combined_term_vecs()
 
-    print('Start consistency testing...')
-    print('Test if all token terms have embeddings...')
-    test_all_token_terms_have_embeddings(path_out)
-    print('Test if all lemma terms have embeddings...')
-    test_all_lemma_terms_have_embeddings(path_out)
+        print('Test if all terms have embeddings...')
+        test_embedding_files(path_out)
+        print('Tests passed.')
+
     # # train hyponym projector
     # hp = HyponymProjector()
     # hp.train()
