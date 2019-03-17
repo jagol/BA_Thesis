@@ -7,6 +7,9 @@ from indexing import Indexer
 from frequency_analysis import FreqAnalyzer
 from consistency_tests import *
 from embeddings import get_emb
+from pruning import Pruner
+from document_embeddings import DocEmbedder
+
 
 """
 Main script to execute all preprocessing steps.
@@ -47,7 +50,7 @@ def main():
                'stop-words...'))
         if args.corpus == 'dblp':
             lpp = DBLPLingPreprocessor(
-                path_in, path_out, path_lang_model) # , max_docs=10000)
+                path_in, path_out, path_lang_model, max_docs=10000)
         elif args.corpus == 'sp':
             lpp = SPLingPreprocessor(
                 path_in, path_out, path_lang_model) # , max_docs=10000)
@@ -94,6 +97,9 @@ def main():
         fa.calc_tf('t')
         print('Calculate lemma term frequencies...')
         fa.calc_tf('l')
+        print('Prune terms...')
+        pruner = Pruner(path_out, min_count=82)
+        pruner.prune_tf()
         print('Calculate token document frequencies...')
         fa.calc_df('t')
         print('Calculate lemma document frequencies...')
@@ -105,6 +111,7 @@ def main():
         print('Calculate document lengths...')
         fa.calc_dl()
         print('Done.')
+
 
     if not args.skip_embeddings:
         emb_types = ['Word2Vec', 'GloVe']
@@ -127,6 +134,12 @@ def main():
         print('Test if all terms have embeddings...')
         test_embedding_files(path_out)
         print('Tests passed.')
+
+    if not args.skip_doc_embs:
+        print('Calculating document embeddings')
+        doc_embedder = DocEmbedder(path_out, emb_type)
+        doc_embedder.embed_docs()
+        print('Done')
 
     # # train hyponym projector
     # hp = HyponymProjector()
