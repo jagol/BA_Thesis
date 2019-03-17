@@ -9,16 +9,21 @@ from math import sqrt
 from numpy import median
 from typing import *
 from corpus import *
-from embeddings import Embeddings, Word2VecE, GloVeE, get_emb
+from embeddings import Embeddings, get_emb
 from clustering import Clustering
 from score import Scorer
 from utility_functions import *
+import pdb
 
 
 # Define global variables.
 node_counter = 0
 idx_to_term = {}
 max_depth = 3
+
+
+# {doc-id: {word-id: (term-freq, tfidf)}} doc-length is at word-id -1
+word_distr_type = DefaultDict[int, DefaultDict[int, Union[Tuple[int, int], int]]]
 
 
 def generate_taxonomy() -> None:
@@ -96,44 +101,108 @@ def generate_taxonomy() -> None:
     print('load global embeddings...')
     term_ids_to_embs_global = Embeddings.load_term_embeddings(
         term_ids, path_embeddings_global)
+
     print('load base corpus...')
     base_corpus = get_base_corpus(path_base_corpus)
-    print('load tf-base...')
-    tf_base = {}  # {doc_id: {word_id: freq}}
-    with open(path_tf, 'r', encoding='utf8') as f:
-        for i, doc_freqs in enumerate(f):
-            doc_freqs_str = json.loads(doc_freqs.strip('\n'))
-            tf_base[i] = {int(k): v for k, v in doc_freqs_str.items()}
+    # print('load tf-base...')
+    # tf_base = {}  # {doc_id: {word_id: freq}}
+    # with open(path_tf, 'r', encoding='utf8') as f:
+    #     for i, doc_freqs in enumerate(f):
+    #         doc_freqs_str = json.loads(doc_freqs.strip('\n'))
+    #         tf_base[i] = {int(k): v for k, v in doc_freqs_str.items()}
     print('load df-base...')
     with open(path_df, 'r', encoding='utf8') as f:
         # {word_id: [doc_id1, ...]}
         df_base_str = json.load(f)
         df_base = {int(k): [int(i) for i in v] for k, v in df_base_str.items()}
-    print('load tfidf-base...')
-    with open(path_tfidf, 'r', encoding='utf8') as f:
-        # {doc-id: {term-id: tfidf}}
-        tfidf_base_str = json.load(f)
-        tfidf_base = {}
-        for doc_id, doc_dict in tfidf_base_str.items():
-            tfidf_base[int(doc_id)] = {int(k): v for k, v in tfidf_base_str[doc_id].items()}
-            # print(doc_tfidfs)
-            # tfidf_base[int(doc_id)] =
-    print('load dl-base...')
-    with open(path_dl, 'r', encoding='utf8') as f:
-        dl_str = json.load(f)
-        dl = {int(k): v for k, v in dl_str.items()}
-        # {doc-id: length}
+    # print('load tfidf-base...')
+    # with open(path_tfidf, 'r', encoding='utf8') as f:
+    #     # {doc-id: {term-id: tfidf}}
+    #     tfidf_base_str = json.load(f)
+    #     tfidf_base = {}
+    #     for doc_id, doc_dict in tfidf_base_str.items():
+    #         tfidf_base[int(doc_id)] = {int(k): v for k, v in tfidf_base_str[doc_id].items()}
+    #         # print(doc_tfidfs)
+    #         # tfidf_base[int(doc_id)] =
+    # print('load dl-base...')
+    # with open(path_dl, 'r', encoding='utf8') as f:
+    #     dl_str = json.load(f)
+    #     dl = {int(k): v for k, v in dl_str.items()}
+    #     # {doc-id: length}
+    print('Loading word distributions...')
+    with open(path_tf, 'r', encoding='utf8') as f:
+        # tf_base = json.load(f)
+        # tf_base = {}
+        # for i, doc_freqs in enumerate(f):
+        #     # doc_freqs_str = json.loads(doc_freqs.strip('\n'))
+        #     # tf_base[i] = {int(k): v for k, v in doc_freqs_str.items()}
+        #     tf_base[str(i)] = json.loads(doc_freqs.strip('\n'))
+        tf_base = json.load(f)
+        with open(path_tfidf, 'r', encoding='utf8') as f:
+            tfidf_base = json.load(f)
+            with open(path_dl, 'r', encoding='utf8') as f:
+                dl_base = json.load(f)
+    word_distr_base = defaultdict(dict)
+    # for doc_id in tf_base:
+    #     if doc_id not in tfidf_base:
+    #         print(doc_id) # 4541 4895 7087 7945
+    # for doc_id in tfidf_base:
+    #     if doc_id not in tf_base:
+    #         print(doc_id) # no term-ids
+    # not_in_tf_base = []
+    # not_in_tfidf_base = []
+    # not_in_dl_base = []
+    # for doc_id in base_corpus:
+    #     if str(doc_id) not in tf_base:
+    #         not_in_tf_base.append(doc_id)
+    #     if str(doc_id) not in tfidf_base:
+    #         not_in_tfidf_base.append(doc_id)
+    #     if str(doc_id) not in dl_base:
+    #         not_in_dl_base.append(doc_id)
+    # print(len(base_corpus))
+    # print(len(tf_base))
+    # print(len(tfidf_base))
+    # print(len(dl_base))
+    # print(not_in_tf_base)
+    # print(not_in_tfidf_base)
+    # print(not_in_dl_base)
+    # print(100*'-')
+    for doc_id in base_corpus:
+        doc_id = str(doc_id)
+        for word_id in tf_base[doc_id]:
+            tf = tf_base[doc_id][word_id]
+            tfidf = tfidf_base[doc_id][word_id]
+            # print(20*'-')
+            # print((tf, tfidf))
+            # print(doc_id, tf_base[doc_id], tfidf_base[doc_id])
+            word_distr_base[int(doc_id)][int(word_id)] = (tf, tfidf)
+            # print(word_distr_base[int(doc_id)][int(word_id)])
+            # print(tfidf_base[doc_id][word_id], doc_id in tfidf_base, doc_id)
+            # print('doc_id not in tfidf_base: {}'.format(4541))
+            # print('doc_id in tf_base: {}'.format(doc_id in tf_base))
+            # print(word_distr_base[int(4541)])
+            # print('tf:', tf)
+            # print('idf:', tfidf)
+            # print(word_distr_base[int(4541)][int(word_id)])
+        word_distr_base[int(doc_id)][-1] = dl_base[doc_id]
+
+    del tf_base
+    del tfidf_base
+    del dl_base
+
 
     # Start recursive taxonomy generation.
     rec_find_children(term_ids_local=term_ids, term_ids_global=term_ids,
                       base_corpus=base_corpus,
                       path_base_corpus_ids=path_base_corpus_ids,
                       cur_node_id=0, level=1, df_base=df_base,
-                      tf_base=tf_base, path_out=path_out, dl=dl,
-                      tfidf_base=tfidf_base, cur_corpus=base_corpus,
+                      # tf_base=tf_base,
+                      path_out=path_out, #dl=dl,
+                      # tfidf_base=tfidf_base,
+                      cur_corpus=base_corpus,
                       csv_writer=csv_writer,
                       term_ids_to_embs_global=term_ids_to_embs_global,
-                      emb_type=emb_type)
+                      emb_type=emb_type, word_distr_base=word_distr_base)
 
     print('Done.')
 
@@ -141,15 +210,16 @@ def generate_taxonomy() -> None:
 def rec_find_children(term_ids_local: Set[str],
                       term_ids_global: Set[str],
                       term_ids_to_embs_global: Dict[str, List[float]],
+                      word_distr_base: Dict[int, Dict[int, Union[Tuple[int, int], int]]],
                       df_base: Dict[str, List[str]],
-                      tf_base: Dict[str, Dict[str, int]],
-                      dl: Dict[str, Union[int, float]],
+                      # tf_base: Dict[str, Dict[str, int]],
+                      # dl: Dict[str, Union[int, float]],
                       cur_node_id: int,
                       level: int,
                       base_corpus: Set[str],
                       path_base_corpus_ids: str,
                       cur_corpus: Set[str],
-                      tfidf_base: Dict[str, Dict[str, float]],
+                      # tfidf_base: Dict[str, Dict[str, float]],
                       path_out: str,
                       csv_writer: Any,
                       emb_type: str
@@ -220,17 +290,18 @@ def rec_find_children(term_ids_local: Set[str],
         print('get subcorpora for clusters...')
         # subcorpora = get_subcorpora(clusters, base_corpus, n, tfidf_base,
         #                             term_ids_to_embs_global)
-        subcorpora = get_subcorpora(clusters, tfidf_base,
-                                    term_ids_to_embs_global, m=m)
+        subcorpora = get_subcorpora(clusters, word_distr_base, # tfidf_base,
+                                    term_ids_to_embs_global, path_out, m=m)
         # {label: doc-ids}
 
         print('get term-frequencies...')
-        tf_corpus = get_tf_corpus(term_ids_local, cur_corpus, tf_base)
+        tf_corpus = get_tf_corpus(term_ids_local, cur_corpus, word_distr_base)
         # TODO: modifiy get_tf_corpus. Get the tf for all docs in cur_docs
 
         print('compute term scores...')
-        term_scores = get_term_scores(clusters, subcorpora, dl, tf_corpus,
-                                      tf_base, level)
+        term_scores = get_term_scores(clusters, subcorpora, # dl,
+                                      # tf_corpus,
+                                      word_distr_base, level)
 
         print('get average and median score...')
         avg_pop, avg_con, avg_total = get_avg_score(term_scores)
@@ -264,9 +335,14 @@ def rec_find_children(term_ids_local: Set[str],
         subcorpus = subcorpora[label]
         rec_find_children(term_ids_local=clus, base_corpus=base_corpus,
                           path_base_corpus_ids=path_base_corpus_ids,
-                          cur_node_id=node_id, level=level+1, dl=dl,
-                          df_base=df_base, tf_base=tf_base, path_out=path_out,
-                          tfidf_base=tfidf_base, cur_corpus=subcorpus,
+                          cur_node_id=node_id, level=level+1,
+                          # dl=dl,
+                          df_base=df_base, # tf_base=tf_base,
+                          # path_out=path_out,
+                          # tfidf_base=tfidf_base,
+                          word_distr_base=word_distr_base,
+                          cur_corpus=subcorpus,
+                          path_out=path_out,
                           csv_writer=csv_writer,
                           term_ids_to_embs_global=term_ids_to_embs_global,
                           term_ids_global=term_ids_global, emb_type=emb_type)
@@ -299,24 +375,31 @@ def write_tax_to_file(cur_node_id: int,
     # Map indices to words.
     concept_terms = [idx_to_term[i] for i in concept_terms]
     child_nodes = list(child_ids.values())
-    row = [cur_node_id] + child_nodes + concept_terms
+    row = [cur_node_id] + child_nodes + list(concept_terms)
     csv_writer.writerow(row)
 
 
 def get_subcorpora(clusters: Dict[int, Set[str]],
                    # base_corpus: Set[str],
-                   tfidf_base: Dict[str, Dict[str, float]],
+                   # tfidf_base: Dict[str, Dict[str, float]],
+                   word_distr_base: word_distr_type,
                    term_ids_to_embs: Dict[str, List[float]],
-                   m: Union[int, None]=None
+                   path_out: str,
+                   m: Union[int, None]=None,
                    ) -> Dict[int, Set[str]]:
     """Get the subcorpus for each cluster."""
     # subcorpora = {}
-    doc_embeddings = get_doc_embeddings(tfidf_base, term_ids_to_embs)
+    # doc_embeddings = get_doc_embeddings(tfidf_base, term_ids_to_embs)
+    print('Calculate document embeddings...')
+    doc_embeddings = get_doc_embeddings(path_out) # , word_distr_base, term_ids_to_embs)
     # {doc_id: embedding}
+    print('Calculate topic_embeddings')
     topic_embeddings = get_topic_embeddings(clusters, term_ids_to_embs)
     # {cluster/topic_label: embedding}
+    print('Calculate topic documents similarities')
     doc_topic_sims = get_doc_topic_sims(doc_embeddings, topic_embeddings)
     # {doc-id: {topic-label: sim}}
+    print('Determine the top m most similar documents to each topic...')
     subcorpora = get_topic_docs(doc_topic_sims, m)
     # {cluster/topic_label: {set of doc-ids}}
 
@@ -390,7 +473,7 @@ def build_corpus_file(doc_ids: Set[str],
     with open(p_out, 'w', encoding='utf8') as f_out:
         for i, doc in enumerate(get_docs(path_base_corpus,
                                          word_tokenized=False)):
-            if str(i) in doc_ids:
+            if i in doc_ids:
                 doc_str = ''
                 for sent in doc:
                     line = sent + '\n'
@@ -401,7 +484,6 @@ def build_corpus_file(doc_ids: Set[str],
                 if i % 1000 == 0:
                     f_out.write(docs_str)
                     docs_str = ''
-
         f_out.write(docs_str)
 
     return p_out
@@ -562,11 +644,12 @@ def get_median_score(term_scores: Dict[str, Tuple[float, float]]
 
 def get_term_scores(clusters: Dict[int, Set[str]],
                     subcorpora: Dict[int, Set[str]],
+                    word_distr: word_distr_type,
                     # df_base: Dict[str, List[str]],
                     # df: Dict[str, int],
-                    dl: Dict[str, Union[int, float]],
-                    tf: Dict[str, Dict[str, int]],
-                    tf_base: Dict[str, Dict[str, int]],
+                    # dl: Dict[str, Union[int, float]],
+                    # tf: Dict[str, Dict[str, int]],
+                    # tf_base: Dict[str, Dict[str, int]],
                     level: int
                     ) -> Dict[str, Tuple[float, float]]:
     """Get the popularity and concentration for each term in clusters.
@@ -594,7 +677,9 @@ def get_term_scores(clusters: Dict[int, Set[str]],
             subcorpus. Form: {term_id: frequency})
     """
     sc = Scorer(clusters, subcorpora, level)
-    return sc.get_term_scores(tf, tf_base, dl)
+    # return sc.get_term_scores(tf, tf_base, dl)
+    return sc.get_term_scores(word_distr)
+
 
 
 # def get_df_corpus(term_ids: Set[str],
