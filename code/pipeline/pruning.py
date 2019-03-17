@@ -10,9 +10,9 @@ class Pruner:
         """Initialize the pruner."""
         self.path_out = path_out
         self.path_token_terms = os.path.join(
-            path_out, 'processed_corpus/token_term_idxs.txt')
+            path_out, 'processed_corpus/token_terms_idxs.txt')
         self.path_lemma_terms = os.path.join(
-            path_out, 'processed_corpus/lemma_term_idxs.txt')
+            path_out, 'processed_corpus/lemma_terms_idxs.txt')
         self.path_tf_tokens = os.path.join(
             path_out, 'frequencies/tf_tokens.json')
         self.path_tf_lemmas = os.path.join(
@@ -27,7 +27,6 @@ class Pruner:
         with open(self.path_tf_tokens, 'r', encoding='utf8') as f:
             tf_tokens = json.load(f)
             tf_tokens_pruned, token_terms_pruned = self._prune_tf(tf_tokens)
-            pdb.set_trace()
         with open(self.path_tf_tokens, 'w', encoding='utf8') as f:
             json.dump(tf_tokens_pruned, f)
         with open(self.path_token_terms, 'w', encoding='utf8') as f:
@@ -57,10 +56,12 @@ class Pruner:
         tf_global = defaultdict(int)
         tf_pruned = {}
 
+        # Count number of global occurences of words.
         for doc_id in tf:
             for word_id in tf[doc_id]:
                 tf_global[word_id] += tf[doc_id][word_id]
 
+        # Fill dict tf_pruned and terms_pruned.
         for doc_id in tf:
             tf_pruned[doc_id] = {}
             for word_id in tf[doc_id]:
