@@ -83,6 +83,9 @@ def get_cmd_args() -> Any:
     parser.add_argument('-se', '--skip_embeddings',
                         help='Skip embedding training',
                         action='store_true')
+    parser.add_argument('-sde', '--skip_doc_embs',
+                        help='Skip doc embeddings',
+                        action='store_true')
     args = parser.parse_args()
     return args
 
