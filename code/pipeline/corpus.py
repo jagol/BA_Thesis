@@ -1,10 +1,15 @@
 from math import log
 import json
+import pickle
+import os
 from typing import *
 from collections import defaultdict
-from utility_functions import get_sim
+from utility_functions import get_sim, get_config
 from numpy import mean
+import pdb
 
+# {doc-id: {word-id: (term-freq, tfidf)}} doc-length is at word-id -1
+word_distr_type = DefaultDict[int, DefaultDict[int, Union[Tuple[int, int], int]]]
 
 class Corpus:
 
@@ -143,8 +148,10 @@ def get_relevant_docs(term_ids: Set[str],
     return set([t[0] for t in top_n])
 
 
-def get_doc_embeddings(tfidf_base: Dict[str, Dict[str, float]],
-                       term_ids_to_embs: Dict[str, List[float]]
+def get_doc_embeddings(# tfidf_base: Dict[str, Dict[str, float]],
+                       path_out: str
+                       # word_distr: word_distr_type,
+                       # term_ids_to_embs: Dict[str, List[float]]
                        ) -> Dict[str, Any]:
     """Compute document embeddings using term-embeddings and tfidf.
 
@@ -162,16 +169,43 @@ def get_doc_embeddings(tfidf_base: Dict[str, Dict[str, float]],
     Return:
         doc_embeddings: {doc-id: embedding}
     """
-    doc_embeddings = {}
-    for doc_id in tfidf_base:
-        doc_emb = []
-        tfidf_doc = tfidf_base[doc_id]
-        for term_id in tfidf_doc:
-            term_emb = term_ids_to_embs[term_id]
-            tfidf = tfidf_base[doc_id][term_id]
-            term_emb = [tfidf*d for d in term_emb]
-            doc_emb.append(term_emb)
-        doc_embeddings[doc_id] = mean(doc_emb, axis=0)
+    # doc_embeddings = {}
+    # # for doc_id in tfidf_base:
+    # for doc_id in word_distr:
+    #     doc_emb = []
+    #     # tfidf_doc = tfidf_base[doc_id]
+    #     word_distr_doc = word_distr[doc_id]
+    #     # for term_id in tfidf_doc:
+    #     # If only -1 in doc-dict then skip document.
+    #     if len(word_distr_doc) == 1:
+    #         continue
+    #     for term_id in word_distr_doc:
+    #         if term_id == -1:
+    #             continue
+    #         term_emb = term_ids_to_embs[term_id]
+    #         # tfidf = tfidf_base[doc_id][term_id]
+    #         tfidf = word_distr_doc[term_id][1]
+    #         term_emb_weighted = [tfidf*d for d in term_emb]
+    #         doc_emb.append(term_emb_weighted)
+    #     doc_embeddings[doc_id] = mean(doc_emb, axis=0)
+    config = get_config()
+    lemmatized = config['lemmatized']
+    emb_type = config['embeddings']
+    if not lemmatized:
+        if emb_type == 'Word2Vec':
+            path_doc_embs = os.path.join(
+                path_out, 'embeddings/doc_embs_token_Word2Vec.pickle')
+        elif emb_type == 'GloVe':
+            path_doc_embs = os.path.join(
+                path_out, 'embeddings/doc_embs_token_GloVe.pickle')
+    else:
+        if emb_type == 'Word2Vec':
+            path_doc_embs = os.path.join(
+                path_out, 'embeddings/doc_embs_lemma_Word2Vec.pickle')
+        elif emb_type == 'GloVe':
+            path_doc_embs = os.path.join(
+                path_out, 'embeddings/doc_embs_lemma_GloVe.pickle')
+    doc_embeddings = pickle.load(open(path_doc_embs, 'rb'))
     return doc_embeddings
 
 
