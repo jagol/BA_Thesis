@@ -60,7 +60,7 @@ def rec_remove_empty_child_ids(parent: node_type,
 def make_dot_tree(fpath, nodes: nodes_type) -> None:
     graph = Digraph(comment='The taxonomy')
     rec_add_nodes('0', nodes, graph)
-    graph.render(fpath, view=True)
+    graph.render(fpath, view=False)
 
 
 def rec_add_nodes(source_id: str,
