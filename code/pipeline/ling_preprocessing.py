@@ -111,12 +111,19 @@ class LingPreprocessor(TextProcessingUnit):
         """
         pp_doc = []
 
+        # Remove tags in doc.
+        tag_pattern = re.compile(r'<.*?>')
+        doc = re.sub(tag_pattern, '', doc)
+
         # process each sentence of doc
         nlp_doc = self._nlp(doc)
         for sent in nlp_doc.sents:
             proc_sent = [(token.text, token.tag_, token.lemma_,
                          token.is_stop)
                          for token in sent]
+            for w in proc_sent:
+                if '<' in w[0]:
+                    print(proc_sent)
             if concat_nps:
                 np_indices = self._get_np_indices(sent)
                 np_indices = self._remove_np_stopwords(np_indices, sent)
