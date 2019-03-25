@@ -6,6 +6,7 @@ from typing import *
 from collections import defaultdict
 from utility_functions import get_sim, get_config
 from numpy import mean
+import numpy as np
 import pdb
 
 # {doc-id: {word-id: (term-freq, tfidf)}} doc-length is at word-id -1
@@ -290,11 +291,59 @@ def get_doc_topic_sims(doc_embeddings: Dict[str, List[float]],
     Return:
         A dict of the form: {doc-id: {topic/cluster-label: similarity}}
     """
-    doc_topic_sims = defaultdict(dict)
+    doc_topic_sims = {i: np.empty(5) for i in doc_embeddings}
     for topic, temb in topic_embeddings.items():
         for doc, demb in doc_embeddings.items():
             doc_topic_sims[doc][topic] = get_sim(temb, demb)
     return doc_topic_sims
+
+
+def get_doc_topic_sims_matrix_mul(doc_embeddings: Dict[str, List[float]],
+                                  topic_embeddings: Dict[int, List[float]]
+                                  ) -> Dict[str, Dict[int, float]]:
+    """Get the similarities between topic and document vectors.
+
+    Faster version using matrix multplication.
+
+    Args:
+        doc_embeddings: Maps doc-ids to their embeddings.
+        topic_embeddings: Maps topic-ids to their embeddings.
+    Return:
+        A dict of the form: {doc-id: {topic/cluster-label: similarity}}
+    """
+    doc_topic_sims = {i: np.empty(5) for i in doc_embeddings}
+    for tlabel, temb in topic_embeddings.items():
+        calc_sims_new_way(temb, doc_embeddings, tlabel, doc_topic_sims)
+    return doc_topic_sims
+
+
+def get_matrix(doc_embs):
+    num_embs = len(doc_embs)
+    doc_ids = np.zeros(num_embs, dtype=int)
+    matrix = np.empty(shape=(num_embs, 100))
+    i = 0
+    for doc_id, emb in doc_embs.items():
+        doc_ids[i] = doc_id
+        matrix[i] = emb
+        i += 1
+    return matrix, doc_ids
+
+
+def matrix_to_dict(sim_matrix, doc_ids, topic_label, doc_topic_sims):
+    for i in range(len(doc_ids)):
+        doc_topic_sims[doc_ids[i]][topic_label] = sim_matrix[i]
+
+
+def cosine_similarities(vector, matrix):
+    vector_norm = np.linalg.norm(vector)
+    matrix_norm = np.linalg.norm(matrix, axis=1)
+    return (matrix @ vector) / (matrix_norm * vector_norm)
+
+
+def calc_sims_new_way(topic_emb, doc_embs, topic_label, doc_topic_sims):
+    matrix, doc_ids = get_matrix(doc_embs)
+    sim_matrix = cosine_similarities(topic_emb, matrix)
+    matrix_to_dict(sim_matrix, doc_ids, topic_label, doc_topic_sims)
 
 
 def get_topic_docs(doc_topic_sims: Dict[str, Dict[int, float]],
@@ -314,7 +363,7 @@ def get_topic_docs(doc_topic_sims: Dict[str, Dict[int, float]],
     td_sc = defaultdict(list)  # {topic: [(doc_id, score), ...]}
     for doc in doc_topic_sims:
         topic_sims = doc_topic_sims[doc]
-        topic = max(topic_sims.keys(), key=(lambda key: topic_sims[key]))
+        topic = get_topic_with_max_sim(topic_sims)
         td_sc[topic].append((doc, topic_sims[topic]))
     topic_docs = defaultdict(set)
 
@@ -328,6 +377,24 @@ def get_topic_docs(doc_topic_sims: Dict[str, Dict[int, float]],
             doc_ids = [doc_id for doc_id, score in td_sc[tc]]
             topic_docs[tc] = set(doc_ids)
     return topic_docs
+
+
+def get_topic_with_max_sim(topic_sims: List[float]) -> int:
+    """Get the topic with the highest similarity score.
+
+    Args:
+        topic_sims: Array of floats with length 5.
+    Return:
+        The id of the topic with the highest similarity which is the
+        index of the highest similarity in the array.
+    """
+    topic = -1
+    sim_max = -1
+    for i, sim in enumerate(topic_sims):
+        if sim > sim_max:
+            topic = i
+            sim_max = sim
+    return topic
 
 
 def get_tf_corpus(corpus: Set[str],

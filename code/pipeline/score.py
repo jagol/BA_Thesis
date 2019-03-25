@@ -4,7 +4,7 @@ from collections import defaultdict
 from numpy import mean
 
 from scipy.spatial.distance import cosine
-
+import time
 from corpus import *
 
 """Compute term-candidate scores."""
@@ -72,7 +72,8 @@ class Scorer:
                         # tf: Dict[str, Dict[str, int]],
                         # tf_base: Dict[str, Dict[str, int]],
                         # dl: Dict[str, Union[int, float]]
-                        word_distr: word_distr_type
+                        word_distr: word_distr_type,
+                        df: Dict[int, List[int]]
                         ) -> Dict[str, Tuple[float, float]]:
         """For all terms, compute and get popularity and concentration.
 
@@ -92,7 +93,7 @@ class Scorer:
         """
         # pop_scores = self.get_pop_scores(tf, dl)  # {term-id: popularity}
         print('Get popularity scores...')
-        pop_scores = self.get_pop_scores(word_distr)
+        pop_scores = self.get_pop_scores(word_distr, df)
         # con_scores = self.get_con_scores(tf, tf_base, dl)
         # {term-id:concentration}
         print('Get concentration scores...')
@@ -109,7 +110,8 @@ class Scorer:
     def get_pop_scores(self,
                        # tf: Dict[str, Dict[str, int]],
                        # dl: Dict[str, Union[int, float]]
-                       word_distr: Dict[int, Dict[int, Union[Tuple[int, int], int]]]
+                       word_distr: Dict[int, Dict[int, Union[Tuple[int, int], int]]],
+                       df: Dict[int, List[int]]
                        ) -> Dict[str, float]:
         """Get the popularity scores for all terms in clusters.
 
@@ -136,21 +138,41 @@ class Scorer:
             subcorp = self.subcorpora[label]
 
             # Calc tf_Dk.
+            # print('Compute number of tokens in cluster {}.'.format(label))
+            # start_time = time.time()
             tf_Dk = 0
             for doc_id in subcorp:
                 tf_Dk += word_distr[doc_id][-1]
+            # end_time = time.time()
+            # print('It took {}'.format(end_time-start_time))
 
             # Calc tf_t_Dk.
+            # print('Compute number of term-occurrences for cluster'.format(label))
+            # start_time = time.time()
             for term_id in clus:
+                # st = time.time()
                 tf_t_Dk = 0
-                for doc_id in subcorp:
-                    if term_id in word_distr[doc_id]:
-                        tf_t_Dk += word_distr[doc_id][term_id][0]
+                # for doc_id in subcorp:
+                #     if term_id in word_distr[doc_id]:
+                #         tf_t_Dk += word_distr[doc_id][term_id][0]
+                for doc_id in df[term_id]:
+                    tf_t_Dk += word_distr[doc_id][term_id][0]
+                    # try:
+                    #     tf_t_Dk += word_distr[doc_id][term_id][0]
+                    # except KeyError:
+                    #     pass
+                # instead: diff data struc
+                # et = time.time()
+                # print('tf_t_Dk took time: {}'.format(et-st))
 
                 # Calc pop-score.
+                # st = time.time()
                 pop_score = log(tf_t_Dk + 1) / log(tf_Dk)
                 pop_scores[term_id] = pop_score
-
+                # et = time.time()
+                # print('Calculating pop score took time: {}'.format(et - st))
+            # end_time = time.time()
+            # print('It took {}'.format(end_time - start_time))
         return pop_scores
 
     def get_con_scores(self,

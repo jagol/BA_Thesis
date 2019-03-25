@@ -13,7 +13,6 @@ from embeddings import Embeddings, get_emb
 from clustering import Clustering
 from score import Scorer
 from utility_functions import *
-import pdb
 
 
 # Define global variables.
@@ -97,10 +96,11 @@ def generate_taxonomy() -> None:
     term_ids = load_term_ids(path_term_ids)
     print('load idx-term mappings...')
     with open(path_idx_to_term, 'r', encoding='utf8') as f:
-        idx_to_term = json.load(f)
+        idx_to_term_str = json.load(f)
+        idx_to_term = {int(k): v for k, v in idx_to_term_str.items()}
     print('load global embeddings...')
     term_ids_to_embs_global = Embeddings.load_term_embeddings(
-        term_ids, path_embeddings_global)
+        term_ids, path_embeddings_global, {})
 
     print('load base corpus...')
     base_corpus = get_base_corpus(path_base_corpus)
@@ -143,59 +143,25 @@ def generate_taxonomy() -> None:
             with open(path_dl, 'r', encoding='utf8') as f:
                 dl_base = json.load(f)
     word_distr_base = defaultdict(dict)
-    # for doc_id in tf_base:
-    #     if doc_id not in tfidf_base:
-    #         print(doc_id) # 4541 4895 7087 7945
-    # for doc_id in tfidf_base:
-    #     if doc_id not in tf_base:
-    #         print(doc_id) # no term-ids
-    # not_in_tf_base = []
-    # not_in_tfidf_base = []
-    # not_in_dl_base = []
-    # for doc_id in base_corpus:
-    #     if str(doc_id) not in tf_base:
-    #         not_in_tf_base.append(doc_id)
-    #     if str(doc_id) not in tfidf_base:
-    #         not_in_tfidf_base.append(doc_id)
-    #     if str(doc_id) not in dl_base:
-    #         not_in_dl_base.append(doc_id)
-    # print(len(base_corpus))
-    # print(len(tf_base))
-    # print(len(tfidf_base))
-    # print(len(dl_base))
-    # print(not_in_tf_base)
-    # print(not_in_tfidf_base)
-    # print(not_in_dl_base)
-    # print(100*'-')
     for doc_id in base_corpus:
         doc_id = str(doc_id)
         for word_id in tf_base[doc_id]:
             tf = tf_base[doc_id][word_id]
             tfidf = tfidf_base[doc_id][word_id]
-            # print(20*'-')
-            # print((tf, tfidf))
-            # print(doc_id, tf_base[doc_id], tfidf_base[doc_id])
             word_distr_base[int(doc_id)][int(word_id)] = (tf, tfidf)
-            # print(word_distr_base[int(doc_id)][int(word_id)])
-            # print(tfidf_base[doc_id][word_id], doc_id in tfidf_base, doc_id)
-            # print('doc_id not in tfidf_base: {}'.format(4541))
-            # print('doc_id in tf_base: {}'.format(doc_id in tf_base))
-            # print(word_distr_base[int(4541)])
-            # print('tf:', tf)
-            # print('idf:', tfidf)
-            # print(word_distr_base[int(4541)][int(word_id)])
         word_distr_base[int(doc_id)][-1] = dl_base[doc_id]
 
     del tf_base
     del tfidf_base
     del dl_base
+    del df_base_str
 
 
     # Start recursive taxonomy generation.
     rec_find_children(term_ids_local=term_ids, term_ids_global=term_ids,
                       base_corpus=base_corpus,
                       path_base_corpus_ids=path_base_corpus_ids,
-                      cur_node_id=0, level=1, df_base=df_base,
+                      cur_node_id=0, level=1, df_base=df_base, df=df_base,
                       # tf_base=tf_base,
                       path_out=path_out, #dl=dl,
                       # tfidf_base=tfidf_base,
@@ -222,6 +188,7 @@ def rec_find_children(term_ids_local: Set[str],
                       # tfidf_base: Dict[str, Dict[str, float]],
                       path_out: str,
                       csv_writer: Any,
+                      df: Dict[int, List[int]],
                       emb_type: str
                       ) -> None:
     """Recursive function to generate child nodes for parent node.
@@ -253,7 +220,8 @@ def rec_find_children(term_ids_local: Set[str],
         csv_writer: csv-writer-object used to write taxonomy to file.
         emb_type: The embedding type: 'Word2Vec', 'GloVe' or 'ELMo'.
     """
-    if level >= max_depth:
+    if level > max_depth or len(term_ids_local) == 0:
+        write_tax_to_file(cur_node_id, {}, set(), csv_writer, only_id=True)
         return None
     print(15*'-'+' level {} node {} '.format(level, cur_node_id) + 15*'-')
     msg = 'start recursion on level {} with node id {}...'.format(level,
@@ -271,7 +239,7 @@ def rec_find_children(term_ids_local: Set[str],
                                           cur_node_id, path_out)
         print('get term embeddings...')
         term_ids_to_embs_local = Embeddings.load_term_embeddings(
-            term_ids_local, emb_path_local)
+            term_ids_local, emb_path_local, term_ids_to_embs_global)
         # {id: embedding}
     else:
         term_ids_to_embs_local = term_ids_to_embs_global
@@ -295,13 +263,13 @@ def rec_find_children(term_ids_local: Set[str],
         # {label: doc-ids}
 
         print('get term-frequencies...')
-        tf_corpus = get_tf_corpus(term_ids_local, cur_corpus, word_distr_base)
+        # tf_corpus = get_tf_corpus(term_ids_local, cur_corpus, word_distr_base)
         # TODO: modifiy get_tf_corpus. Get the tf for all docs in cur_docs
 
         print('compute term scores...')
         term_scores = get_term_scores(clusters, subcorpora, # dl,
                                       # tf_corpus,
-                                      word_distr_base, level)
+                                      word_distr_base, df, level)
 
         print('get average and median score...')
         avg_pop, avg_con, avg_total = get_avg_score(term_scores)
@@ -319,15 +287,23 @@ def rec_find_children(term_ids_local: Set[str],
         cluster_sizes = [len(clus) for label, clus in clusters.items()]
         print('terms pushed up: {}'.format(len(general_terms)))
         print('cluster_sizes: {}'.format(cluster_sizes))
-        if len(general_terms) == 0:
+        if len(general_terms) == 0 or len(term_ids_to_embs_local) == 0:
+            # 2. cond for the case if all terms have been pushed up.
             break
         term_ids_to_embs_local = update_title(term_ids_to_embs_local, clusters)
+
+    del term_scores
+    del general_terms
+    del term_ids_to_embs_local
 
     # Start preparation of next iteration.
     child_ids = get_child_ids(clusters)
     print('The child ids of {} are {}'.format(cur_node_id, str(child_ids)))
     print('write concept terms to file...')
-    write_tax_to_file(cur_node_id, child_ids, concept_terms, csv_writer)
+    if len(concept_terms) == 0:
+        write_tax_to_file(cur_node_id, {}, set(), csv_writer, only_id=True)
+    else:
+        write_tax_to_file(cur_node_id, child_ids, concept_terms, csv_writer)
 
     print('start new recursion...')
     for label, clus in clusters.items():
@@ -335,7 +311,7 @@ def rec_find_children(term_ids_local: Set[str],
         subcorpus = subcorpora[label]
         rec_find_children(term_ids_local=clus, base_corpus=base_corpus,
                           path_base_corpus_ids=path_base_corpus_ids,
-                          cur_node_id=node_id, level=level+1,
+                          cur_node_id=node_id, level=level+1, df=df_base,
                           # dl=dl,
                           df_base=df_base, # tf_base=tf_base,
                           # path_out=path_out,
@@ -369,13 +345,17 @@ def get_child_ids(proc_clusters: Dict[int, Set[str]]) -> Dict[int, int]:
 def write_tax_to_file(cur_node_id: int,
                       child_ids: Union[Dict[int, int], List[None]],
                       concept_terms: Set[str],
-                      csv_writer: Any
+                      csv_writer: Any,
+                      only_id: bool = False
                       ) -> None:
     """Write the current node with terms and child-nodes to file."""
     # Map indices to words.
-    concept_terms = [idx_to_term[i] for i in concept_terms]
-    child_nodes = list(child_ids.values())
-    row = [cur_node_id] + child_nodes + list(concept_terms)
+    if only_id:
+        row = [cur_node_id, str(None)]
+    else:
+        concept_terms = [idx_to_term[i] for i in concept_terms]
+        child_nodes = list(child_ids.values())
+        row = [cur_node_id] + child_nodes + list(concept_terms)
     csv_writer.writerow(row)
 
 
@@ -390,16 +370,17 @@ def get_subcorpora(clusters: Dict[int, Set[str]],
     """Get the subcorpus for each cluster."""
     # subcorpora = {}
     # doc_embeddings = get_doc_embeddings(tfidf_base, term_ids_to_embs)
-    print('Calculate document embeddings...')
+    print('  Calculate document embeddings...')
     doc_embeddings = get_doc_embeddings(path_out) # , word_distr_base, term_ids_to_embs)
     # {doc_id: embedding}
-    print('Calculate topic_embeddings')
+    print('  Calculate topic_embeddings...')
     topic_embeddings = get_topic_embeddings(clusters, term_ids_to_embs)
     # {cluster/topic_label: embedding}
-    print('Calculate topic documents similarities')
-    doc_topic_sims = get_doc_topic_sims(doc_embeddings, topic_embeddings)
+    print('  Calculate topic document similarities...')
+    # doc_topic_sims_old = get_doc_topic_sims(doc_embeddings, topic_embeddings)
+    doc_topic_sims = get_doc_topic_sims_matrix_mul(doc_embeddings, topic_embeddings)
     # {doc-id: {topic-label: sim}}
-    print('Determine the top m most similar documents to each topic...')
+    print('  Determine the top m most similar documents to each topic...')
     subcorpora = get_topic_docs(doc_topic_sims, m)
     # {cluster/topic_label: {set of doc-ids}}
 
@@ -645,6 +626,7 @@ def get_median_score(term_scores: Dict[str, Tuple[float, float]]
 def get_term_scores(clusters: Dict[int, Set[str]],
                     subcorpora: Dict[int, Set[str]],
                     word_distr: word_distr_type,
+                    df,
                     # df_base: Dict[str, List[str]],
                     # df: Dict[str, int],
                     # dl: Dict[str, Union[int, float]],
@@ -678,8 +660,7 @@ def get_term_scores(clusters: Dict[int, Set[str]],
     """
     sc = Scorer(clusters, subcorpora, level)
     # return sc.get_term_scores(tf, tf_base, dl)
-    return sc.get_term_scores(word_distr)
-
+    return sc.get_term_scores(word_distr, df)
 
 
 # def get_df_corpus(term_ids: Set[str],
@@ -774,7 +755,8 @@ def get_concept_terms(clus: Set[str],
     """
     concept_terms = set()
     # threshhold = 0.25 # According to TaxoGen.
-    threshhold = 0.1
+    threshhold = 0.25
+    # threshhold = 0.85
     for term_id in clus:
         pop = term_scores[term_id][0]
         con = term_scores[term_id][1]
