@@ -71,7 +71,7 @@ class DocEmbedder:
                     ) -> None:
         """Calculate Document embeddings."""
         term_idxs = self.load_term_idxs(path_term_idxs)
-        term_embs = Embeddings.load_term_embeddings(term_idxs, path_term_embs)
+        term_embs = Embeddings.load_term_embeddings(term_idxs, path_term_embs, term_ids_to_embs_global={})
         with open(path_tfidf, 'r', encoding='utf8') as f:
             tfidf = json.load(f)
         doc_embeddings = {}
