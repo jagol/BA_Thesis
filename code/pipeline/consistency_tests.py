@@ -398,7 +398,7 @@ def test_all_terms_have_embeddings(path_terms: str,
             separated by space.
     """
     terms = load_terms(path_terms)
-    embeddings = Embeddings.load_term_embeddings(terms, path_embeddings)
+    embeddings = Embeddings.load_term_embeddings(terms, path_embeddings, term_ids_to_embs_global={})
     embedded_terms = set(embeddings)
     not_in_et = []
     for t in terms:
