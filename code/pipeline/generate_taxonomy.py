@@ -92,17 +92,17 @@ def generate_taxonomy() -> None:
     csv_writer = csv.writer(tax_file, delimiter=',')
 
     # Define starting variables.
-    print('load term-ids...')
+    print('Load term-ids...')
     term_ids = load_term_ids(path_term_ids)
-    print('load idx-term mappings...')
+    print('Load idx-term mappings...')
     with open(path_idx_to_term, 'r', encoding='utf8') as f:
         idx_to_term_str = json.load(f)
         idx_to_term = {int(k): v for k, v in idx_to_term_str.items()}
-    print('load global embeddings...')
+    print('Load global embeddings...')
     term_ids_to_embs_global = Embeddings.load_term_embeddings(
         term_ids, path_embeddings_global, {})
 
-    print('load base corpus...')
+    print('Load base corpus...')
     base_corpus = get_base_corpus(path_base_corpus)
     # print('load tf-base...')
     # tf_base = {}  # {doc_id: {word_id: freq}}
@@ -110,7 +110,7 @@ def generate_taxonomy() -> None:
     #     for i, doc_freqs in enumerate(f):
     #         doc_freqs_str = json.loads(doc_freqs.strip('\n'))
     #         tf_base[i] = {int(k): v for k, v in doc_freqs_str.items()}
-    print('load df-base...')
+    print('Load df-base...')
     with open(path_df, 'r', encoding='utf8') as f:
         # {word_id: [doc_id1, ...]}
         df_base_str = json.load(f)
@@ -224,27 +224,27 @@ def rec_find_children(term_ids_local: Set[str],
         write_tax_to_file(cur_node_id, {}, set(), csv_writer, only_id=True)
         return None
     print(15*'-'+' level {} node {} '.format(level, cur_node_id) + 15*'-')
-    msg = 'start recursion on level {} with node id {}...'.format(level,
+    msg = 'Start recursion on level {} with node id {}...'.format(level,
                                                                   cur_node_id)
     print(msg)
     print('Number of candidate terms: {}'.format(len(term_ids_local)))
 
     m = int(len(base_corpus)/(5*level))
-    print('build corpus file...')
+    print('Build corpus file...')
     corpus_path = build_corpus_file(cur_corpus, path_base_corpus_ids,
                                     cur_node_id, path_out)
-    print('train embeddings...')
+    print('Train embeddings...')
     if level != 1:
         emb_path_local = train_embeddings(emb_type, corpus_path,
                                           cur_node_id, path_out)
-        print('get term embeddings...')
+        print('Get term embeddings...')
         term_ids_to_embs_local = Embeddings.load_term_embeddings(
             term_ids_local, emb_path_local, term_ids_to_embs_global)
         # {id: embedding}
     else:
         term_ids_to_embs_local = term_ids_to_embs_global
 
-    concept_terms = set()
+    concept_terms = []
     print('Start finding general terms...')
     i = 0
     while True:
@@ -255,38 +255,38 @@ def rec_find_children(term_ids_local: Set[str],
         clusters = perform_clustering(term_ids_to_embs_local)
         # Dict[int, Set[int]]
 
-        print('get subcorpora for clusters...')
+        print('Get subcorpora for clusters...')
         # subcorpora = get_subcorpora(clusters, base_corpus, n, tfidf_base,
         #                             term_ids_to_embs_global)
         subcorpora = get_subcorpora(clusters, word_distr_base, # tfidf_base,
                                     term_ids_to_embs_global, path_out, m=m)
         # {label: doc-ids}
 
-        print('get term-frequencies...')
+        # print('Get term-frequencies...')
         # tf_corpus = get_tf_corpus(term_ids_local, cur_corpus, word_distr_base)
         # TODO: modifiy get_tf_corpus. Get the tf for all docs in cur_docs
 
-        print('compute term scores...')
+        print('Compute term scores...')
         term_scores = get_term_scores(clusters, subcorpora, # dl,
                                       # tf_corpus,
                                       word_distr_base, df, level)
 
-        print('get average and median score...')
+        print('Get average and median score...')
         avg_pop, avg_con, avg_total = get_avg_score(term_scores)
         median_pop, median_con, median_total = get_median_score(term_scores)
-        msg_avg = ('avg popularity: {:.3f}, avg concentation: {:.3f}, '
+        msg_avg = ('  avg popularity: {:.3f}, avg concentation: {:.3f}, '
                    'avg score: {:.3f}')
-        msg_median = ('median popularity: {:.3f}, median concentation: {:.3f},'
-                      ' median score: {:.3f}')
+        msg_median = ('  median popularity: {:.3f}, median concentation: {:.3f}'
+                      ', median score: {:.3f}')
         print(msg_avg.format(avg_pop, avg_con, avg_total))
         print(msg_median.format(median_pop, median_con, median_total))
 
-        print('remove terms from clusters...')
+        print('Remove terms from clusters...')
         clusters, general_terms = separate_gen_terms(clusters, term_scores)
-        concept_terms = concept_terms.union(general_terms)
+        concept_terms.extend(general_terms)
         cluster_sizes = [len(clus) for label, clus in clusters.items()]
-        print('terms pushed up: {}'.format(len(general_terms)))
-        print('cluster_sizes: {}'.format(cluster_sizes))
+        print('Terms pushed up: {}'.format(len(general_terms)))
+        print('Cluster_sizes: {}'.format(cluster_sizes))
         if len(general_terms) == 0 or len(term_ids_to_embs_local) == 0:
             # 2. cond for the case if all terms have been pushed up.
             break
@@ -299,13 +299,14 @@ def rec_find_children(term_ids_local: Set[str],
     # Start preparation of next iteration.
     child_ids = get_child_ids(clusters)
     print('The child ids of {} are {}'.format(cur_node_id, str(child_ids)))
-    print('write concept terms to file...')
+    print('Write concept terms to file...')
     if len(concept_terms) == 0:
         write_tax_to_file(cur_node_id, {}, set(), csv_writer, only_id=True)
     else:
+        concept_terms.sort(key=lambda t: t[1], reverse=True)
         write_tax_to_file(cur_node_id, child_ids, concept_terms, csv_writer)
 
-    print('start new recursion...')
+    print('Start new recursion...')
     for label, clus in clusters.items():
         node_id = child_ids[label]
         subcorpus = subcorpora[label]
@@ -344,18 +345,28 @@ def get_child_ids(proc_clusters: Dict[int, Set[str]]) -> Dict[int, int]:
 
 def write_tax_to_file(cur_node_id: int,
                       child_ids: Union[Dict[int, int], List[None]],
-                      concept_terms: Set[str],
+                      concept_term_ids: List[Tuple[str, float]],
                       csv_writer: Any,
                       only_id: bool = False
                       ) -> None:
-    """Write the current node with terms and child-nodes to file."""
+    """Write the current node with terms and child-nodes to file.
+
+    concept_terms is a list containing strings of the form:
+    'concept_term;term_score'.
+
+    The term score is the one which got the term pushed up. (highest one)
+    """
     # Map indices to words.
     if only_id:
         row = [cur_node_id, str(None)]
     else:
-        concept_terms = [idx_to_term[i] for i in concept_terms]
+        concept_terms = []
+        for idx, score in concept_term_ids:
+            term = idx_to_term[idx]
+            term_w_score = '{}|{:.3f}'.format(term, score)
+            concept_terms.append(term_w_score)
         child_nodes = list(child_ids.values())
-        row = [cur_node_id] + child_nodes + list(concept_terms)
+        row = [cur_node_id] + child_nodes + concept_terms
     csv_writer.writerow(row)
 
 
@@ -395,7 +406,7 @@ def get_subcorpora(clusters: Dict[int, Set[str]],
 
 def separate_gen_terms(clusters: Dict[int, Set[str]],
                        term_scores: Dict[str, Tuple[float, float]]
-                       ) -> Tuple[Dict[int, Set[str]], Set[str]]:
+                       ) -> Tuple[Dict[int, Set[str]], List[Tuple[str, float]]]:
     """Remove general terms and unpopular terms from clusters.
 
     For each cluster remove the unpopular terms and push up and
@@ -411,7 +422,7 @@ def separate_gen_terms(clusters: Dict[int, Set[str]],
         concept_terms: A set of term-ids belonging to the concept.
     """
     proc_clusters = {}  # {label: clus}
-    concept_terms = set()
+    concept_terms = []
     for label, clus in clusters.items():
 
         # terms_to_remove = get_terms_to_remove(clus, term_scores)
@@ -419,7 +430,7 @@ def separate_gen_terms(clusters: Dict[int, Set[str]],
         # clus = remove(clus, terms_to_remove)
 
         concept_terms_clus = get_concept_terms(clus, term_scores)
-        concept_terms = concept_terms.union(concept_terms_clus)
+        concept_terms.extend(concept_terms_clus)
         clus = remove(clus, concept_terms)
 
         proc_clusters[label] = clus
@@ -555,14 +566,15 @@ def perform_clustering(term_ids_to_embs: Dict[str, List[float]]
 
 
 def remove(clus: Set[str],
-           terms_to_remove: Set[str]
+           terms_to_remove: List[Tuple[str, float]]
            ) -> Set[str]:
     """Remove terms_to_remove from cluster.
 
     Args:
         clus: A set of term-ids.
-        terms_to_remove: A set of term-ids.
+        terms_to_remove: A list of term-ids with scores.
     """
+    terms_to_remove = set([t[0] for t in terms_to_remove])
     return clus-terms_to_remove
 
 
@@ -743,7 +755,7 @@ def get_terms_to_remove(clus: Set[str],
 
 def get_concept_terms(clus: Set[str],
                       term_scores: Dict[str, Tuple[float, float]]
-                      ) -> Set[str]:
+                      ) -> List[Tuple[str, float]]:
     """Determine the concept candidates in the cluster.
 
     Args:
@@ -753,9 +765,9 @@ def get_concept_terms(clus: Set[str],
     Return:
         A set of term-ids of the terms to remove.
     """
-    concept_terms = set()
+    concept_terms = []
     # threshhold = 0.25 # According to TaxoGen.
-    threshhold = 0.25
+    threshhold = 0.65
     # threshhold = 0.85
     for term_id in clus:
         pop = term_scores[term_id][0]
@@ -763,7 +775,7 @@ def get_concept_terms(clus: Set[str],
         score = sqrt(pop*con)
         # if con < threshhold:
         if score < threshhold:
-            concept_terms.add(term_id)
+            concept_terms.append((term_id, score))
     return concept_terms
 
 
