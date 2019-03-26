@@ -1,5 +1,6 @@
 # import os
 import json
+import pickle
 # import re
 import csv
 import time
@@ -18,11 +19,11 @@ from utility_functions import *
 # Define global variables.
 node_counter = 0
 idx_to_term = {}
-max_depth = 3
+max_depth = 2
 
 
 # {doc-id: {word-id: (term-freq, tfidf)}} doc-length is at word-id -1
-word_distr_type = DefaultDict[int, DefaultDict[int, Union[Tuple[int, int], int]]]
+term_distr_type = DefaultDict[int, DefaultDict[int, Union[Tuple[int, int], int]]]
 
 
 def generate_taxonomy() -> None:
@@ -43,6 +44,8 @@ def generate_taxonomy() -> None:
         - start again at beginning using the resulting cluster
     """
     global idx_to_term
+    global path_embeddings_global
+    global path_term_distr
     # Load cmd args and configs.
     print('Load and parse cmd args...')
     config = get_config()
@@ -64,6 +67,8 @@ def generate_taxonomy() -> None:
         path_tf = os.path.join(path_out, 'frequencies/tf_lemmas.json')
         path_tfidf = os.path.join(
             path_out, 'frequencies/tfidf_lemmas.json')
+        path_term_distr = os.path.join(
+            path_out, 'frequencies/term_distr_lemmas.json')
         path_base_corpus = os.path.join(
             path_out, 'processed_corpus/pp_lemma_corpus.txt')
         path_base_corpus_ids = os.path.join(
@@ -78,6 +83,8 @@ def generate_taxonomy() -> None:
         path_df = os.path.join(path_out, 'frequencies/df_tokens.json')
         path_tf = os.path.join(path_out, 'frequencies/tf_tokens.json')
         path_tfidf = os.path.join(path_out, 'frequencies/tfidf_tokens.json')
+        path_term_distr = os.path.join(
+            path_out, 'frequencies/term_distr_tokens.json')
         path_base_corpus = os.path.join(
             path_out, 'processed_corpus/pp_token_corpus.txt')
         path_base_corpus_ids = os.path.join(
@@ -129,7 +136,7 @@ def generate_taxonomy() -> None:
     #     dl_str = json.load(f)
     #     dl = {int(k): v for k, v in dl_str.items()}
     #     # {doc-id: length}
-    print('Loading word distributions...')
+    print('Loading term distributions...')
     with open(path_tf, 'r', encoding='utf8') as f:
         # tf_base = json.load(f)
         # tf_base = {}
@@ -142,41 +149,50 @@ def generate_taxonomy() -> None:
             tfidf_base = json.load(f)
             with open(path_dl, 'r', encoding='utf8') as f:
                 dl_base = json.load(f)
-    word_distr_base = defaultdict(dict)
+    term_distr_base = defaultdict(dict)
     for doc_id in base_corpus:
         doc_id = str(doc_id)
         for word_id in tf_base[doc_id]:
             tf = tf_base[doc_id][word_id]
             tfidf = tfidf_base[doc_id][word_id]
-            word_distr_base[int(doc_id)][int(word_id)] = (tf, tfidf)
-        word_distr_base[int(doc_id)][-1] = dl_base[doc_id]
+            term_distr_base[int(doc_id)][int(word_id)] = (tf, tfidf)
+        term_distr_base[int(doc_id)][-1] = dl_base[doc_id]
+    with open(path_term_distr, 'wb') as f:
+        pickle.dump(term_distr_base, f)
 
     del tf_base
     del tfidf_base
     del dl_base
     del df_base_str
-
+    del term_distr_base
 
     # Start recursive taxonomy generation.
     rec_find_children(term_ids_local=term_ids, term_ids_global=term_ids,
                       base_corpus=base_corpus,
                       path_base_corpus_ids=path_base_corpus_ids,
-                      cur_node_id=0, level=1, df_base=df_base, df=df_base,
+                      cur_node_id=0, level=0, df_base=df_base, df=df_base,
                       # tf_base=tf_base,
                       path_out=path_out, #dl=dl,
                       # tfidf_base=tfidf_base,
                       cur_corpus=base_corpus,
                       csv_writer=csv_writer,
                       term_ids_to_embs_global=term_ids_to_embs_global,
-                      emb_type=emb_type, word_distr_base=word_distr_base)
+                      # term_distr_base=term_distr_base,
+                      emb_type=emb_type)
 
     print('Done.')
+
+
+def load_term_distr() -> Dict[int, Dict[int, Union[List[float], int]]]:
+    """Load the word distrubutions from pickle file."""
+    with open(path_term_distr, 'rb') as f:
+        return pickle.load(f)
 
 
 def rec_find_children(term_ids_local: Set[str],
                       term_ids_global: Set[str],
                       term_ids_to_embs_global: Dict[str, List[float]],
-                      word_distr_base: Dict[int, Dict[int, Union[Tuple[int, int], int]]],
+                      # term_distr_base: Dict[int, Dict[int, Union[Tuple[int, int], int]]],
                       df_base: Dict[str, List[str]],
                       # tf_base: Dict[str, Dict[str, int]],
                       # dl: Dict[str, Union[int, float]],
@@ -229,12 +245,12 @@ def rec_find_children(term_ids_local: Set[str],
     print(msg)
     print('Number of candidate terms: {}'.format(len(term_ids_local)))
 
-    m = int(len(base_corpus)/(5*level))
+    m = int(len(base_corpus)/(5*level+1))
     print('Build corpus file...')
     corpus_path = build_corpus_file(cur_corpus, path_base_corpus_ids,
                                     cur_node_id, path_out)
     print('Train embeddings...')
-    if level != 1:
+    if level != 0:
         emb_path_local = train_embeddings(emb_type, corpus_path,
                                           cur_node_id, path_out)
         print('Get term embeddings...')
@@ -249,27 +265,32 @@ def rec_find_children(term_ids_local: Set[str],
     i = 0
     while True:
         i += 1
-        print(5*'-' + ' iteration {} '.format(i) + 5*'-')
+        info_msg = ' iteration {} level {} node {} '.format(i, level,
+                                                            cur_node_id)
+        print(5*'-' + info_msg + 5*'-')
 
-        print('cluster terms...')
+        print('Cluster terms...')
         clusters = perform_clustering(term_ids_to_embs_local)
         # Dict[int, Set[int]]
+        cluster_centers = get_topic_embeddings(clusters, term_ids_to_embs_local)
 
         print('Get subcorpora for clusters...')
         # subcorpora = get_subcorpora(clusters, base_corpus, n, tfidf_base,
         #                             term_ids_to_embs_global)
-        subcorpora = get_subcorpora(clusters, word_distr_base, # tfidf_base,
+        subcorpora = get_subcorpora(clusters, cluster_centers,
                                     term_ids_to_embs_global, path_out, m=m)
         # {label: doc-ids}
 
         # print('Get term-frequencies...')
-        # tf_corpus = get_tf_corpus(term_ids_local, cur_corpus, word_distr_base)
+        # tf_corpus = get_tf_corpus(term_ids_local, cur_corpus, term_distr_base)
         # TODO: modifiy get_tf_corpus. Get the tf for all docs in cur_docs
-
+        print('Loading term distributions...')
+        term_distr_base = load_term_distr()
         print('Compute term scores...')
-        term_scores = get_term_scores(clusters, subcorpora, # dl,
+        term_scores = get_term_scores(clusters, cluster_centers, subcorpora,
                                       # tf_corpus,
-                                      word_distr_base, df, level)
+                                      term_distr_base, df, level)
+        del term_distr_base
 
         print('Get average and median score...')
         avg_pop, avg_con, avg_total = get_avg_score(term_scores)
@@ -317,7 +338,7 @@ def rec_find_children(term_ids_local: Set[str],
                           df_base=df_base, # tf_base=tf_base,
                           # path_out=path_out,
                           # tfidf_base=tfidf_base,
-                          word_distr_base=word_distr_base,
+                          # term_distr_base=term_distr_base,
                           cur_corpus=subcorpus,
                           path_out=path_out,
                           csv_writer=csv_writer,
@@ -371,9 +392,10 @@ def write_tax_to_file(cur_node_id: int,
 
 
 def get_subcorpora(clusters: Dict[int, Set[str]],
+                   cluster_centers: Dict[int, List[float]],
                    # base_corpus: Set[str],
                    # tfidf_base: Dict[str, Dict[str, float]],
-                   word_distr_base: word_distr_type,
+                   # term_distr_base: term_distr_type,
                    term_ids_to_embs: Dict[str, List[float]],
                    path_out: str,
                    m: Union[int, None]=None,
@@ -382,10 +404,10 @@ def get_subcorpora(clusters: Dict[int, Set[str]],
     # subcorpora = {}
     # doc_embeddings = get_doc_embeddings(tfidf_base, term_ids_to_embs)
     print('  Calculate document embeddings...')
-    doc_embeddings = get_doc_embeddings(path_out) # , word_distr_base, term_ids_to_embs)
+    doc_embeddings = get_doc_embeddings(path_out) # , term_distr_base, term_ids_to_embs)
     # {doc_id: embedding}
-    print('  Calculate topic_embeddings...')
-    topic_embeddings = get_topic_embeddings(clusters, term_ids_to_embs)
+    print('  Get topic_embeddings...')
+    topic_embeddings = cluster_centers
     # {cluster/topic_label: embedding}
     print('  Calculate topic document similarities...')
     # doc_topic_sims_old = get_doc_topic_sims(doc_embeddings, topic_embeddings)
@@ -554,7 +576,7 @@ def perform_clustering(term_ids_to_embs: Dict[str, List[float]]
     term_ids_embs_items = [(k, v) for k, v in term_ids_to_embs.items()]
     results = c.fit([it[1] for it in term_ids_embs_items])
     labels = results['labels']
-    print('density:', results['density'])
+    print('  Density:', results['density'])
     clusters = defaultdict(set)
     for i in range(len(term_ids_embs_items)):
         term_id = term_ids_embs_items[i][0]
@@ -636,8 +658,9 @@ def get_median_score(term_scores: Dict[str, Tuple[float, float]]
 
 
 def get_term_scores(clusters: Dict[int, Set[str]],
+                    cluster_centers: Dict[int, List[float]],
                     subcorpora: Dict[int, Set[str]],
-                    word_distr: word_distr_type,
+                    term_distr: term_distr_type,
                     df,
                     # df_base: Dict[str, List[str]],
                     # df: Dict[str, int],
@@ -670,9 +693,9 @@ def get_term_scores(clusters: Dict[int, Set[str]],
         df: The document frequencies of the given terms for the given
             subcorpus. Form: {term_id: frequency})
     """
-    sc = Scorer(clusters, subcorpora, level)
+    sc = Scorer(clusters, cluster_centers, subcorpora, level)
     # return sc.get_term_scores(tf, tf_base, dl)
-    return sc.get_term_scores(word_distr, df)
+    return sc.get_term_scores(term_distr, df)
 
 
 # def get_df_corpus(term_ids: Set[str],
@@ -767,8 +790,7 @@ def get_concept_terms(clus: Set[str],
     """
     concept_terms = []
     # threshhold = 0.25 # According to TaxoGen.
-    threshhold = 0.65
-    # threshhold = 0.85
+    threshhold = 0.53
     for term_id in clus:
         pop = term_scores[term_id][0]
         con = term_scores[term_id][1]
@@ -785,4 +807,4 @@ if __name__ == '__main__':
     end_time = time.time()
     time_used = end_time - start_time
     print('Time used: {}'.format(time_used))
-    print('Done.')
+    print('Finished.')
