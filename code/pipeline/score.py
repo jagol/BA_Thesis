@@ -2,9 +2,7 @@ from typing import *
 from math import sqrt, exp, log
 from collections import defaultdict
 from numpy import mean
-
 from scipy.spatial.distance import cosine
-import time
 from corpus import *
 
 """Compute term-candidate scores."""
@@ -38,6 +36,7 @@ class Scorer:
 
     def __init__(self,
                  clusters: Dict[int, cluster_type],
+                 cluster_centers: Dict[int, List[float]],
                  subcorpora: Dict[int, Set[str]],
                  # parent_corpus: Set[int],
                  # path_base_corpus: str,
@@ -55,23 +54,11 @@ class Scorer:
             path_base_corpus: The path to the original corpus file.)
         """
         self.clusters = clusters
+        self.cluster_centers = cluster_centers
         self.subcorpora = subcorpora
-        # self.parent_corpus = Corpus(parent_corpus, self.path_base_corpus)
-        # self.parent_corpus.get_corpus_docs()
-        # self.path_base_corpus = path_base_corpus
-        # self.topic_corpus = Corpus(self.cluster, self.path_base_corpus)
-        # self.topic_corpus.get_corpus_docs()
         self.level = level
 
-        # precompute term frequencies for all given terms
-        # self.tf_topic_corpus = self.get_tf(cluster, self.topic_corpus.docs)
-        # self.tf_parent_corpus = self.get_tf(cluster, self.parent_corpus.docs)
-
     def get_term_scores(self,
-                        # df_base: Dict[str, int],
-                        # tf: Dict[str, Dict[str, int]],
-                        # tf_base: Dict[str, Dict[str, int]],
-                        # dl: Dict[str, Union[int, float]]
                         word_distr: word_distr_type,
                         df: Dict[int, List[int]]
                         ) -> Dict[str, Tuple[float, float]]:
@@ -87,16 +74,10 @@ class Scorer:
             A dictionary mapping each term-id a tuple containing the
             terms popularity and concentration. Form:
             {term-id: (popularity, concentration)}
-        (Old Args:
-            df_base: The document frequencies of the terms in parent-corpus.
-                Form: {term-id: frequency})
         """
-        # pop_scores = self.get_pop_scores(tf, dl)  # {term-id: popularity}
-        print('Get popularity scores...')
+        print('  Get popularity scores...')
         pop_scores = self.get_pop_scores(word_distr, df)
-        # con_scores = self.get_con_scores(tf, tf_base, dl)
-        # {term-id:concentration}
-        print('Get concentration scores...')
+        print('  Get concentration scores...')
         con_scores = self.get_con_scores(word_distr)
 
         term_scores = {}
@@ -108,8 +89,6 @@ class Scorer:
         return term_scores
 
     def get_pop_scores(self,
-                       # tf: Dict[str, Dict[str, int]],
-                       # dl: Dict[str, Union[int, float]]
                        word_distr: Dict[int, Dict[int, Union[Tuple[int, int], int]]],
                        df: Dict[int, List[int]]
                        ) -> Dict[str, float]:
@@ -138,48 +117,23 @@ class Scorer:
             subcorp = self.subcorpora[label]
 
             # Calc tf_Dk.
-            # print('Compute number of tokens in cluster {}.'.format(label))
-            # start_time = time.time()
             tf_Dk = 0
             for doc_id in subcorp:
                 tf_Dk += word_distr[doc_id][-1]
-            # end_time = time.time()
-            # print('It took {}'.format(end_time-start_time))
 
             # Calc tf_t_Dk.
-            # print('Compute number of term-occurrences for cluster'.format(label))
-            # start_time = time.time()
             for term_id in clus:
-                # st = time.time()
                 tf_t_Dk = 0
-                # for doc_id in subcorp:
-                #     if term_id in word_distr[doc_id]:
-                #         tf_t_Dk += word_distr[doc_id][term_id][0]
                 for doc_id in df[term_id]:
                     tf_t_Dk += word_distr[doc_id][term_id][0]
-                    # try:
-                    #     tf_t_Dk += word_distr[doc_id][term_id][0]
-                    # except KeyError:
-                    #     pass
-                # instead: diff data struc
-                # et = time.time()
-                # print('tf_t_Dk took time: {}'.format(et-st))
 
                 # Calc pop-score.
-                # st = time.time()
                 pop_score = log(tf_t_Dk + 1) / log(tf_Dk)
                 pop_scores[term_id] = pop_score
-                # et = time.time()
-                # print('Calculating pop score took time: {}'.format(et - st))
-            # end_time = time.time()
-            # print('It took {}'.format(end_time - start_time))
+
         return pop_scores
 
     def get_con_scores(self,
-                       # df_base: Dict[str, List[str]],
-                       # tf: Dict[str, Dict[str, int]],
-                       # tf_base: Dict[str, Dict[str, int]],
-                       # dl: Dict[str, Union[int, float]]
                        word_distr: word_distr_type
                        ) -> Dict[str, float]:
         """Get the concentration scores for all terms in clusters.
@@ -197,7 +151,6 @@ class Scorer:
             df_base: The document frequencies of the terms in parent-
                 corpus. Form: {term-id: frequency})
         """
-        # bm25_scores = self.get_bm25_scores(tf, tf_base, dl)
         bm25_scores = self.get_bm25_scores(word_distr)
         # {term-id: {label: bm25-score}}
         bm25_scores_sum = self.sum_bm25_scores(bm25_scores)
@@ -213,9 +166,6 @@ class Scorer:
         return con_scores
 
     def get_bm25_scores(self,
-                        # tf: Dict[str, Dict[str, int]],
-                        # tf_base: Dict[str, Dict[str, int]],
-                        # dl: Dict[str, Union[int, float]]
                         word_distr: word_distr_type
                         ) -> Dict[str, Dict[int, float]]:
         """Get the bm25 scores for all terms in clusters.
@@ -238,22 +188,22 @@ class Scorer:
         k1 = 1.2
         b = 0.5
         multiplier = 3
-        # len_pseudo_docs = self.get_len_pseudo_docs(tf)  # {label: len}
         len_pseudo_docs = self.get_len_pseudo_docs(word_distr)  # {label: len}
-        # tf = self.get_tf(tf)  # {term-id: {pseudo_doc-id/label: tf}}
         avgdl = mean(list(len_pseudo_docs.values()))
+
         for label, clus in self.clusters.items():
             pseudo_doc = self.subcorpora[label]
-            # tf_pseudo_doc = self.get_tf_pseudo_doc(pseudo_doc, tf_base)
             tf_pseudo_doc = self.get_tf_pseudo_doc(pseudo_doc, clus, word_distr)
             # {term-id: tf}
             len_pseudo_doc = len_pseudo_docs[label]
+
             for term_id in clus:
                 tf_td = tf_pseudo_doc[term_id]  # tf_term_doc
                 numerator = idf[term_id]*(tf_td*(k1+1))
                 denominator = (tf_td+k1*(1-b+b*(len_pseudo_doc/avgdl)))
                 bm25_score = numerator/denominator
                 bm25_scores[term_id][label] = bm25_score*multiplier
+
         return bm25_scores
 
     def get_idf_scores(self,
@@ -287,7 +237,6 @@ class Scorer:
         return idf
 
     def form_pseudo_docs_bag_of_words(self,
-                                      # tf: Dict[str, Dict[str, int]]
                                       word_distr: word_distr_type
                                       ) -> Dict[int, Set[str]]:
         """Form bag of words pseudo docs.
@@ -304,9 +253,6 @@ class Scorer:
             for doc_id in sc:
                 s = set([term_id for term_id in word_distr[doc_id] if term_id != -1])
                 pd_bof[label].union(s)
-                # if doc_id in tf:
-                #     s = set([term_id for term_id in tf[doc_id]])
-                #     pd_bof[label].union(s)
         return pd_bof
 
     @staticmethod
@@ -335,14 +281,12 @@ class Scorer:
         """
         len_pseudo_docs = {}
         for label, sc in self.subcorpora.items():
-            # len_pseudo_docs[label] = sum(dl[doc_id] for doc_id in sc)
             len_pseudo_docs[label] = sum(word_distr[doc_id][-1] for doc_id in sc)
         return len_pseudo_docs
 
     @staticmethod
     def get_tf_pseudo_doc(pseudo_doc: Set[str],
                           cluster: Set[str],
-                          # tf_base: Dict[str, Dict[str, int]]
                           word_distr: word_distr_type
                           )-> Dict[str, int]:
         """Get term frequencies for the given pseudo-document.
@@ -359,13 +303,6 @@ class Scorer:
             {term_id: frequency}
         """
         tf_pseudo_doc = defaultdict(int)
-        # for doc_id in pseudo_doc:
-        #     # for term_id in tf_base[doc_id]:
-        #     for term_id in cluster:
-        #         # tf_pseudo_doc[term_id] += tf_base[doc_id][term_id]
-        #         freqs = word_distr[doc_id].get(term_id)
-        #         if freqs:
-        #             tf_pseudo_doc[term_id] += freqs[0]
         for doc_id in pseudo_doc:
             for term_id in word_distr[doc_id]:
                 if term_id in cluster:
@@ -396,127 +333,6 @@ class Scorer:
 
         return term_scores
 
-    # def get_tf(self,
-    #            cluster: cluster_type,
-    #            corpus: corpus_type
-    #            ) -> Dict[str, int]:
-    #     """Get term frequency of terms in the cluster for the corpus.
-    #
-    #     Args:
-    #         cluster: A set of term-ids.
-    #         corpus: A list of document-ids and their documents.
-    #     Return:
-    #         A dictionary mapping each term-id in the cluster to it's
-    #         frequency in the corpus.
-    #     """
-    #     tf_dict = defaultdict(int)
-    #     for id_, doc in corpus:
-    #         for sent in doc:
-    #             for word in sent:
-    #                 for term_id in cluster:
-    #                     if term_id == word:
-    #                         tf_dict[term_id] += 1
-    #     return tf_dict
-
-    # def calc_term_score(self,
-    #                     term_id: str,
-    #                     cluster_id: int,
-    #                     top_level=False
-    #                     ) -> float:
-    #     if top_level:
-    #         score = self.calc_top_level_score(term_id, cluster_id)
-    #     else:
-    #         score = self.calc_gen_score(term_id, cluster_id)
-    #
-    #     return score
-
-    # def calc_top_level_score(self, term_id: str, cluster_id: int) -> float:
-    #     """Calculate the term score on the top level of the taxonomy.
-    #
-    #     Args:
-    #         term_id: The id of the term for which the score is
-    #             calculated.
-    #         cluster_id: The id of the cluster for which the term score
-    #             is calculated.
-    #     Return:
-    #         The score.
-    #     """
-    #     pop = self.get_pop(term_id)
-    #     con = self.get_con(term_id, cluster_id)
-    #     return sqrt(pop*con)
-
-    # def calc_gen_score(self, term_id: str, cluster_id: int) -> float:
-    #     """Calculate the term score in the general case (not top level).
-    #
-    #     The term score is calculated as following:
-    #     score(t, D_k) = sqrt(pop(t, D_k)*con(t, D_k)*hyp(t, D_k))
-    #
-    #     Args:
-    #         term_id: The id of the term for which the score is
-    #             calculated.
-    #         cluster_id: The id of the cluster for which the term score
-    #             is calculated.
-    #     Return:
-    #         The score.
-    #     """
-    #     pop = self.get_pop(term_id)
-    #     con = self.get_con(term_id, cluster_id)
-    #     hyp = self.get_hyp(term_id, cluster_id)
-    #     return sqrt(pop*con*hyp)
-
-    # def get_pop(self, term_id: str) -> float:
-    #     """Get the popularity of the term in the cluster corpus.
-    #
-    #     For the set of documents belonging to the cluster-id, calculate:
-    #     pop(t, S_k) = log(tf(t, D_k)+1)/log(tf(D_k))
-    #     where tf(D_k) denotes the total number of tokens in the cluster
-    #     corpus D_k and tf(t, D_k) denotes the term frequency of term t
-    #     in the cluster corpus D_k.
-    #
-    #     Args:
-    #         term_id: The id of the term to be scored.
-    #         cluster_id: The id of the cluster for which the term is
-    #         to be scored.
-    #     Return:
-    #         The popularity score.
-    #     """
-    #     numerator = log(self.tf_topic_corpus[term_id]+1)
-    #     denominator = log(self.tf_parent_corpus[term_id])
-    #     return numerator/denominator
-
-    # def get_con(self, term_id: str, cluster_id: int) -> float:
-    #     """Get the concentration of the term in the cluster corpus.
-    #
-    #     For the set of documents belonging to the cluster-id calculate:
-    #     con(t, S_k) = exp(rel(t, D_k))/(1+sum(exp(rel(t, D_1...D_n))))
-    #     where rel(t, D_k) denotes the bm25-relevancy of term t for the
-    #     cluster corpus D_k.
-    #     """
-    #     numerator = exp(self.get_bm25(term_id, cluster_id))
-    #     rel_scores = [exp(self.get_bm25(term_id, id_))
-    #                   for id_ in self.cluster_ids]
-    #     denominator = 1+sum(rel_scores)
-    #     return numerator/denominator
-
-    # def get_hyp(self, term_id: str, cluster_id: int) -> float:
-    #     """Get the hyponym score of the term for the cluster.
-    #
-    #     Given the labels of the parent/hypernym-topics calculate how
-    #     close the term is to the hyponym projection of the hypernyms.
-    #     The closeness projection is weighted with the score of the
-    #     corresponding hypernym.
-    #     """
-    #     parent_clus_id = self.get_parent_cluster(cluster_id)
-    #     parent_label_ids, parent_label_scores = self.get_labels(
-    #           parent_clus_id)
-    #     projections = [self.get_projection(idx) for idx in parent_label_ids]
-    #     term_vec = self.get_vec(term_id)
-    #     similarities = [self.get_sim(pj, term_vec) for pj in projections]
-    #     sim_scores = []
-    #     for i in range(len(similarities)):
-    #         sim_scores.append(similarities[i]*parent_label_scores[i])
-    #     return sum(sim_scores)
-
     @staticmethod
     def get_sim(v1: Iterator[float], v2: Iterator[float]) -> float:
         """Calcualte the consine similarity between vectors v1 and v2.
@@ -528,12 +344,3 @@ class Scorer:
             The cosine similarity.
         """
         return 1-cosine(v1, v2)
-
-    # def get_term_scores(self) -> Dict[str, Tuple[float, float]]:
-    #     """Get the term scores for all the terms in the given clusters.
-    #
-    #     Return:
-    #         A dictionary mapping each term-id to a tuple of the form:
-    #         (popularity, concentration)
-    #     """
-    #     pass
