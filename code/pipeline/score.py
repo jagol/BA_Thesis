@@ -23,11 +23,13 @@ from corpus import *
 
 # Type of a cluster as a set of term-ids.
 cluster_type = Set[str]
+cluster_centers_type = Dict[int, List[float]]
 # Type of a corpus as a list of tuples (doc_id, doc) where the document
 # is a list of sentences which is a list of words.
 corpus_type = List[Tuple[int, List[List[str]]]]
 # {doc-id: {word-id: (term-freq, tfidf)}} doc-length is at word-id -1
-word_distr_type = DefaultDict[int, DefaultDict[int, Union[Tuple[int, int], int]]]
+word_distr_type = DefaultDict[int, DefaultDict[int, Union[Tuple[int, int],
+                                                          int]]]
 
 # ----------------------------------------------------------------------
 
@@ -38,20 +40,17 @@ class Scorer:
                  clusters: Dict[int, cluster_type],
                  cluster_centers: Dict[int, List[float]],
                  subcorpora: Dict[int, Set[str]],
-                 # parent_corpus: Set[int],
-                 # path_base_corpus: str,
                  level: int
                  ) -> None:
-        """Initialize a Scorer object. Precompute all term scores.
+        """Initialize a Scorer object.
 
         Args:
             clusters: A list of clusters. Each cluster is a set of
                 term-ids.
+            cluster_centers: A dict mapping the cluster-id to it's
+                cluster-center.
             subcorpora: Maps each cluster label to the relevant doc-ids.
-        (Old Args:
-            parent_corpus: The doc-ids of the document, that make up the
-                parent corpus (the corpus, to which the cluster belongs).
-            path_base_corpus: The path to the original corpus file.)
+            level: Level in the taxonomy. Root is level 0.
         """
         self.clusters = clusters
         self.cluster_centers = cluster_centers
@@ -65,10 +64,9 @@ class Scorer:
         """For all terms, compute and get popularity and concentration.
 
         Args:
-            tf: The term frequencies of the terms in parent-corpus.
-                Form: {doc-id: {term-id: frequency}}
-            tf_base:
-            dl: The document lengts. Form: {doc-id: length}
+            word_distr: Description at the top of the file in
+                type-definitions.
+            df: The document frequencies of terms in the base corpus.
 
         Return:
             A dictionary mapping each term-id a tuple containing the
@@ -89,7 +87,7 @@ class Scorer:
         return term_scores
 
     def get_pop_scores(self,
-                       word_distr: Dict[int, Dict[int, Union[Tuple[int, int], int]]],
+                       word_distr: word_distr_type,
                        df: Dict[int, List[int]]
                        ) -> Dict[str, float]:
         """Get the popularity scores for all terms in clusters.
@@ -97,20 +95,14 @@ class Scorer:
         For a given cluster (init) and given subcorpora for each cluster
         (init) calculate the popularity.
 
-        for label, clus in self.clusters.items():
-            subcorp = self.subcorpora[label]
-            num_tokens = sum([word_distr[doc_id][-1] for doc_id in subcorp])
-            for term_id in clus:
-                num_occurences = sum([word_distr[doc_id][term_id] for doc_id in subcorp if term_id in word_distr[doc_id])
-
         Args:
-            tf: The term frequencies of the terms in parent-corpus.
-                Form: {doc-id: {term-id: frequency}}
-            dl: The document lengths. Form: {doc-id: length}
+            word_distr: Description at the top of the file in
+                type-definitions.
+            df: df: The document frequencies of terms in the base corpus.
 
         Return:
             A dictionary mapping each term-id the terms popularity.
-            Form: {term-id: (popularity, concentration)}
+            Form: {term-id: popularity}
         """
         pop_scores = {}
         for label, clus in self.clusters.items():
@@ -139,17 +131,12 @@ class Scorer:
         """Get the concentration scores for all terms in clusters.
 
         Args:
-            tf: The term frequencies of the terms in parent-corpus.
-                Form: {doc-id: {term-id: frequency}}
-            tf_base:
-            dl: The document lengts. Form: {doc-id: length}
+            word_distr: Description at the top of the file in
+                type-definitions.
 
         Return:
             A dictionary mapping each term-id the terms concentration.
             Form: {term-id: concentration}
-        (Old Args:
-            df_base: The document frequencies of the terms in parent-
-                corpus. Form: {term-id: frequency})
         """
         bm25_scores = self.get_bm25_scores(word_distr)
         # {term-id: {label: bm25-score}}
@@ -174,14 +161,12 @@ class Scorer:
         https://en.wikipedia.org/wiki/Okapi_BM25
 
         Args:
-            tf: The term frequencies of the terms in parent-corpus.
-                Form: {doc-id: {term-id: frequency}}
-            tf_base:
-            dl: The document lengts. Form: {doc-id: length}
+            word_distr: Description at the top of the file in
+                type-definitions.
 
         Return:
             A mapping of term's ids to their bm25 score in the form:
-            {term-id: {label: bm25-score}}
+            {term-id: {clus-label: bm25-score}}
         """
         bm25_scores = defaultdict(dict)
         idf = self.get_idf_scores(word_distr)  # {term-id: idf}
@@ -207,7 +192,6 @@ class Scorer:
         return bm25_scores
 
     def get_idf_scores(self,
-                       # tf: Dict[str, Dict[str, int]]
                        word_distr: word_distr_type
                        ) -> Dict[str, float]:
         """Get idf scores for terms in clusters and pseudo docs.
@@ -215,15 +199,9 @@ class Scorer:
         idf(t, D) = log(N/|d e D: t e d|)
         There are 5 pseudo-docs, so N = |D| = 5.
 
-        Method:
-        Form a bag of words representation for each pseudo-document ->
-            {pseudo-doc-label: set of all term-ids in the pseudo-doc}
-        Calc df by counting in how many pseudo-docs a term appears.
-        Calc idf.
-
         Args:
-            tf: The term frequencies of the terms in parent-corpus.
-                Form: {doc-id: {term-id: frequency}}
+            word_distr: Description at the top of the file in
+                type-definitions.
         Return:
             {term_id: idf_score}
         """
@@ -242,8 +220,8 @@ class Scorer:
         """Form bag of words pseudo docs.
 
         Args:
-            tf: The term frequencies of the terms in parent-corpus.
-                Form: {doc-id: {term-id: frequency}}
+            word_distr: Description at the top of the file in
+                type-definitions.
         Return:
             {label: Bag of document words}
         """
@@ -271,10 +249,13 @@ class Scorer:
         return bm25_scores_sum
 
     def get_len_pseudo_docs(self,
-                            # dl: Dict[str, Union[int, float]]
                             word_distr: word_distr_type
                             ) -> Dict[int, int]:
         """Get the length of pseudo-docs subcorpora.
+
+        Args:
+            word_distr: Description at the top of the file in
+                type-definitions.
 
         Return:
             {label: length}
@@ -297,8 +278,9 @@ class Scorer:
 
         Args:
             pseudo_doc: A set of document ids.
-            tf_base: The term frequencies of the terms in the base-corpus.
-                Form: {doc-id: {term-id: frequency}}
+            cluster: A set of term-ids.
+            word_distr: Description at the top of the file in
+                type-definitions.
         Return:
             {term_id: frequency}
         """
@@ -317,7 +299,6 @@ class Scorer:
         Return:
             A dict mapping the term-id to concentration and popularity.
         """
-        df = {}  # {term-id: list of doc-ids}
         term_scores = defaultdict(list)
         for label, clus in self.clusters.items():
             subcorp = self.subcorpora[label]
