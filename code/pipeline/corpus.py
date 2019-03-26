@@ -342,7 +342,10 @@ def cosine_similarities(vector, matrix):
 
 def calc_sims_new_way(topic_emb, doc_embs, topic_label, doc_topic_sims):
     matrix, doc_ids = get_matrix(doc_embs)
+    del doc_embs
     sim_matrix = cosine_similarities(topic_emb, matrix)
+    del matrix
+    del topic_emb
     matrix_to_dict(sim_matrix, doc_ids, topic_label, doc_topic_sims)
 
 
