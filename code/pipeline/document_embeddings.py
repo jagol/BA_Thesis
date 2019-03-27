@@ -42,21 +42,37 @@ class DocEmbedder:
         Output:
             A Keyed Vector file mapping each doc-id to its embedding.
         """
+        self.embed_token_docs()
+        self.embed_lemma_docs()
+
+    def embed_token_docs(self):
+        """Compute token document embeddings.
+
+        Output:
+            A Keyed Vector file mapping each doc-id to its embedding.
+        """
         print('Calculate token w2v embeddings...')
         self._embed_docs(self.path_term_embs_token_w2v,
                          self.path_token_term_idxs,
                          self.path_tfidf_tokens,
                          self.path_doc_embs_token_w2v)
-        print('Calculate lemma w2v embeddings...')
-        self._embed_docs(self.path_term_embs_lemma_w2v,
-                         self.path_lemma_term_idxs,
-                         self.path_tfidf_lemmas,
-                         self.path_doc_embs_lemma_w2v)
         print('Calculate token glove embeddings...')
         self._embed_docs(self.path_term_embs_token_glove,
                          self.path_token_term_idxs,
                          self.path_tfidf_tokens,
                          self.path_doc_embs_token_glove)
+
+    def embed_lemma_docs(self):
+        """Compute lemma document embeddings.
+
+        Output:
+            A Keyed Vector file mapping each doc-id to its embedding.
+        """
+        print('Calculate lemma w2v embeddings...')
+        self._embed_docs(self.path_term_embs_lemma_w2v,
+                         self.path_lemma_term_idxs,
+                         self.path_tfidf_lemmas,
+                         self.path_doc_embs_lemma_w2v)
         print('Calculate lemma glove embeddings...')
         self._embed_docs(self.path_term_embs_lemma_glove,
                          self.path_lemma_term_idxs,
