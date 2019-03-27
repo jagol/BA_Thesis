@@ -22,7 +22,7 @@ from corpus import *
 # type definitions
 
 # Type of a cluster as a set of term-ids.
-cluster_type = Set[str]
+cluster_type = Set[int]
 cluster_centers_type = Dict[int, List[float]]
 # Type of a corpus as a list of tuples (doc_id, doc) where the document
 # is a list of sentences which is a list of words.
@@ -39,7 +39,7 @@ class Scorer:
     def __init__(self,
                  clusters: Dict[int, cluster_type],
                  cluster_centers: Dict[int, List[float]],
-                 subcorpora: Dict[int, Set[str]],
+                 subcorpora: Dict[int, Set[int]],
                  level: int
                  ) -> None:
         """Initialize a Scorer object.
@@ -60,7 +60,7 @@ class Scorer:
     def get_term_scores(self,
                         word_distr: word_distr_type,
                         df: Dict[int, List[int]]
-                        ) -> Dict[str, Tuple[float, float]]:
+                        ) -> Dict[int, Tuple[float, float]]:
         """For all terms, compute and get popularity and concentration.
 
         Args:
@@ -89,7 +89,7 @@ class Scorer:
     def get_pop_scores(self,
                        word_distr: word_distr_type,
                        df: Dict[int, List[int]]
-                       ) -> Dict[str, float]:
+                       ) -> Dict[int, float]:
         """Get the popularity scores for all terms in clusters.
 
         For a given cluster (init) and given subcorpora for each cluster
@@ -127,7 +127,7 @@ class Scorer:
 
     def get_con_scores(self,
                        word_distr: word_distr_type
-                       ) -> Dict[str, float]:
+                       ) -> Dict[int, float]:
         """Get the concentration scores for all terms in clusters.
 
         Args:
@@ -177,8 +177,8 @@ class Scorer:
         avgdl = mean(list(len_pseudo_docs.values()))
 
         for label, clus in self.clusters.items():
-            pseudo_doc = self.subcorpora[label]
-            tf_pseudo_doc = self.get_tf_pseudo_doc(pseudo_doc, clus, word_distr)
+            pseud_doc = self.subcorpora[label]
+            tf_pseudo_doc = self.get_tf_pseudo_doc(pseud_doc, clus, word_distr)
             # {term-id: tf}
             len_pseudo_doc = len_pseudo_docs[label]
 
@@ -229,7 +229,8 @@ class Scorer:
         for label, sc in self.subcorpora.items():
             pd_bof[label] = set()
             for doc_id in sc:
-                s = set([term_id for term_id in word_distr[doc_id] if term_id != -1])
+                s = set([term_id for term_id in word_distr[doc_id]
+                         if term_id != -1])
                 pd_bof[label].union(s)
         return pd_bof
 
@@ -262,12 +263,13 @@ class Scorer:
         """
         len_pseudo_docs = {}
         for label, sc in self.subcorpora.items():
-            len_pseudo_docs[label] = sum(word_distr[doc_id][-1] for doc_id in sc)
+            len_pseudo_doc = sum(word_distr[doc_id][-1] for doc_id in sc)
+            len_pseudo_docs[label] = len_pseudo_doc
         return len_pseudo_docs
 
     @staticmethod
-    def get_tf_pseudo_doc(pseudo_doc: Set[str],
-                          cluster: Set[str],
+    def get_tf_pseudo_doc(pseudo_doc: Set[int],
+                          cluster: Set[int],
                           word_distr: word_distr_type
                           )-> Dict[str, int]:
         """Get term frequencies for the given pseudo-document.
@@ -291,28 +293,28 @@ class Scorer:
                     tf_pseudo_doc[term_id] += word_distr[doc_id][term_id][0]
         return tf_pseudo_doc
 
-    def get_term_scores_efficient(self,
-                                  word_distr: word_distr_type
-                                  ) -> Dict[str, Tuple[float, float]]:
-        """More efficient version of get_term_scores.
-
-        Return:
-            A dict mapping the term-id to concentration and popularity.
-        """
-        term_scores = defaultdict(list)
-        for label, clus in self.clusters.items():
-            subcorp = self.subcorpora[label]
-            tf_Dk = sum([word_distr[doc_id][-1] for doc_id in subcorp])
-            for term_id in clus:
-                tf_t_Dk = 0
-                for doc_id in subcorp:
-                    if term_id in word_distr[doc_id]:
-                        tf_t_Dk += word_distr[doc_id][term_id][0]
-
-                pop_score = log(tf_t_Dk + 1) / log(tf_Dk)
-                term_scores[term_id].append(pop_score)
-
-        return term_scores
+    # def get_term_scores_efficient(self,
+    #                               word_distr: word_distr_type
+    #                               ) -> Dict[int, Tuple[float, float]]:
+    #     """More efficient version of get_term_scores.
+    #
+    #     Return:
+    #         A dict mapping the term-id to concentration and popularity.
+    #     """
+    #     term_scores = defaultdict(list)
+    #     for label, clus in self.clusters.items():
+    #         subcorp = self.subcorpora[label]
+    #         tf_Dk = sum([word_distr[doc_id][-1] for doc_id in subcorp])
+    #         for term_id in clus:
+    #             tf_t_Dk = 0
+    #             for doc_id in subcorp:
+    #                 if term_id in word_distr[doc_id]:
+    #                     tf_t_Dk += word_distr[doc_id][term_id][0]
+    #
+    #             pop_score = log(tf_t_Dk + 1) / log(tf_Dk)
+    #             term_scores[term_id].append(pop_score)
+    #
+    #     return term_scores
 
     @staticmethod
     def get_sim(v1: Iterator[float], v2: Iterator[float]) -> float:
