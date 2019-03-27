@@ -7,10 +7,12 @@ from collections import defaultdict
 from utility_functions import get_sim, get_config
 from numpy import mean
 import numpy as np
-import pdb
 
+
+doc_distr_type = DefaultDict[int, Union[Tuple[int, int], int]]
+word_distr_type = DefaultDict[int, doc_distr_type]
 # {doc-id: {word-id: (term-freq, tfidf)}} doc-length is at word-id -1
-word_distr_type = DefaultDict[int, DefaultDict[int, Union[Tuple[int, int], int]]]
+
 
 class Corpus:
 
@@ -100,14 +102,14 @@ class Corpus:
         return [token for sent in doc for token in sent]
 
 
-def get_relevant_docs(term_ids: Set[str],
-                      base_corpus: Set[str],
+def get_relevant_docs(  # term_ids: Set[int],
+                      # base_corpus: Set[int],
                       n: int,
-                      tfidf_base: Dict[str, Dict[str, float]],
-                      doc_embeddings: Dict[str, List[float]],
+                      # tfidf_base: Dict[int, Dict[int, float]],
+                      doc_embeddings: Dict[int, List[float]],
                       topic_embedding: List[float],
-                      only_tfidf: bool=False
-                      ) -> Set[str]:
+                      # only_tfidf: bool=False
+                      ) -> Set[int]:
     """Generate a pseudo corpus (relevant_docs) for given set of terms.
 
     Find the documents for the pseudo-corpus by calculating a document
@@ -137,9 +139,9 @@ def get_relevant_docs(term_ids: Set[str],
         Set of indices which denote the documents beloning to the pseudo
         corpus.
     """
-    if only_tfidf:
-        return get_relevant_docs_only_tfidf(
-            term_ids, base_corpus, n, tfidf_base)
+    # if only_tfidf:
+    #     return get_relevant_docs_only_tfidf(
+    #         term_ids, base_corpus, n, tfidf_base)
 
     doc_sims = []
     for doc_id, doc_emb in doc_embeddings.items():
@@ -149,11 +151,7 @@ def get_relevant_docs(term_ids: Set[str],
     return set([t[0] for t in top_n])
 
 
-def get_doc_embeddings(# tfidf_base: Dict[str, Dict[str, float]],
-                       path_out: str
-                       # word_distr: word_distr_type,
-                       # term_ids_to_embs: Dict[str, List[float]]
-                       ) -> Dict[str, Any]:
+def get_doc_embeddings(path_out: str) -> Dict[int, List[float]]:
     """Compute document embeddings using term-embeddings and tfidf.
 
     Compute document embeddings though average of tfidf weighted term
@@ -164,31 +162,10 @@ def get_doc_embeddings(# tfidf_base: Dict[str, Dict[str, float]],
     where t is a term in d.
 
     Args:
-        tfidf_base: The tfidf values for the terms in the entire
-            base_corpus (global).
-        term_ids_to_embs: Maps term-ids to their global embeddings.
+        path_out: Path to the output directory.
     Return:
         doc_embeddings: {doc-id: embedding}
     """
-    # doc_embeddings = {}
-    # # for doc_id in tfidf_base:
-    # for doc_id in word_distr:
-    #     doc_emb = []
-    #     # tfidf_doc = tfidf_base[doc_id]
-    #     word_distr_doc = word_distr[doc_id]
-    #     # for term_id in tfidf_doc:
-    #     # If only -1 in doc-dict then skip document.
-    #     if len(word_distr_doc) == 1:
-    #         continue
-    #     for term_id in word_distr_doc:
-    #         if term_id == -1:
-    #             continue
-    #         term_emb = term_ids_to_embs[term_id]
-    #         # tfidf = tfidf_base[doc_id][term_id]
-    #         tfidf = word_distr_doc[term_id][1]
-    #         term_emb_weighted = [tfidf*d for d in term_emb]
-    #         doc_emb.append(term_emb_weighted)
-    #     doc_embeddings[doc_id] = mean(doc_emb, axis=0)
     config = get_config()
     lemmatized = config['lemmatized']
     emb_type = config['embeddings']
@@ -199,6 +176,8 @@ def get_doc_embeddings(# tfidf_base: Dict[str, Dict[str, float]],
         elif emb_type == 'GloVe':
             path_doc_embs = os.path.join(
                 path_out, 'embeddings/doc_embs_token_GloVe.pickle')
+        else:
+            raise Exception('Error! Embedding type not recognized.')
     else:
         if emb_type == 'Word2Vec':
             path_doc_embs = os.path.join(
@@ -206,12 +185,14 @@ def get_doc_embeddings(# tfidf_base: Dict[str, Dict[str, float]],
         elif emb_type == 'GloVe':
             path_doc_embs = os.path.join(
                 path_out, 'embeddings/doc_embs_lemma_GloVe.pickle')
+        else:
+            raise Exception('Error! Embedding type not recognized.')
     doc_embeddings = pickle.load(open(path_doc_embs, 'rb'))
     return doc_embeddings
 
 
-def get_topic_embeddings(clusters: Dict[int, Set[str]],
-                         term_ids_to_embs: Dict[str, List[float]]
+def get_topic_embeddings(clusters: Dict[int, Set[int]],
+                         term_ids_to_embs: Dict[int, List[float]]
                          )-> Dict[int, Any]:
     """Compute embeddings for topics/clusters by averaging terms-embs.
 
@@ -228,61 +209,61 @@ def get_topic_embeddings(clusters: Dict[int, Set[str]],
     return topic_embeddings
 
 
-def get_relevant_docs_only_tfidf(term_ids: Set[str],
-                                 base_corpus: Set[str],
-                                 n: int,
-                                 tfidf_base: Dict[str, Dict[str, float]]
-                                 ) -> Set[str]:
-    """Generate a pseudo corpus (relevant_docs) for given set of terms.
+# def get_relevant_docs_only_tfidf(term_ids: Set[int],
+#                                  base_corpus: Set[int],
+#                                  n: int,
+#                                  tfidf_base: Dict[int, Dict[int, float]]
+#                                  ) -> Set[int]:
+#     """Generate a pseudo corpus (relevant_docs) for given set of terms.
+#
+#     This is the tfidf-only version without usage of embeddings.
+#
+#     Find the documents of the corpus using tfidf. The general idea is:
+#     Those documents, for which the given terms are important, belong
+#     to the corpus. Thus, for each of the given terms, get the tfidf
+#     score in the base corpus (corpus from which the most important
+#     documents for the pseudo corpus are selected). Then get the top n
+#     documents, for which the terms are most important. The importance
+#     score for a document d is: score(d) = sum(tfidf(t1...tn, d))
+#     where t1...tn denotes the set of given terms.
+#
+#     Args:
+#         term_ids: The lemma-ids of the terms that define the corpus.
+#         base_corpus: The document ids, that form the document collection
+#             from which to choose from.
+#         n: The top n scored documents are chosen for the pseudo corpus.
+#             n should be chosen as num_docs / n_clus
+#             where num_docs denotes the number of documents in the base
+#             corpus and n_clus denotes the number of clusters (or just
+#             the number of parts) the base corpus is divided into.
+#         tfidf_base: The tfidf values for the terms in the entire
+#             base_corpus.
+#     Return:
+#         Set of indices which denote the documents beloning to the pseudo
+#         corpus.
+#     """
+#     tfidf_doc = {}
+#     # Calculate document scores.
+#     for doc_id in base_corpus:
+#         vals = []  # The importances of a (cluster)terms for a document.
+#         for term_id in term_ids:
+#             try:
+#                 vals.append(tfidf_base[doc_id][term_id])
+#             except KeyError:
+#                 pass
+#         tfidf_doc[doc_id] = sum(vals)
+#
+#     # Rank documents by score.
+#     ranked_docs = sorted(
+#         tfidf_doc.items(), key=lambda tpl: tpl[1], reverse=True)
+#
+#     # Return only the ids of the n highest scored documents.
+#     return set(d[0] for d in ranked_docs[:n])
 
-    This is the tfidf-only version without usage of embeddings.
 
-    Find the documents of the corpus using tfidf. The general idea is:
-    Those documents, for which the given terms are important, belong
-    to the corpus. Thus, for each of the given terms, get the tfidf
-    score in the base corpus (corpus from which the most important
-    documents for the pseudo corpus are selected). Then get the top n
-    documents, for which the terms are most important. The importance
-    score for a document d is: score(d) = sum(tfidf(t1...tn, d))
-    where t1...tn denotes the set of given terms.
-
-    Args:
-        term_ids: The lemma-ids of the terms that define the corpus.
-        base_corpus: The document ids, that form the document collection
-            from which to choose from.
-        n: The top n scored documents are chosen for the pseudo corpus.
-            n should be chosen as num_docs / n_clus
-            where num_docs denotes the number of documents in the base
-            corpus and n_clus denotes the number of clusters (or just
-            the number of parts) the base corpus is divided into.
-        tfidf_base: The tfidf values for the terms in the entire
-            base_corpus.
-    Return:
-        Set of indices which denote the documents beloning to the pseudo
-        corpus.
-    """
-    tfidf_doc = {}
-    # Calculate document scores.
-    for doc_id in base_corpus:
-        vals = []  # The importances of a (cluster)terms for a document.
-        for term_id in term_ids:
-            try:
-                vals.append(tfidf_base[doc_id][term_id])
-            except KeyError:
-                pass
-        tfidf_doc[doc_id] = sum(vals)
-
-    # Rank documents by score.
-    ranked_docs = sorted(
-        tfidf_doc.items(), key=lambda tpl: tpl[1], reverse=True)
-
-    # Return only the ids of the n highest scored documents.
-    return set(d[0] for d in ranked_docs[:n])
-
-
-def get_doc_topic_sims(doc_embeddings: Dict[str, List[float]],
+def get_doc_topic_sims(doc_embeddings: Dict[int, List[float]],
                        topic_embeddings: Dict[int, List[float]]
-                       ) -> Dict[str, Dict[int, float]]:
+                       ) -> Dict[int, List[float]]:
     """Get the similarities between topic and document vectors.
 
     Args:
@@ -298,9 +279,9 @@ def get_doc_topic_sims(doc_embeddings: Dict[str, List[float]],
     return doc_topic_sims
 
 
-def get_doc_topic_sims_matrix_mul(doc_embeddings: Dict[str, List[float]],
+def get_doc_topic_sims_matrix_mul(doc_embeddings: Dict[int, List[float]],
                                   topic_embeddings: Dict[int, List[float]]
-                                  ) -> Dict[str, Dict[int, float]]:
+                                  ) -> Dict[int, List[float]]:
     """Get the similarities between topic and document vectors.
 
     Faster version using matrix multplication.
@@ -349,9 +330,9 @@ def calc_sims_new_way(topic_emb, doc_embs, topic_label, doc_topic_sims):
     matrix_to_dict(sim_matrix, doc_ids, topic_label, doc_topic_sims)
 
 
-def get_topic_docs(doc_topic_sims: Dict[str, Dict[int, float]],
+def get_topic_docs(doc_topic_sims: Dict[int, List[float]],
                    m: Union[int, None]=None
-                   ) -> Dict[int, Set[str]]:
+                   ) -> Dict[int, Set[int]]:
     """Get the topic/cluster for each document.
 
     Match all documents to a topic by choosing the max similarity.
@@ -400,7 +381,7 @@ def get_topic_with_max_sim(topic_sims: List[float]) -> int:
     return topic
 
 
-def get_tf_corpus(corpus: Set[str],
+def get_tf_corpus(corpus: Set[int],
                   path_tf: str
                   ) -> Dict[int, Dict[int, int]]:
     """Get the term frequencies of a corpus.
@@ -420,8 +401,8 @@ def get_tf_corpus(corpus: Set[str],
     return tf_corpus
 
 
-def get_df_corpus(term_ids: Set[str],
-                  corpus: Set[str],
+def get_df_corpus(term_ids: Set[int],
+                  corpus: Set[int],
                   path_df: str
                   ) -> DefaultDict[int, int]:
     """Get the document frequencies of a corpus.
@@ -446,12 +427,11 @@ def get_df_corpus(term_ids: Set[str],
     return df_corpus
 
 
-def get_tfidf(term_ids: Set[str],
-              corpus: Set[str],
+def get_tfidf(term_ids: Set[int],
+              corpus: Set[int],
               path_tf: str,
               path_df: str,
-              key: str = 'doc',
-              ) -> DefaultDict[int, Dict[str, float]]:
+              ) -> DefaultDict[int, Dict[int, float]]:
     """Compute the tfidf score for the given terms in the given corpus.
 
     Args:
@@ -461,12 +441,6 @@ def get_tfidf(term_ids: Set[str],
         path_tf: Path to the frequencies of terms per document.
         path_df: Path to json-file of the form:
         {term_id: [doc term appears in]}
-        key: either 'term' or 'doc'.
-            If 'term', then the tfidf is returned in the
-            following structure: Dict[term_id, Dict[term_id, tfidf]
-            If 'doc', then the tfidf is returned in the following
-            structure: Dict[doc_id, Dict[term_id, tfidf]]
-            NOTE: at the moment the method always returns as if key='doc'
     """
     df = get_df_corpus(term_ids, corpus, path_df)  # {term_id: doc-freq}
     tf = get_tf_corpus(corpus, path_tf)  # {doc_id: term_id: frequency}
