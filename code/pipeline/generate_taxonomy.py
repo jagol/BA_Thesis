@@ -157,6 +157,7 @@ def generate_taxonomy() -> None:
                       base_corpus=base_corpus,
                       path_base_corpus_ids=path_base_corpus_ids,
                       cur_node_id=0, level=0, df_base=df_base, df=df_base,
+                      cur_repr_terms=[],
                       path_out=path_out,
                       cur_corpus=base_corpus,
                       csv_writer=csv_writer,
@@ -176,6 +177,7 @@ def rec_find_children(term_ids_local: Set[int],
                       term_ids_global: Set[int],
                       term_ids_to_embs_global: Dict[int, List[float]],
                       df_base: Dict[int, List[int]],
+                      cur_repr_terms: List[Tuple[int, float]],
                       cur_node_id: int,
                       level: int,
                       base_corpus: Set[int],
@@ -204,6 +206,8 @@ def rec_find_children(term_ids_local: Set[int],
         cur_corpus: All doc_ids of the documents in the current corpus.
         df_base: df values for all terms in the base corpus, Form:
             {term_id: [doc1, ...]}
+        cur_repr_terms: The most representative terms of the topic.
+            A list of tuples of the form: (term-id, score).
         path_out: The path to the output directory.
         csv_writer: csv-writer-object used to write taxonomy to file.
         df: Document frequencies of the form: {term-id: List of doc-ids}
@@ -252,8 +256,6 @@ def rec_find_children(term_ids_local: Set[int],
         subcorpora = get_subcorpora(cluster_centers, path_out, m=m)
         # {label: doc-ids}
 
-        print('Loading term distributions...')
-        # term_distr_base = load_term_distr()
         print('Compute term scores...')
         term_scores = get_term_scores(clusters, cluster_centers, subcorpora,
                                       term_distr_base, df, level)
@@ -292,11 +294,10 @@ def rec_find_children(term_ids_local: Set[int],
     # if len(general_terms) == 0:
     #     write_tax_to_file(cur_node_id, {}, [], csv_writer, only_id=True)
     # else:
-    for label in clusters:
-        # general_terms.sort(key=lambda t: t[1])
-        repr_terms_clus = repr_terms[label]
-        write_tax_to_file(child_ids[label], cur_node_id,
-                          repr_terms_clus, csv_writer)
+    # for label in clusters:
+    #     general_terms.sort(key=lambda t: t[1])
+    #     repr_terms_clus = repr_terms[label]
+    write_tax_to_file(cur_node_id, child_ids, cur_repr_terms, csv_writer)
 
     print('Start new recursion...')
     for label, clus in clusters.items():
@@ -306,6 +307,7 @@ def rec_find_children(term_ids_local: Set[int],
                           path_base_corpus_ids=path_base_corpus_ids,
                           cur_node_id=node_id, level=level+1, df=df_base,
                           df_base=df_base,
+                          cur_repr_terms=repr_terms[label],
                           cur_corpus=subcorpus,
                           path_out=path_out,
                           csv_writer=csv_writer,
@@ -331,9 +333,9 @@ def get_child_ids(proc_clusters: Dict[int, Set[int]]) -> Dict[int, int]:
     return child_ids
 
 
-def write_tax_to_file(node_id: int,
-                      parent_id: Union[int, None],
-                      concept_term_ids: List[Tuple[int, float]],
+def write_tax_to_file(cur_node_id: int,
+                      child_ids: Dict[int, int],
+                      repr_terms: List[Tuple[int, float]],
                       csv_writer: Any,
                       only_id: bool = False
                       ) -> None:
@@ -345,18 +347,17 @@ def write_tax_to_file(node_id: int,
     The term score is the one which got the term pushed up. (highest one)
     """
     if only_id:
-        row = [node_id, str(None)]
+        row = [cur_node_id, str(None)]
     else:
         concept_terms = []
-        for idx, score in concept_term_ids:
+        for idx, score in repr_terms:
             term = idx_to_term[idx]
             term_w_score = '{}|{}|{:.3f}'.format(idx, term, score)
             concept_terms.append(term_w_score)
-        # child_nodes = [str(v) for v in child_ids.values()]
-        row = [node_id] + [parent_id] + concept_terms
+        child_nodes = [str(c) for c in child_ids.values()]
+        row = [str(cur_node_id)] + child_nodes + concept_terms
         print('Write: {}'.format(row))
     csv_writer.writerow(row)
-    print('Written.')
 
 
 def get_subcorpora(cluster_centers: Dict[int, List[float]],
