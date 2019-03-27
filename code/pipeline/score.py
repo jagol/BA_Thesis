@@ -60,7 +60,7 @@ class Scorer:
     def get_term_scores(self,
                         word_distr: word_distr_type,
                         df: Dict[int, List[int]]
-                        ) -> Dict[int, Tuple[float, float]]:
+                        ) -> Dict[int, Tuple[float, float, float]]:
         """For all terms, compute and get popularity and concentration.
 
         Args:
@@ -82,7 +82,8 @@ class Scorer:
         for term_id in pop_scores:
             pop = pop_scores[term_id]
             con = con_scores[term_id]
-            term_scores[term_id] = (pop, con)
+            total = sqrt(pop*con)
+            term_scores[term_id] = (pop, con, total)
 
         return term_scores
 
