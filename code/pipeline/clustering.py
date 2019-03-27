@@ -9,7 +9,7 @@ from utility_functions import get_clus_config
 
 # ----------------------------------------------------------------------
 # type definitions
-data_type = List[Iterator[float]] # a list of vectors
+data_type = List[Iterator[float]]  # a list of vectors
 
 # ----------------------------------------------------------------------
 
@@ -27,9 +27,9 @@ class Clustering:
         self.compactness = None
 
     def fit(self,
-                data: List[Iterator[float]],
-                find_n: bool = False
-                ) -> Dict[str, Union[List[int],  Union[float, None]]]:
+            data: List[Iterator[float]],
+            find_n: bool = False
+            ) -> Dict[str, Union[List[int],  Union[float, None]]]:
         """Cluster the input data into n clusters.
 
         Args:
@@ -41,7 +41,7 @@ class Clustering:
             corresponds to the order of the input data.
         """
         if find_n:
-            self.n_clusters = self._get_n()
+            self.n_clusters = 5  # self._get_n()
         if self.clus_type == 'kmeans':
             self.cluster = k_means(n_clusters=self.n_clusters)
         elif self.clus_type == 'sphericalkmeans':
