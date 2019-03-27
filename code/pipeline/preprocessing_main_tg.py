@@ -1,8 +1,6 @@
 import os
-import json
-from typing import Dict, List, Set, Any
-
-from utility_functions import get_docs_tg, get_config, get_cmd_args, prep_output_dir
+from typing import Dict, Any
+from utility_functions import get_config, get_cmd_args, prep_output_dir
 from indexing import Indexer
 from frequency_analysis import FreqAnalyzer
 from embeddings import get_emb
