@@ -170,7 +170,7 @@ class FreqAnalyzer:
         'frequency_analysis/dl.json' in form of a dict: {doc_id: length}
         """
         dl = {}
-        for doc in get_docs(self.path_lemma_idx_corpus, sent_tokenized=False):
+        for doc in get_docs(self.path_token_idx_corpus, sent_tokenized=False):
             dl[self._docs_processed] = len(doc)
             self._docs_processed += 1
             self._update_cmd_counter()
