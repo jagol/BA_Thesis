@@ -144,6 +144,30 @@ def get_docs(fpath: str,
                 doc.append(line.strip('\n'))
 
 
+def get_docs_tg(fpath: str,
+                word_tokenized: bool = True,
+                sent_tokenized: bool = True
+                ) -> Generator[doc_type, None, None]:
+    """Yield each document of a corpus.
+
+    Load the corpus from a file. There is one line per document.
+    If tokenized is true, yield each document as a list of strings.
+    If not, yield each document as a string.
+
+    Args:
+        fpath: path to corpus file
+        word_tokenized: Indicate, if output should be word_tokenized.
+        sent_tokenized: Indicate, if output should be split into
+            sentences.
+    Return:
+        A generator object of documents.
+    """
+    with open(fpath, 'r', encoding='utf8') as f:
+        for line in f:
+            doc = [line.strip('\n')]
+            yield format_doc(doc, word_tokenized, sent_tokenized)
+
+
 def get_docs_list(fpath: str,
                   word_tokenized: bool,
                   sent_tokenized: bool
