@@ -76,7 +76,7 @@ class Scorer:
         print('  Get popularity scores...')
         pop_scores = self.get_pop_scores(word_distr, df)
         print('  Get concentration scores...')
-        con_scores = self.get_con_scores(word_distr)
+        con_scores = self.get_con_scores(word_distr, df)
 
         term_scores = {}
         for term_id in pop_scores:
@@ -99,7 +99,7 @@ class Scorer:
         Args:
             word_distr: Description at the top of the file in
                 type-definitions.
-            df: df: The document frequencies of terms in the base corpus.
+            df: The document frequencies of terms in the base corpus.
 
         Return:
             A dictionary mapping each term-id the terms popularity.
@@ -127,19 +127,21 @@ class Scorer:
         return pop_scores
 
     def get_con_scores(self,
-                       word_distr: word_distr_type
+                       word_distr: word_distr_type,
+                       df: Dict[int, List[int]]
                        ) -> Dict[int, float]:
         """Get the concentration scores for all terms in clusters.
 
         Args:
             word_distr: Description at the top of the file in
                 type-definitions.
+            df: The document frequencies of terms in the base corpus.
 
         Return:
             A dictionary mapping each term-id the terms concentration.
             Form: {term-id: concentration}
         """
-        bm25_scores = self.get_bm25_scores(word_distr)
+        bm25_scores = self.get_bm25_scores(word_distr, df)
         # {term-id: {label: bm25-score}}
         bm25_scores_sum = self.sum_bm25_scores(bm25_scores)
         # {term-id: sum_bm_25_scores}
@@ -154,7 +156,8 @@ class Scorer:
         return con_scores
 
     def get_bm25_scores(self,
-                        word_distr: word_distr_type
+                        word_distr: word_distr_type,
+                        df: Dict[int, List[int]]
                         ) -> Dict[str, Dict[int, float]]:
         """Get the bm25 scores for all terms in clusters.
 
@@ -164,6 +167,7 @@ class Scorer:
         Args:
             word_distr: Description at the top of the file in
                 type-definitions.
+            df: The document frequencies of terms in the base corpus.
 
         Return:
             A mapping of term's ids to their bm25 score in the form:
@@ -181,16 +185,48 @@ class Scorer:
             pseud_doc = self.subcorpora[label]
             tf_pseudo_doc = self.get_tf_pseudo_doc(pseud_doc, clus, word_distr)
             # {term-id: tf}
+            df_local = self.get_df_clus_subcorp(pseud_doc, clus, df)
+            max_df = max(df_local.keys())
             len_pseudo_doc = len_pseudo_docs[label]
 
             for term_id in clus:
+                df_term = len(df_local[term_id])
+                df_factor = log(1 + df_term, 2) / log(1 + max_df, 2)
                 tf_td = tf_pseudo_doc[term_id]  # tf_term_doc
                 numerator = idf[term_id]*(tf_td*(k1+1))
                 denominator = (tf_td+k1*(1-b+b*(len_pseudo_doc/avgdl)))
                 bm25_score = numerator/denominator
-                bm25_scores[term_id][label] = bm25_score*multiplier
+                bm25_score *= df_factor
+                bm25_score *= multiplier
+                bm25_scores[term_id][label] = bm25_score
 
         return bm25_scores
+
+    @staticmethod
+    def get_df_clus_subcorp(pseud_doc: Set[int],
+                            clus: Set[int],
+                            df: Dict[int, List[int]]
+                            ) -> Dict[int, List[int]]:
+        """Get the local document frequencies.
+
+        The local document frequencies only include terms in the current
+        cluster and documents from the current subcorpus.
+
+        Args:
+            pseud_doc: A set of document ids.
+            clus: A set of term ids.
+            df: The global document frequencies.
+        Return:
+            The local document frequencies of the form:
+            {term-id: List of doc-ids the term appears in}
+        """
+        local_df = {}
+        for term_id in clus:
+            local_df[term_id] = []
+            for doc_id in df[term_id]:
+                if doc_id in pseud_doc:
+                    local_df[term_id].append(doc_id)
+        return local_df
 
     def get_idf_scores(self,
                        word_distr: word_distr_type
