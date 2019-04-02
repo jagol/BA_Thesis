@@ -12,12 +12,12 @@ from embeddings import Embeddings, get_emb
 from clustering import Clustering
 from score import Scorer
 from utility_functions import *
-
+import pdb
 
 # Define global variables.
 node_counter = 0
 idx_to_term = {}
-max_depth = 1
+max_depth = 2
 
 """
 Insight:
@@ -157,12 +157,14 @@ def generate_taxonomy() -> None:
                       base_corpus=base_corpus,
                       path_base_corpus_ids=path_base_corpus_ids,
                       cur_node_id=0, level=0, df_base=df_base, df=df_base,
-                      cur_repr_terms=[],
+                      # cur_repr_terms=[],
                       path_out=path_out,
                       cur_corpus=base_corpus,
                       csv_writer=csv_writer,
                       term_ids_to_embs_global=term_ids_to_embs_global,
                       emb_type=emb_type)
+
+    tax_file.close()
 
     print('Done.')
 
@@ -177,7 +179,7 @@ def rec_find_children(term_ids_local: Set[int],
                       term_ids_global: Set[int],
                       term_ids_to_embs_global: Dict[int, List[float]],
                       df_base: Dict[int, List[int]],
-                      cur_repr_terms: List[Tuple[int, float]],
+                      # cur_repr_terms: List[Tuple[int, float]],
                       cur_node_id: int,
                       level: int,
                       base_corpus: Set[int],
@@ -242,9 +244,8 @@ def rec_find_children(term_ids_local: Set[int],
     i = 0
     while True:
         i += 1
-        info_msg = ' iteration {} level {} node {} '.format(i, level,
-                                                            cur_node_id)
-        print(5*'-' + info_msg + 5*'-')
+        info_msg = ' level {} node {} iteration {} '
+        print(5*'-' + info_msg.format(level, cur_node_id, i) + 5*'-')
 
         print('Cluster terms...')
         clusters = perform_clustering(term_ids_to_embs_local)
@@ -274,7 +275,7 @@ def rec_find_children(term_ids_local: Set[int],
         print('Remove terms from clusters...')
         clusters, gen_terms_clus = separate_gen_terms(clusters, term_scores)
         general_terms.extend(gen_terms_clus)
-        repr_terms = get_repr_terms(clusters, term_scores)
+        # repr_terms = get_repr_terms(clusters, term_scores)
         cluster_sizes = [len(clus) for label, clus in clusters.items()]
         print('Terms pushed up: {}'.format(len(gen_terms_clus)))
         print('Cluster_sizes: {}'.format(cluster_sizes))
@@ -283,21 +284,26 @@ def rec_find_children(term_ids_local: Set[int],
             break
         term_ids_to_embs_local = update_title(term_ids_to_embs_local, clusters)
 
+    # Start preparation of next iteration.
+    child_ids = get_child_ids(clusters)
+    print('The child ids of {} are {}'.format(cur_node_id, str(child_ids)))
+
+    # Write terms to file.
+    print('Write concept terms to file...')
+    write_pushed_up_terms_to_file(path_out, cur_node_id, general_terms)
+    write_term_scores_to_file(path_out, child_ids, clusters, term_scores)
+    write_tax_to_file(cur_node_id, child_ids, [], csv_writer)
+
     del term_scores
     del gen_terms_clus
     del term_ids_to_embs_local
 
-    # Start preparation of next iteration.
-    child_ids = get_child_ids(clusters)
-    print('The child ids of {} are {}'.format(cur_node_id, str(child_ids)))
-    print('Write concept terms to file...')
     # if len(general_terms) == 0:
     #     write_tax_to_file(cur_node_id, {}, [], csv_writer, only_id=True)
     # else:
     # for label in clusters:
     #     general_terms.sort(key=lambda t: t[1])
     #     repr_terms_clus = repr_terms[label]
-    write_tax_to_file(cur_node_id, child_ids, cur_repr_terms, csv_writer)
 
     print('Start new recursion...')
     for label, clus in clusters.items():
@@ -307,7 +313,7 @@ def rec_find_children(term_ids_local: Set[int],
                           path_base_corpus_ids=path_base_corpus_ids,
                           cur_node_id=node_id, level=level+1, df=df_base,
                           df_base=df_base,
-                          cur_repr_terms=repr_terms[label],
+                          # cur_repr_terms=repr_terms[label],
                           cur_corpus=subcorpus,
                           path_out=path_out,
                           csv_writer=csv_writer,
@@ -342,7 +348,7 @@ def write_tax_to_file(cur_node_id: int,
     """Write the current node with terms and child-nodes to file.
 
     concept_terms is a list containing tuples of the form:
-    (idx,term_score).
+    (idx, term_score).
 
     The term score is the one which got the term pushed up. (highest one)
     """
@@ -356,8 +362,58 @@ def write_tax_to_file(cur_node_id: int,
             concept_terms.append(term_w_score)
         child_nodes = [str(c) for c in child_ids.values()]
         row = [str(cur_node_id)] + child_nodes + concept_terms
-        print('Write: {}'.format(row))
+        # print('Write: {}'.format(row))
     csv_writer.writerow(row)
+
+
+def write_pushed_up_terms_to_file(path_out: str,
+                                  cur_node_id: int,
+                                  general_terms: List[Tuple[int, float]]
+                                  )-> None:
+    """Write the pushed up terms, belonging to a cluster to file.
+
+    Args:
+        path_out: Path to the output directory.
+        cur_node_id: The id of the current node.
+        general_terms: A list of terms of the form (term_id, score)
+    Output:
+        A file with name <cur_node_id>.txt with one term per line
+        of the form:
+        term_id SPACE term SPACE score NEWLINE
+    """
+    path_out = os.path.join(path_out, 'concept_terms/')
+    with open(path_out+str(cur_node_id)+'.txt', 'w', encoding='utf8') as f:
+        for term_id, score in general_terms:
+            term = idx_to_term[term_id]
+            line = '{} {} {}\n'.format(term_id, term, score)
+            f.write(line)
+
+
+def write_term_scores_to_file(path_out: str,
+                              child_ids: Dict[int, int],
+                              clusters: Dict[int, Set[int]],
+                              term_scores:Dict[int, Tuple[float, float, float]]
+                              ) -> None:
+    """Write the final term-scores for all terms, not pushed up to file.
+
+    Args:
+        path_out: The path to the output directory.
+        child_ids: The A dictionary mapping cluster labels to node ids.
+        clusters: A dictionary mapping a cluster label to a set of
+            term-ids.
+        term_scores: A dictionary mapping a term-id to a tuple of the
+            form: (pop, con, score)
+    """
+    path_out = os.path.join(path_out, 'concept_terms/')
+    for label, node_id in child_ids.items():
+        fname = '{}_scores.txt'.format(node_id)
+        fpath = os.path.join(path_out, fname)
+        with open(fpath, 'w', encoding='utf8') as f:
+            for term_id in clusters[label]:
+                score = term_scores[term_id][2]
+                term = idx_to_term[term_id]
+                line = '{} {} {}\n'.format(term_id, term, score)
+                f.write(line)
 
 
 def get_subcorpora(cluster_centers: Dict[int, List[float]],
@@ -366,6 +422,7 @@ def get_subcorpora(cluster_centers: Dict[int, List[float]],
                    ) -> Dict[int, Set[int]]:
     """Get the subcorpus for each cluster.
 
+    TODO: describe args
     Args:
         cluster_centers: ...
         path_out: ...
@@ -707,7 +764,7 @@ def get_concept_terms(clus: Set[int],
         A set of term-ids of the terms to remove.
     """
     concept_terms = []
-    # threshhold = 0.25 # According to TaxoGen.
+    # threshhold = 0.25  # According to TaxoGen.
     threshhold = 0.30
     for term_id in clus:
         score = term_scores[term_id][2]
