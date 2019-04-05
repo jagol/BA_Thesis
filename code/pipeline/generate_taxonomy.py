@@ -12,12 +12,12 @@ from embeddings import Embeddings, get_emb
 from clustering import Clustering
 from score import Scorer
 from utility_functions import *
-import pdb
+
 
 # Define global variables.
 node_counter = 0
 idx_to_term = {}
-max_depth = 2
+max_depth = 1
 
 """
 Insight:
@@ -41,10 +41,10 @@ csv:
 node_id, child1, ... child5, mostreprterm1, ... mostreprterm10
 """
 
-
 # {doc-id: {word-id: (term-freq, tfidf)}} doc-length is at word-id -1
-term_distr_type = DefaultDict[int,
-                              DefaultDict[int, Union[Tuple[int, int], int]]]
+doc_distr_type = DefaultDict[int, Union[Tuple[int, int], int]]
+term_distr_type = DefaultDict[int, doc_distr_type]
+term_distr_base: term_distr_type
 
 
 def generate_taxonomy() -> None:
@@ -54,10 +54,11 @@ def generate_taxonomy() -> None:
     2. Load data.
     3. Start recursive taxonomy generation.
     """
+    # Define globals.
     global idx_to_term
     global path_embeddings_global
     global path_term_distr
-    global term_distr_base
+
     # Load cmd args and configs.
     print('Load and parse cmd args...')
     config = get_config()
@@ -128,29 +129,11 @@ def generate_taxonomy() -> None:
         df_base_str = json.load(f)
         df_base = {int(k): [int(i) for i in v] for k, v in df_base_str.items()}
 
-    print('Create term distributions pickle file...')
-    with open(path_tf, 'r', encoding='utf8') as f_tf:
-        tf_base = json.load(f_tf)
-        with open(path_tfidf, 'r', encoding='utf8') as f_tfidf:
-            tfidf_base = json.load(f_tfidf)
-            with open(path_dl, 'r', encoding='utf8') as f_dl:
-                dl_base = json.load(f_dl)
-    term_distr_base = defaultdict(dict)
-    for doc_id in base_corpus:
-        doc_id = str(doc_id)
-        for word_id in tf_base[doc_id]:
-            tf = tf_base[doc_id][word_id]
-            tfidf = tfidf_base[doc_id][word_id]
-            term_distr_base[int(doc_id)][int(word_id)] = (tf, tfidf)
-        term_distr_base[int(doc_id)][-1] = dl_base[doc_id]
-    with open(path_term_distr, 'wb') as f:
-        pickle.dump(term_distr_base, f)
+    print('load term distr file...')
+    global term_distr_base
+    term_distr_base = pickle.load(open(path_term_distr, 'rb'))
 
-    del tf_base
-    del tfidf_base
-    del dl_base
     del df_base_str
-    # del term_distr_base
 
     # Start recursive taxonomy generation.
     rec_find_children(term_ids_local=term_ids, term_ids_global=term_ids,
@@ -208,8 +191,6 @@ def rec_find_children(term_ids_local: Set[int],
         cur_corpus: All doc_ids of the documents in the current corpus.
         df_base: df values for all terms in the base corpus, Form:
             {term_id: [doc1, ...]}
-        cur_repr_terms: The most representative terms of the topic.
-            A list of tuples of the form: (term-id, score).
         path_out: The path to the output directory.
         csv_writer: csv-writer-object used to write taxonomy to file.
         df: Document frequencies of the form: {term-id: List of doc-ids}
@@ -218,18 +199,18 @@ def rec_find_children(term_ids_local: Set[int],
     if level > max_depth or len(term_ids_local) == 0:
         # write_tax_to_file(cur_node_id, {}, [], csv_writer, only_id=True)
         return None
-    print(15*'-'+' level {} node {} '.format(level, cur_node_id) + 15*'-')
+    print(
+        15 * '-' + ' level {} node {} '.format(level, cur_node_id) + 15 * '-')
     msg = 'Start recursion on level {} with node id {}...'.format(level,
                                                                   cur_node_id)
     print(msg)
     print('Number of candidate terms: {}'.format(len(term_ids_local)))
-
-    m = int(len(base_corpus)/(5*level+1))
     print('Build corpus file...')
     corpus_path = build_corpus_file(cur_corpus, path_base_corpus_ids,
                                     cur_node_id, path_out)
     print('Train embeddings...')
     if level != 0:
+        m = int(len(base_corpus) / (5 * level))
         emb_path_local = train_embeddings(emb_type, corpus_path,
                                           cur_node_id, path_out)
         print('Get term embeddings...')
@@ -238,6 +219,7 @@ def rec_find_children(term_ids_local: Set[int],
         # {id: embedding}
     else:
         term_ids_to_embs_local = term_ids_to_embs_global
+        m = len(base_corpus)
 
     general_terms = []
     print('Start finding general terms...')
@@ -245,7 +227,7 @@ def rec_find_children(term_ids_local: Set[int],
     while True:
         i += 1
         info_msg = ' level {} node {} iteration {} '
-        print(5*'-' + info_msg.format(level, cur_node_id, i) + 5*'-')
+        print(5 * '-' + info_msg.format(level, cur_node_id, i) + 5 * '-')
 
         print('Cluster terms...')
         clusters = perform_clustering(term_ids_to_embs_local)
@@ -254,11 +236,13 @@ def rec_find_children(term_ids_local: Set[int],
                                                term_ids_to_embs_local)
 
         print('Get subcorpora for clusters...')
-        subcorpora = get_subcorpora(cluster_centers, path_out, m=m)
+        subcorpora_emb = get_subcorpora_emb(cluster_centers, path_out, m=m)
         # {label: doc-ids}
+        subcorpora_tfidf = get_subcorpora_tfidf(m, clusters, term_distr_base)
 
         print('Compute term scores...')
-        term_scores = get_term_scores(clusters, cluster_centers, subcorpora,
+        term_scores = get_term_scores(clusters, cluster_centers,
+                                      subcorpora_tfidf,
                                       term_distr_base, df, level)
         # del term_distr_base
 
@@ -291,7 +275,7 @@ def rec_find_children(term_ids_local: Set[int],
     # Write terms to file.
     print('Write concept terms to file...')
     write_pushed_up_terms_to_file(path_out, cur_node_id, general_terms)
-    write_term_scores_to_file(path_out, child_ids, clusters, term_scores)
+    write_term_scores(path_out, child_ids, clusters, term_scores)
     write_tax_to_file(cur_node_id, child_ids, [], csv_writer)
 
     del term_scores
@@ -308,10 +292,10 @@ def rec_find_children(term_ids_local: Set[int],
     print('Start new recursion...')
     for label, clus in clusters.items():
         node_id = child_ids[label]
-        subcorpus = subcorpora[label]
+        subcorpus = subcorpora_emb[label]
         rec_find_children(term_ids_local=clus, base_corpus=base_corpus,
                           path_base_corpus_ids=path_base_corpus_ids,
-                          cur_node_id=node_id, level=level+1, df=df_base,
+                          cur_node_id=node_id, level=level + 1, df=df_base,
                           df_base=df_base,
                           # cur_repr_terms=repr_terms[label],
                           cur_corpus=subcorpus,
@@ -369,7 +353,7 @@ def write_tax_to_file(cur_node_id: int,
 def write_pushed_up_terms_to_file(path_out: str,
                                   cur_node_id: int,
                                   general_terms: List[Tuple[int, float]]
-                                  )-> None:
+                                  ) -> None:
     """Write the pushed up terms, belonging to a cluster to file.
 
     Args:
@@ -382,18 +366,18 @@ def write_pushed_up_terms_to_file(path_out: str,
         term_id SPACE term SPACE score NEWLINE
     """
     path_out = os.path.join(path_out, 'concept_terms/')
-    with open(path_out+str(cur_node_id)+'.txt', 'w', encoding='utf8') as f:
+    with open(path_out + str(cur_node_id) + '.txt', 'w', encoding='utf8') as f:
         for term_id, score in general_terms:
             term = idx_to_term[term_id]
             line = '{} {} {}\n'.format(term_id, term, score)
             f.write(line)
 
 
-def write_term_scores_to_file(path_out: str,
-                              child_ids: Dict[int, int],
-                              clusters: Dict[int, Set[int]],
-                              term_scores:Dict[int, Tuple[float, float, float]]
-                              ) -> None:
+def write_term_scores(path_out: str,
+                      child_ids: Dict[int, int],
+                      clusters: Dict[int, Set[int]],
+                      term_scores: Dict[int, Tuple[float, float, float]]
+                      ) -> None:
     """Write the final term-scores for all terms, not pushed up to file.
 
     Args:
@@ -416,10 +400,10 @@ def write_term_scores_to_file(path_out: str,
                 f.write(line)
 
 
-def get_subcorpora(cluster_centers: Dict[int, List[float]],
-                   path_out: str,
-                   m: Union[int, None]=None,
-                   ) -> Dict[int, Set[int]]:
+def get_subcorpora_emb(cluster_centers: Dict[int, List[float]],
+                       path_out: str,
+                       m: Union[int, None] = None,
+                       ) -> Dict[int, Set[int]]:
     """Get the subcorpus for each cluster.
 
     TODO: describe args
@@ -468,7 +452,6 @@ def separate_gen_terms(clusters: Dict[int, Set[int]],
     proc_clusters = {}  # {label: clus}
     concept_terms = []
     for label, clus in clusters.items():
-
         # terms_to_remove = get_terms_to_remove(clus, term_scores)
 
         # clus = remove(clus, terms_to_remove)
@@ -496,7 +479,6 @@ def get_repr_terms(clusters: Dict[int, Set[int]],
         Each containing the 10 most representative terms in the form:
         (term-id: score).
     """
-
     repr_terms = {}
     for label, clus in clusters.items():
         clus_terms = [(term_id, term_scores[term_id][2]) for term_id in clus]
@@ -612,7 +594,7 @@ def remove(clus: Set[int],
         terms_to_remove: A list of term-ids with scores.
     """
     terms_to_remove = set([t[0] for t in terms_to_remove])
-    return clus-terms_to_remove
+    return clus - terms_to_remove
 
 
 def load_term_ids(path_term_ids: str) -> Set[int]:
