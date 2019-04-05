@@ -7,11 +7,12 @@ from collections import defaultdict
 from utility_functions import get_sim, get_config
 from numpy import mean
 import numpy as np
+import pdb
 
 
 doc_distr_type = DefaultDict[int, Union[Tuple[int, int], int]]
-word_distr_type = DefaultDict[int, doc_distr_type]
-# {doc-id: {word-id: (term-freq, tfidf)}} doc-length is at word-id -1
+term_distr_type = DefaultDict[int, doc_distr_type]
+# {doc-id: {term-id: (term-freq, tfidf)}} doc-length is at word-id -1
 
 
 class Corpus:
@@ -102,13 +103,9 @@ class Corpus:
         return [token for sent in doc for token in sent]
 
 
-def get_relevant_docs(  # term_ids: Set[int],
-                      # base_corpus: Set[int],
-                      n: int,
-                      # tfidf_base: Dict[int, Dict[int, float]],
+def get_relevant_docs(n: int,
                       doc_embeddings: Dict[int, List[float]],
                       topic_embedding: List[float],
-                      # only_tfidf: bool=False
                       ) -> Set[int]:
     """Generate a pseudo corpus (relevant_docs) for given set of terms.
 
@@ -121,28 +118,17 @@ def get_relevant_docs(  # term_ids: Set[int],
     every level the every branch gets 5 subbranches.
 
     Args:
-        term_ids: The lemma-ids of the terms that define the corpus.
-        base_corpus: The document ids, that form the document collection
-            from which to choose from.
         n: The top n scored documents are chosen for the pseudo corpus.
             n should be chosen as num_docs / n_clus
             where num_docs denotes the number of documents in the base
             corpus and n_clus denotes the number of clusters (or just
             the number of parts) the base corpus is divided into.
-        tfidf_base: The tfidf values for the terms in the entire
-            base_corpus.
         doc_embeddings: The document embeddings.
         topic_embedding: The topic embedding.
-        only_tfidf: Don't use embeddings but only the summed tfidf
-            scores for documents to rank them.
     Return:
         Set of indices which denote the documents beloning to the pseudo
         corpus.
     """
-    # if only_tfidf:
-    #     return get_relevant_docs_only_tfidf(
-    #         term_ids, base_corpus, n, tfidf_base)
-
     doc_sims = []
     for doc_id, doc_emb in doc_embeddings.items():
         doc_sims.append((doc_id, get_sim(topic_embedding, doc_emb)))
@@ -209,56 +195,147 @@ def get_topic_embeddings(clusters: Dict[int, Set[int]],
     return topic_embeddings
 
 
-# def get_relevant_docs_only_tfidf(term_ids: Set[int],
-#                                  base_corpus: Set[int],
-#                                  n: int,
-#                                  tfidf_base: Dict[int, Dict[int, float]]
-#                                  ) -> Set[int]:
-#     """Generate a pseudo corpus (relevant_docs) for given set of terms.
-#
-#     This is the tfidf-only version without usage of embeddings.
-#
-#     Find the documents of the corpus using tfidf. The general idea is:
-#     Those documents, for which the given terms are important, belong
-#     to the corpus. Thus, for each of the given terms, get the tfidf
-#     score in the base corpus (corpus from which the most important
-#     documents for the pseudo corpus are selected). Then get the top n
-#     documents, for which the terms are most important. The importance
-#     score for a document d is: score(d) = sum(tfidf(t1...tn, d))
-#     where t1...tn denotes the set of given terms.
-#
-#     Args:
-#         term_ids: The lemma-ids of the terms that define the corpus.
-#         base_corpus: The document ids, that form the document collection
-#             from which to choose from.
-#         n: The top n scored documents are chosen for the pseudo corpus.
-#             n should be chosen as num_docs / n_clus
-#             where num_docs denotes the number of documents in the base
-#             corpus and n_clus denotes the number of clusters (or just
-#             the number of parts) the base corpus is divided into.
-#         tfidf_base: The tfidf values for the terms in the entire
-#             base_corpus.
-#     Return:
-#         Set of indices which denote the documents beloning to the pseudo
-#         corpus.
-#     """
-#     tfidf_doc = {}
-#     # Calculate document scores.
-#     for doc_id in base_corpus:
-#         vals = []  # The importances of a (cluster)terms for a document.
-#         for term_id in term_ids:
-#             try:
-#                 vals.append(tfidf_base[doc_id][term_id])
-#             except KeyError:
-#                 pass
-#         tfidf_doc[doc_id] = sum(vals)
-#
-#     # Rank documents by score.
-#     ranked_docs = sorted(
-#         tfidf_doc.items(), key=lambda tpl: tpl[1], reverse=True)
-#
-#     # Return only the ids of the n highest scored documents.
-#     return set(d[0] for d in ranked_docs[:n])
+def get_subcorpora_tfidf(n: int,
+                         clusters: Dict[int, Set[int]],
+                         term_distr: term_distr_type,
+                         df: Dict[int, List[int]]
+                         ) -> Dict[int, Set[int]]:
+    """Generate a pseudo corpus (relevant_docs) for given set of terms.
+
+    This is the tfidf-only version without usage of embeddings.
+
+    Find the documents of the corpus using tfidf. The general idea is:
+    Those documents, for which the given terms are important, belong
+    to the corpus. Thus, for each of the given terms, get the tfidf
+    score in the base corpus (corpus from which the most important
+    documents for the pseudo corpus are selected). Then get the top n
+    documents, for which the terms are most important. The importance
+    score for a document d is: score(d) = sum(tfidf(t1...tn, d))
+    where t1...tn denotes the set of given terms.
+
+    Strategy:
+        1. Calculate the strength per topic per cluster
+            - create topic_docs of form: {clus-label: {(doc-id, strength)}}
+        2. Trim such that each cluster only contains the strongest n
+            docs.
+            - filter and return the form: {clus-label: {doc-id}}
+
+    Args:
+        n: The top n scored documents are chosen for the pseudo corpus.
+            n should be chosen as num_docs / n_clus
+            where num_docs denotes the number of documents in the base
+            corpus and n_clus denotes the number of clusters (or just
+            the number of parts) the base corpus is divided into.
+        clusters: {clus-label: set of term-ids}
+        term_distr: description in type definitions at the top of the
+            document
+        df: {term-id: List of doc-ids}
+    Return:
+        {clus-label: doc-ids}
+    """
+    clusters_inv = invert_clusters(clusters)
+    topic_doc_strengths = get_topic_doc_strengths(clusters_inv, term_distr,
+                                                  df, len(clusters))
+    topic_doc_strengths = trim_top_n_per_clus(topic_doc_strengths, n)
+    return remove_strengths(topic_doc_strengths)
+
+
+def get_topic_doc_strengths(clusters_inv: Dict[int, int],
+                            word_distr: term_distr_type,
+                            df: Dict[int, List[int]],
+                            num_clusters: int
+                            ) -> DefaultDict[int, List[Tuple[int, float]]]:
+    """For each document get the strength for each cluster.
+
+    Args:
+        clusters_inv: {term-id: clus-label}
+        word_distr: description in type definitions at the top of the
+            document
+        df: {term-id: List of doc-ids}
+        num_clusters: The number of clusters.
+    Return:
+        {clus-label: [(doc-id, strength), ...]}
+    """
+    clusters_term_ids = set(clusters_inv.keys())
+    topic_doc_strengths = defaultdict(list)  # {label: {(doc-id, strength)}}
+    for doc_id in word_distr:
+        doc_clus_strengths = num_clusters * [0.0]  # clus-label as index
+        for term_id in word_distr[doc_id]:
+            if term_id not in clusters_term_ids:
+                continue
+            tfidf = word_distr[doc_id][term_id][1]
+            clus_label = clusters_inv[term_id]
+            doc_clus_strengths[clus_label] += tfidf
+        clus_label, strength = get_strongest_topic(doc_clus_strengths)
+        topic_doc_strengths[clus_label].append((doc_id, strength))
+    return topic_doc_strengths
+
+
+def trim_top_n_per_clus(topic_docs: DefaultDict[int, List[Tuple[int, float]]],
+                        n: int
+                        ) -> DefaultDict[int, List[Tuple[int, float]]]:
+    """Only return the top n documents by strength per cluster.
+
+    Args:
+        topic_docs: {label: {(doc-id, strength)}}
+        n: int
+    Return:
+        {clus-label: Set of doc-ids}
+    """
+    for clus_label in topic_docs:
+        topic_docs[clus_label].sort(key=lambda tpl: tpl[1], reverse=True)
+        topic_docs[clus_label] = topic_docs[clus_label][:n]
+    return topic_docs
+
+
+def invert_clusters(clusters: Dict[int, Set[int]]) -> Dict[int, int]:
+    """Invert clusters to term-ids as keys and clus-labels as values.
+
+    Args:
+        clusters: {clus-label: Set of term-ids}
+    Return:
+        {term-id: clus-label}
+    """
+    clusters_inv = {}
+    for label in clusters:
+        for term_id in clusters[label]:
+            clusters_inv[term_id] = label
+    return clusters_inv
+
+
+def remove_strengths(topic_docs: DefaultDict[int, List[Tuple[int, float]]]
+                     ) -> Dict[int, Set[int]]:
+    """Remove the topic-strength score and return instead set of doc-ids.
+
+    Args:
+        topic_docs: topic_docs: {label: {(doc-id, strength)}}
+    Return:
+        {clus_label: set of doc-ids}
+    """
+    subcorpora = {}
+    for clus_label in topic_docs:
+        doc_ids = set([doc_id for doc_id, strength in topic_docs[clus_label]])
+        subcorpora[clus_label] = doc_ids
+    return subcorpora
+
+
+def get_strongest_topic(doc_membership: List[float]
+                        ) -> Tuple[int, float]:
+    """Get the topic with the highest aggregated tfidf score.
+
+    Code from here:
+    https://stackoverflow.com/questions/268272/
+    getting-key-with-maximum-value-in-dictionary
+
+    Args:
+        doc_membership: A dict mapping a topic-label to its
+            strength in the document.
+    Return:
+        A tuple of the form: (label, strength).
+    """
+    strongest_score = max(doc_membership)
+    label = doc_membership.index(strongest_score)
+    return label, strongest_score
 
 
 def get_doc_topic_sims(doc_embeddings: Dict[int, List[float]],
