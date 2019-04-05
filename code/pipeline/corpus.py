@@ -7,7 +7,6 @@ from collections import defaultdict
 from utility_functions import get_sim, get_config
 from numpy import mean
 import numpy as np
-import pdb
 
 
 doc_distr_type = DefaultDict[int, Union[Tuple[int, int], int]]
@@ -198,7 +197,6 @@ def get_topic_embeddings(clusters: Dict[int, Set[int]],
 def get_subcorpora_tfidf(n: int,
                          clusters: Dict[int, Set[int]],
                          term_distr: term_distr_type,
-                         df: Dict[int, List[int]]
                          ) -> Dict[int, Set[int]]:
     """Generate a pseudo corpus (relevant_docs) for given set of terms.
 
@@ -229,20 +227,18 @@ def get_subcorpora_tfidf(n: int,
         clusters: {clus-label: set of term-ids}
         term_distr: description in type definitions at the top of the
             document
-        df: {term-id: List of doc-ids}
     Return:
         {clus-label: doc-ids}
     """
     clusters_inv = invert_clusters(clusters)
     topic_doc_strengths = get_topic_doc_strengths(clusters_inv, term_distr,
-                                                  df, len(clusters))
+                                                  len(clusters))
     topic_doc_strengths = trim_top_n_per_clus(topic_doc_strengths, n)
     return remove_strengths(topic_doc_strengths)
 
 
 def get_topic_doc_strengths(clusters_inv: Dict[int, int],
                             word_distr: term_distr_type,
-                            df: Dict[int, List[int]],
                             num_clusters: int
                             ) -> DefaultDict[int, List[Tuple[int, float]]]:
     """For each document get the strength for each cluster.
@@ -251,7 +247,6 @@ def get_topic_doc_strengths(clusters_inv: Dict[int, int],
         clusters_inv: {term-id: clus-label}
         word_distr: description in type definitions at the top of the
             document
-        df: {term-id: List of doc-ids}
         num_clusters: The number of clusters.
     Return:
         {clus-label: [(doc-id, strength), ...]}
