@@ -5,6 +5,7 @@ from numpy import mean
 from scipy.spatial.distance import cosine
 from corpus import *
 
+
 """Compute term-candidate scores."""
 """
 - prepare pseudo docs for given terms using tfidf scores
@@ -28,7 +29,7 @@ cluster_centers_type = Dict[int, List[float]]
 # is a list of sentences which is a list of words.
 corpus_type = List[Tuple[int, List[List[str]]]]
 # {doc-id: {word-id: (term-freq, tfidf)}} doc-length is at word-id -1
-word_distr_type = DefaultDict[int, DefaultDict[int, Union[Tuple[int, int],
+term_distr_type = DefaultDict[int, DefaultDict[int, Union[Tuple[int, int],
                                                           int]]]
 
 # ----------------------------------------------------------------------
@@ -58,7 +59,7 @@ class Scorer:
         self.level = level
 
     def get_term_scores(self,
-                        word_distr: word_distr_type,
+                        word_distr: term_distr_type,
                         df: Dict[int, List[int]]
                         ) -> Dict[int, Tuple[float, float, float]]:
         """For all terms, compute and get popularity and concentration.
@@ -88,7 +89,7 @@ class Scorer:
         return term_scores
 
     def get_pop_scores(self,
-                       word_distr: word_distr_type,
+                       word_distr: term_distr_type,
                        df: Dict[int, List[int]]
                        ) -> Dict[int, float]:
         """Get the popularity scores for all terms in clusters.
@@ -127,7 +128,7 @@ class Scorer:
         return pop_scores
 
     def get_con_scores(self,
-                       word_distr: word_distr_type,
+                       word_distr: term_distr_type,
                        df: Dict[int, List[int]]
                        ) -> Dict[int, float]:
         """Get the concentration scores for all terms in clusters.
@@ -156,7 +157,7 @@ class Scorer:
         return con_scores
 
     def get_bm25_scores(self,
-                        word_distr: word_distr_type,
+                        word_distr: term_distr_type,
                         df: Dict[int, List[int]]
                         ) -> Dict[str, Dict[int, float]]:
         """Get the bm25 scores for all terms in clusters.
@@ -229,7 +230,7 @@ class Scorer:
         return local_df
 
     def get_idf_scores(self,
-                       word_distr: word_distr_type
+                       word_distr: term_distr_type
                        ) -> Dict[str, float]:
         """Get idf scores for terms in clusters and pseudo docs.
 
@@ -252,7 +253,7 @@ class Scorer:
         return idf
 
     def form_pseudo_docs_bag_of_words(self,
-                                      word_distr: word_distr_type
+                                      word_distr: term_distr_type
                                       ) -> Dict[int, Set[str]]:
         """Form bag of words pseudo docs.
 
@@ -287,7 +288,7 @@ class Scorer:
         return bm25_scores_sum
 
     def get_len_pseudo_docs(self,
-                            word_distr: word_distr_type
+                            word_distr: term_distr_type
                             ) -> Dict[int, int]:
         """Get the length of pseudo-docs subcorpora.
 
@@ -307,7 +308,7 @@ class Scorer:
     @staticmethod
     def get_tf_pseudo_doc(pseudo_doc: Set[int],
                           cluster: Set[int],
-                          word_distr: word_distr_type
+                          word_distr: term_distr_type
                           )-> Dict[str, int]:
         """Get term frequencies for the given pseudo-document.
 
@@ -331,7 +332,7 @@ class Scorer:
         return tf_pseudo_doc
 
     # def get_term_scores_efficient(self,
-    #                               word_distr: word_distr_type
+    #                               word_distr: term_distr_type
     #                               ) -> Dict[int, Tuple[float, float]]:
     #     """More efficient version of get_term_scores.
     #
