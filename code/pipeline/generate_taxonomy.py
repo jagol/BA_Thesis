@@ -76,9 +76,9 @@ def generate_taxonomy() -> None:
         path_idx_to_term = os.path.join(
             path_out, 'indexing/idx_to_lemma.json')
         path_df = os.path.join(path_out, 'frequencies/df_lemmas.json')
-        path_tf = os.path.join(path_out, 'frequencies/tf_lemmas.json')
-        path_tfidf = os.path.join(
-            path_out, 'frequencies/tfidf_lemmas.json')
+        # path_tf = os.path.join(path_out, 'frequencies/tf_lemmas.json')
+        # path_tfidf = os.path.join(
+        #     path_out, 'frequencies/tfidf_lemmas.json')
         path_term_distr = os.path.join(
             path_out, 'frequencies/term_distr_lemmas.json')
         path_base_corpus = os.path.join(
@@ -93,8 +93,8 @@ def generate_taxonomy() -> None:
         path_idx_to_term = os.path.join(
             path_out, 'indexing/idx_to_token.json')
         path_df = os.path.join(path_out, 'frequencies/df_tokens.json')
-        path_tf = os.path.join(path_out, 'frequencies/tf_tokens.json')
-        path_tfidf = os.path.join(path_out, 'frequencies/tfidf_tokens.json')
+        # path_tf = os.path.join(path_out, 'frequencies/tf_tokens.json')
+        # path_tfidf = os.path.join(path_out, 'frequencies/tfidf_tokens.json')
         path_term_distr = os.path.join(
             path_out, 'frequencies/term_distr_tokens.json')
         path_base_corpus = os.path.join(
@@ -104,7 +104,7 @@ def generate_taxonomy() -> None:
         path_embeddings_global = os.path.join(
             path_out, 'embeddings/embs_token_global_{}.vec'.format(emb_type))
 
-    path_dl = os.path.join(path_out, 'frequencies/dl.json')
+    # path_dl = os.path.join(path_out, 'frequencies/dl.json')
     path_taxonomy = os.path.join(path_out, 'hierarchy/taxonomy.csv')
 
     tax_file = open(path_taxonomy, 'w', encoding='utf8', newline='')
@@ -746,8 +746,8 @@ def get_concept_terms(clus: Set[int],
         A set of term-ids of the terms to remove.
     """
     concept_terms = []
-    # threshhold = 0.25  # According to TaxoGen.
-    threshhold = 0.30
+    threshhold = 0.25  # According to TaxoGen.
+    # threshhold = 0.30
     for term_id in clus:
         score = term_scores[term_id][2]
         if score < threshhold:
