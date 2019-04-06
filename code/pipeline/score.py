@@ -4,7 +4,7 @@ from collections import defaultdict
 from numpy import mean
 from scipy.spatial.distance import cosine
 from corpus import *
-
+import pdb
 
 """Compute term-candidate scores."""
 """
@@ -119,7 +119,8 @@ class Scorer:
             for term_id in clus:
                 tf_t_Dk = 0
                 for doc_id in df[term_id]:
-                    tf_t_Dk += word_distr[doc_id][term_id][0]
+                    if doc_id in subcorp:
+                        tf_t_Dk += word_distr[doc_id][term_id][0]
 
                 # Calc pop-score.
                 pop_score = log(tf_t_Dk + 1) / log(tf_Dk)
