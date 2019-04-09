@@ -2,9 +2,7 @@ from typing import *
 from math import sqrt, exp, log
 from collections import defaultdict
 from numpy import mean
-from scipy.spatial.distance import cosine
-from corpus import *
-import pdb
+
 
 """Compute term-candidate scores."""
 """
@@ -233,32 +231,6 @@ class Scorer:
                     count += 1
             df_scores_pd[term_id] = count
         return df_scores_pd
-
-    # @staticmethod
-    # def get_df_clus_subcorp(pseud_doc: Set[int],
-    #                         clus: Set[int],
-    #                         df: Dict[int, List[int]]
-    #                         ) -> Dict[int, List[int]]:
-    #     """Get the local document frequencies.
-    #
-    #     The local document frequencies only include terms in the current
-    #     cluster and documents from the current subcorpus.
-    #
-    #     Args:
-    #         pseud_doc: A set of document ids.
-    #         clus: A set of term ids.
-    #         df: The global document frequencies.
-    #     Return:
-    #         The local document frequencies of the form:
-    #         {term-id: List of doc-ids the term appears in}
-    #     """
-    #     local_df = {}
-    #     for term_id in clus:
-    #         local_df[term_id] = []
-    #         for doc_id in df[term_id]:
-    #             if doc_id in pseud_doc:
-    #                 local_df[term_id].append(doc_id)
-    #     return local_df
 
     @staticmethod
     def get_idf_scores_pd(df_scores_pd: Dict[int, int]
