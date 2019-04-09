@@ -3,15 +3,15 @@ import json
 import pickle
 import csv
 import time
-from math import sqrt
+from numpy import mean
 from collections import defaultdict
 from numpy import median
-from typing import *
-from corpus import *
+from typing import List, Dict, Set, Tuple, Union, Any, DefaultDict
+from corpus import Corpus as Cp
 from embeddings import Embeddings, get_emb
 from clustering import Clustering
 from score import Scorer
-from utility_functions import *
+from utility_functions import get_cmd_args, get_config, get_num_docs, get_docs
 
 
 # Define global variables.
@@ -232,13 +232,14 @@ def rec_find_children(term_ids_local: Set[int],
         print('Cluster terms...')
         clusters = perform_clustering(term_ids_to_embs_local)
         # Dict[int, Set[int]]
-        cluster_centers = get_topic_embeddings(clusters,
-                                               term_ids_to_embs_local)
+        cluster_centers = Cp.get_topic_embeddings(clusters,
+                                                  term_ids_to_embs_local)
 
         print('Get subcorpora for clusters...')
         subcorpora_emb = get_subcorpora_emb(cluster_centers, path_out, m=m)
         # {label: doc-ids}
-        subcorpora_tfidf = get_subcorpora_tfidf(m, clusters, term_distr_base)
+        subcorpora_tfidf = Cp.get_subcorpora_tfidf(m, clusters,
+                                                   term_distr_base)
 
         print('Compute term scores...')
         term_scores = get_term_scores(clusters, cluster_centers,
@@ -259,7 +260,6 @@ def rec_find_children(term_ids_local: Set[int],
         print('Remove terms from clusters...')
         clusters, gen_terms_clus = separate_gen_terms(clusters, term_scores)
         general_terms.extend(gen_terms_clus)
-        # repr_terms = get_repr_terms(clusters, term_scores)
         cluster_sizes = [len(clus) for label, clus in clusters.items()]
         print('Terms pushed up: {}'.format(len(gen_terms_clus)))
         print('Cluster_sizes: {}'.format(cluster_sizes))
@@ -415,18 +415,18 @@ def get_subcorpora_emb(cluster_centers: Dict[int, List[float]],
         A dictionary mapping each clusterlabel to a set of doc-ids.
     """
     print('  Calculate document embeddings...')
-    doc_embeddings = get_doc_embeddings(path_out)
+    doc_embeddings = Cp.get_doc_embeddings(path_out)
     # {doc_id: embedding}
     print('  Get topic_embeddings...')
     topic_embeddings = cluster_centers
     # {cluster/topic_label: embedding}
     print('  Calculate topic document similarities...')
     # doc_topic_sims_old = get_doc_topic_sims(doc_embeddings, topic_embeddings)
-    doc_topic_sims = get_doc_topic_sims_matrix_mul(doc_embeddings,
-                                                   topic_embeddings)
+    doc_topic_sims = Cp.get_doc_topic_sims_matrix_mul(doc_embeddings,
+                                                      topic_embeddings)
     # {doc-id: {topic-label: sim}}
     print('  Determine the top m most similar documents to each topic...')
-    subcorpora = get_topic_docs(doc_topic_sims, m)
+    subcorpora = Cp.get_topic_docs(doc_topic_sims, m)
     # {cluster/topic_label: {set of doc-ids}}
     return subcorpora
 
