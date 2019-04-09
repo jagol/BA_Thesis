@@ -89,6 +89,7 @@ class Scorer:
         print('  Get concentration scores...')
         con_scores = self.get_con_scores(term_distr)
 
+        print('  Get repr. scores...')
         term_scores = {}
         for term_id in pop_scores:
             pop = pop_scores[term_id]
@@ -160,7 +161,7 @@ class Scorer:
         for label, clus in self.clusters.items():
             for term_id in clus:
                 numerator = exp(bm25_scores[term_id][label])
-                denominator = 1+exp(bm25_scores_sum[term_id])
+                denominator = 1 + exp(bm25_scores_sum[term_id])
                 con_score = numerator/denominator
                 con_scores[term_id] = con_score
         return con_scores
@@ -195,6 +196,7 @@ class Scorer:
         # {term-id: [tf_pd0, ...tf_pd4]}
         avgdl = mean(list(len_pds.values()))
         max_df = max(df_scores_pd.values())
+        # max_df is the max number of pseudo-docs a term appears in.
 
         for term_id in self.clusters_inv:
             for label in self.clusters:
