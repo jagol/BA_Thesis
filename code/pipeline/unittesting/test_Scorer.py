@@ -18,6 +18,15 @@ term_distr = {  # {doc-id: {term-id: (tf, tfidf)}}
 }
 
 
+len_pd = {
+    0: 6,
+    1: 3,
+    2: 5,
+    3: 3,
+    4: 6
+}
+
+
 df = {  # {term_id: list of doc_ids}
     1: [1, 8],
     2: [9],
@@ -88,7 +97,7 @@ class TestScorer(unittest.TestCase):
                     subcorpora=subcorpora, level=0)
 
     # def test_get_term_scores(self):
-    #     actual_output = self.scorer.get_term_scores(word_distr=word_distr,
+    #     actual_output = self.scorer.get_term_scores(tern_distr=term_distr,
     #                                                 df=df)
     #     desired_output = {}
     #     self.assertEqual(actual_output, desired_output)
@@ -111,28 +120,141 @@ class TestScorer(unittest.TestCase):
         }
         self.assertEqual(actual_output, desired_output)
 
-    # def test_get_con_scores(self):
-    #     actual_output = self.scorer.get_con_scores(word_distr=word_distr,
-    #                                                df=df)
-    #     desired_output = {}
-    #     self.assertEqual(actual_output, desired_output)
-    #
-    # def test_get_bm25_scores(self):
-    #     actual_output = self.scorer.get_bm25_scores(term_distr=term_distr,
-    #                                                 df_scores=df)
-    #     desired_output = {
-    #         1: {
-    #             0: 0,
-    #             1: 0,
-    #             2: 0,
-    #             3: 0,
-    #             4: 0
-    #         },
-    #         2: {
-    #             0: 0
-    #         }
-    #     }
-    #     self.assertEqual(actual_output, desired_output)
+    def test_get_con_scores(self):
+        """All results from term_id 4 and upwards are copied from output.
+
+        TODO test term-id 4 and upwards too.
+        """
+        actual_output = self.scorer.get_con_scores(term_distr=term_distr)
+        desired_output = {
+            1: 0.844771424324134,
+            2: 0.12412514708312912,
+            3: 0.8322168937620554,
+            4: 0.17667732093652708,
+            5: 0.23252908085072804,
+            7: 0.10348131060629184,
+            8: 0.844771424324134,
+            9: 0.8322168937620554,
+            11: 0.9051656581708963,
+            16: 0.2381958406281263
+        }
+        self.assertEqual(actual_output, desired_output)
+
+    def test_sum_bm25_scores(self):
+        bm25_scores = {1: {0: 0.0, 1: 0.0, 2: 1.6941673745823507, 3: 0.0,
+                           4: 0.0},
+                       2: {0: 0.0, 1: 2.2541665606882964, 2: 2.073351061167845,
+                           3: 0.0, 4: 0.0},
+                       3: {0: 1.6014209854628794, 1: 0.0, 2: 0.0, 3: 0.0,
+                           4: 0.0},
+                       4: {0: 0.0, 1: 1.6930858010409913, 2: 1.496975476596089,
+                           3: 0.0, 4: 0.0},
+                       5: {0: 1.4150242643736752, 1: 0.0, 2: 0.0,
+                           3: 1.6930858010409913, 4: 0.0},
+                       7: {0: 1.9934017914570026, 1: 0.0, 2: 0.0,
+                           3: 2.2541665606882964, 4: 0.0},
+                       8: {0: 0.0, 1: 0.0, 2: 1.6941673745823507, 3: 0.0,
+                           4: 0.0},
+                       9: {0: 1.6014209854628794, 1: 0.0, 2: 0.0, 3: 0.0,
+                           4: 0.0},
+                       11: {0: 0.0, 1: 0.0, 2: 0.0, 3: 0.0,
+                            4: 2.255986375407861},
+                       16: {0: 1.4150242643736752, 1: 0.0, 2: 0.0, 3: 0.0,
+                            4: 2.505438762122049}}
+        actual_output = self.scorer.sum_bm25_scores(bm25_scores)
+        desired_output = {
+            1: 1.6941673745823507,
+            2: 2.2541665606882964 + 2.073351061167845,
+            3: 1.6014209854628794,
+            4: 1.6930858010409913 + 1.496975476596089,
+            5: 1.4150242643736752 + 1.6930858010409913,
+            7: 1.9934017914570026 + 2.2541665606882964,
+            8: 1.6941673745823507,
+            9:1.6014209854628794,
+            11: 2.255986375407861,
+            16: 1.4150242643736752 + 2.505438762122049
+        }
+        self.assertEqual(actual_output, desired_output)
+
+    def test_get_bm25_scores(self):
+        """The results from term-id 7 upwards are copied from actual
+        results.
+
+        TODO: Test results from 7 upwards.
+        """
+        actual_output = self.scorer.get_bm25_scores(term_distr=term_distr)
+        desired_output = {
+            1: {
+                0: 0.0,
+                1: 0.0,
+                2: 1.6941673745823507,
+                3: 0.0,
+                4: 0.0
+            },
+            2: {
+                0: 0.0,
+                1: 2.2541665606882964,
+                2: 2.073351061167845,
+                3: 0.0,
+                4: 0.0
+            },
+            3: {
+                0: 1.6014209854628794,
+                1: 0.0,
+                2: 0.0,
+                3: 0.0,
+                4: 0.0
+            },
+            4: {
+                0: 0.0,
+                1: 1.6930858010409913,
+                2: 1.496975476596089,
+                3: 0.0,
+                4: 0.0
+            },
+            5: {
+                0: 1.4150242643736752,
+                1: 0.0,
+                2: 0.0,
+                3: 1.6930858010409913,
+                4: 0.0
+            },
+            7: {
+                0: 1.9934017914570026,
+                1: 0.0,
+                2: 0.0,
+                3: 2.2541665606882964,
+                4: 0.0},
+            8: {
+                0: 0.0,
+                1: 0.0,
+                2: 1.6941673745823507,
+                3: 0.0,
+                4: 0.0
+            },
+            9: {
+                0: 1.6014209854628794,
+                1: 0.0,
+                2: 0.0,
+                3: 0.0,
+                4: 0.0
+            },
+            11: {
+                0: 0.0,
+                1: 0.0,
+                2: 0.0,
+                3: 0.0,
+                4: 2.255986375407861
+            },
+            16: {
+                0: 1.4150242643736752,
+                1: 0.0,
+                2: 0.0,
+                3: 0.0,
+                4: 2.505438762122049
+            }
+        }
+        self.assertEqual(actual_output, desired_output)
 
     def test_get_idf_scores_pd(self):
         df_scores_pd = {  # N / log(df+1),
