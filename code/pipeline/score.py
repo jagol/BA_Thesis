@@ -395,32 +395,6 @@ class Scorer:
             len_pseudo_docs[label] = len_pseudo_doc
         return len_pseudo_docs
 
-    # @staticmethod
-    # def get_tf_pseudo_doc(pseudo_doc: Set[int],
-    #                       cluster: Set[int],
-    #                       word_distr: term_distr_type
-    #                       )-> Dict[str, int]:
-    #     """Get term frequencies for the given pseudo-document.
-    #
-    #     Get: how often terms appears in given pseudo-doc-
-    #     Needed: doc-ids of pseudo-doc, set of terms, term-frequency per doc
-    #     Which terms? All term in one of the current clusters.
-    #
-    #     Args:
-    #         pseudo_doc: A set of document ids.
-    #         cluster: A set of term-ids.
-    #         word_distr: Description at the top of the file in
-    #             type-definitions.
-    #     Return:
-    #         {term_id: frequency}
-    #     """
-    #     tf_pseudo_doc = defaultdict(int)
-    #     for doc_id in pseudo_doc:
-    #         for term_id in word_distr[doc_id]:
-    #             if term_id in cluster:
-    #                 tf_pseudo_doc[term_id] += word_distr[doc_id][term_id][0]
-    #     return tf_pseudo_doc
-
     def get_tf_scores_pd(self,
                          term_distr: term_distr_type
                          ) -> Dict[int, Dict[int, int]]:
@@ -436,48 +410,13 @@ class Scorer:
         Return:
             {term_id: {label: tf}}
         """
-        dict_template = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0}
-        tf_pseudo_docs = {}
+        tf_pd = {}
         for label, sc in self.subcorpora.items():
             for doc_id in sc:
                 for term_id in term_distr[doc_id]:
                     if term_id in self.clusters_inv:
-                        if term_id not in tf_pseudo_docs:
-                            tf_pseudo_docs[term_id] = dict_template
-                        tf_pseudo_docs[term_id][label] += term_distr[doc_id][term_id][0]
-        return tf_pseudo_docs
-
-    # def get_term_scores_efficient(self,
-    #                               word_distr: term_distr_type
-    #                               ) -> Dict[int, Tuple[float, float]]:
-    #     """More efficient version of get_term_scores.
-    #
-    #     Return:
-    #         A dict mapping the term-id to concentration and popularity.
-    #     """
-    #     term_scores = defaultdict(list)
-    #     for label, clus in self.clusters.items():
-    #         subcorp = self.subcorpora[label]
-    #         tf_Dk = sum([word_distr[doc_id][-1] for doc_id in subcorp])
-    #         for term_id in clus:
-    #             tf_t_Dk = 0
-    #             for doc_id in subcorp:
-    #                 if term_id in word_distr[doc_id]:
-    #                     tf_t_Dk += word_distr[doc_id][term_id][0]
-    #
-    #             pop_score = log(tf_t_Dk + 1) / log(tf_Dk)
-    #             term_scores[term_id].append(pop_score)
-    #
-    #     return term_scores
-
-    @staticmethod
-    def get_sim(v1: Iterator[float], v2: Iterator[float]) -> float:
-        """Calcualte the consine similarity between vectors v1 and v2.
-
-        Args:
-            v1: vector 1
-            v2: vector 2
-        Return:
-            The cosine similarity.
-        """
-        return 1-cosine(v1, v2)
+                        if term_id not in tf_pd:
+                            tf_pd[term_id] = {0: 0, 1: 0, 2: 0,
+                                                     3: 0, 4: 0}
+                        tf_pd[term_id][label] += term_distr[doc_id][term_id][0]
+        return tf_pd
