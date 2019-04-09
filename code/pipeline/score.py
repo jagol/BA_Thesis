@@ -25,9 +25,6 @@ import pdb
 # Type of a cluster as a set of term-ids.
 cluster_type = Set[int]
 cluster_centers_type = Dict[int, List[float]]
-# Type of a corpus as a list of tuples (doc_id, doc) where the document
-# is a list of sentences which is a list of words.
-corpus_type = List[Tuple[int, List[List[str]]]]
 # {doc-id: {word-id: (term-freq, tfidf)}} doc-length is at word-id -1
 term_distr_type = DefaultDict[int, DefaultDict[int, Union[Tuple[int, int],
                                                           int]]]
@@ -59,9 +56,8 @@ class Scorer:
         self.subcorpora = subcorpora
         self.level = level
 
-
-    def inverse_cluster(self,
-                        clusters: Dict[int, cluster_type]
+    @staticmethod
+    def inverse_cluster(clusters: Dict[int, cluster_type]
                         ) -> Dict[int, int]:
         """Inverse a cluster.
 
@@ -73,7 +69,6 @@ class Scorer:
             for term_id in clus:
                 inv_clusters[term_id] = label
         return inv_clusters
-
 
     def get_term_scores(self,
                         term_distr: term_distr_type,
@@ -94,7 +89,7 @@ class Scorer:
         print('  Get popularity scores...')
         pop_scores = self.get_pop_scores(term_distr, df)
         print('  Get concentration scores...')
-        con_scores = self.get_con_scores(term_distr, df)
+        con_scores = self.get_con_scores(term_distr)
 
         term_scores = {}
         for term_id in pop_scores:
@@ -147,20 +142,18 @@ class Scorer:
 
     def get_con_scores(self,
                        term_distr: term_distr_type,
-                       df: Dict[int, List[int]]
                        ) -> Dict[int, float]:
         """Get the concentration scores for all terms in clusters.
 
         Args:
             term_distr: Description at the top of the file in
                 type-definitions.
-            df: The document frequencies of terms in the base corpus.
 
         Return:
             A dictionary mapping each term-id the terms concentration.
             Form: {term-id: concentration}
         """
-        bm25_scores = self.get_bm25_scores(term_distr, df)
+        bm25_scores = self.get_bm25_scores(term_distr)
         # {term-id: {label: bm25-score}}
         bm25_scores_sum = self.sum_bm25_scores(bm25_scores)
         # {term-id: sum_bm_25_scores}
@@ -174,61 +167,8 @@ class Scorer:
                 con_scores[term_id] = con_score
         return con_scores
 
-    # def get_bm25_scores(self,
-    #                     word_distr: term_distr_type,
-    #                     df: Dict[int, List[int]]
-    #                     ) -> Dict[int, Dict[int, float]]:
-    #     """Get the bm25 scores for all terms in clusters.
-    #
-    #     The score is calculated as described in:
-    #     https://en.wikipedia.org/wiki/Okapi_BM25
-    #
-    #     Args:
-    #         word_distr: Description at the top of the file in
-    #             type-definitions.
-    #         df: The document frequencies of terms in the base corpus.
-    #
-    #     Return:
-    #         A mapping of term's ids to their bm25 score in the form:
-    #         {term-id: {clus-label: bm25-score}}
-    #     """
-    #     print('  In get_bm25_scores...')
-    #     bm25_scores = defaultdict(dict)
-    #     print('  Calculate idf scores...')
-    #     idf = self.get_idf_scores(word_distr)  # {term-id: idf}
-    #     k1 = 1.2
-    #     b = 0.5
-    #     multiplier = 3
-    #     print('  Calculate get_len_pseudo_docs...')
-    #     len_pseudo_docs = self.get_len_pseudo_docs(word_distr)  # {label: len}
-    #     print('  Calculate avgdl...')
-    #     avgdl = mean(list(len_pseudo_docs.values()))
-    #
-    #     print('Rest of bm25 calculations...')
-    #     for label, clus in self.clusters.items():
-    #         print('  bm25 for label {}'.format(label))
-    #         pseud_doc = self.subcorpora[label]
-    #         tf_pseudo_doc = self.get_tf_pseudo_doc(pseud_doc, clus, word_distr)
-    #         # {term-id: tf}
-    #         df_local = self.get_df_clus_subcorp(pseud_doc, clus, df)
-    #         max_df = max([len(v) for v in df_local.values()])
-    #         len_pseudo_doc = len_pseudo_docs[label]
-    #
-    #         for term_id in self.clusters_inv:  # {term_id: clus_label}
-    #             df_term = len(df_local[term_id])
-    #             df_factor = log(1 + df_term, 2) / log(1 + max_df, 2)
-    #             tf_td = tf_pseudo_doc[term_id]  # tf_term_doc
-    #             numerator = idf[term_id]*(tf_td*(k1+1))
-    #             denominator = (tf_td+k1*(1-b+b*(len_pseudo_doc/avgdl)))
-    #             bm25_score = numerator/denominator
-    #             bm25_score *= df_factor
-    #             bm25_score *= multiplier
-    #             bm25_scores[term_id][label] = bm25_score
-    #     return bm25_scores
-
     def get_bm25_scores(self,
                         term_distr: term_distr_type,
-                        df_scores: Dict[int, List[int]]
                         ) -> DefaultDict[int, Dict[int, float]]:
         """Get the bm25 scores for all terms in clusters.
 
@@ -236,9 +176,8 @@ class Scorer:
         https://en.wikipedia.org/wiki/Okapi_BM25
 
         Args:
-            word_distr: Description at the top of the file in
+            term_distr: Description at the top of the file in
                 type-definitions.
-            df: The document frequencies of terms in the base corpus.
 
         Return:
             A mapping of term's ids to their bm25 score in the form:
@@ -279,7 +218,8 @@ class Scorer:
         """Get the documents frequencies for the terms in pseudo-docs.
 
         Args:
-            df: The document frequencies of terms in the base corpus.
+            term_distr: Description at the top of the file in
+                type-definitions.
         Return:
             The document frequencies for terms in pseudo-docs.
             {term-id: df}
@@ -320,8 +260,8 @@ class Scorer:
     #                 local_df[term_id].append(doc_id)
     #     return local_df
 
-    def get_idf_scores_pd(self,
-                          df_scores_pd: Dict[int, int]
+    @staticmethod
+    def get_idf_scores_pd(df_scores_pd: Dict[int, int]
                           ) -> Dict[str, float]:
         """Get idf scores for terms in clusters and pseudo docs.
 
@@ -329,8 +269,7 @@ class Scorer:
         There are 5 pseudo-docs, so N = |D| = 5.
 
         Args:
-            word_distr: Description at the top of the file in
-                type-definitions.
+            df_scores_pd: {term_id: pseudo-document frequency}
         Return:
             {term_id: idf_score}
         """
@@ -347,17 +286,16 @@ class Scorer:
         """Form bag of words pseudo docs.
 
         Args:
-            word_distr: Description at the top of the file in
+            term_distr: Description at the top of the file in
                 type-definitions.
         Return:
             {label: Bag of document words}
         """
         pd_bof = {}  # pseudo-docs-bag-of-words
         for label, sc in self.subcorpora.items():
-            print('      label: {}'.format(label))
             vocab = []
             for doc_id in sc:
-                s = [term_id for term_id in term_distr[doc_id] if term_id !=-1]
+                s = [t_id for t_id in term_distr[doc_id] if t_id != -1]
                 vocab.extend(s)
             pd_bof[label] = set(vocab)
         return pd_bof
@@ -383,7 +321,7 @@ class Scorer:
         """Get the length of pseudo-docs subcorpora.
 
         Args:
-            word_distr: Description at the top of the file in
+            term_distr: Description at the top of the file in
                 type-definitions.
 
         Return:
@@ -417,6 +355,6 @@ class Scorer:
                     if term_id in self.clusters_inv:
                         if term_id not in tf_pd:
                             tf_pd[term_id] = {0: 0, 1: 0, 2: 0,
-                                                     3: 0, 4: 0}
+                                              3: 0, 4: 0}
                         tf_pd[term_id][label] += term_distr[doc_id][term_id][0]
         return tf_pd
