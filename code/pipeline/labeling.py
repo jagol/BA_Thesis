@@ -18,9 +18,17 @@ def main():
         idx_to_term_str = json.load(f)
         idx_to_term = {int(k): v for k, v in idx_to_term_str.items()}
 
-    path_tax_f = os.path.join(path_out, 'concept_terms/tax_labels.csv')
     taxonomy = load_taxonomy(path_out)
-    tax_label_file = open(path_tax_f, 'w', encoding='utf8')
+
+    # Run labeling with repr score as metric.
+    path_tax_frep = os.path.join(path_out, 'concept_terms/tax_labels_repr.csv')
+    tax_label_file = open(path_tax_frep, 'w', encoding='utf8')
+    csv_writer = csv.writer(tax_label_file, delimiter=',')
+    rec_find_labels(path_out, taxonomy, 10, 0, csv_writer)
+
+    # Run labeling with cosine similarity as metric.
+    path_tax_fsim = os.path.join(path_out, 'concept_terms/tax_labels_sim.csv')
+    tax_label_file = open(path_tax_fsim, 'w', encoding='utf8')
     csv_writer = csv.writer(tax_label_file, delimiter=',')
     rec_find_labels(path_out, taxonomy, 10, 0, csv_writer)
 
@@ -29,7 +37,8 @@ def rec_find_labels(path_out: str,
                     taxonomy: Dict[int, List[int]],
                     top_k: int,
                     node_id: int,
-                    csv_writer: Any
+                    csv_writer: Any,
+                    cos: bool = False
                     ) -> None:
     """Find the most representative labels for each cluster.
 
@@ -39,16 +48,18 @@ def rec_find_labels(path_out: str,
         top_k: The k most representative terms are selected as labels.
         node_id: The id of the root node.
         csv_writer: file-object to which the labels are written.
+        cos: If true, use the cosine similarity, else use the repr
+            score.
     """
     child_ids = taxonomy.get(node_id)
     if not child_ids:
         return
 
     if node_id != 0:
-        top_k_terms = get_top_k_terms(path_out, top_k, node_id)
+        top_k_terms = get_top_k_terms(path_out, top_k, node_id, cos=cos)
         child_ids_as_dict = {i: chid for i, chid in enumerate(child_ids)}
         write_tax_to_file(node_id, child_ids_as_dict, top_k_terms, csv_writer)
-    # print(node_id, child_ids)
+
     for child_id in child_ids:
         print(node_id, child_id)
         rec_find_labels(path_out, taxonomy, top_k, child_id, csv_writer)
@@ -56,18 +67,26 @@ def rec_find_labels(path_out: str,
 
 def get_top_k_terms(path_out: str,
                     top_k: int,
-                    node_id: int
+                    node_id: int,
+                    cos: bool = False
                     ) -> List[Tuple[int, float]]:
     """Get the top k terms.
+
+    If cos is false, use the term-representaiveness score, if it is true
+    use the cosine similarity between term and cluster-center as a
+    metric.
+
     Args:
         path_out: The path to the output directory.
         top_k: The k most representative terms are selected as labels.
         node_id: The id of the root node.
+        cos: If true, use the cosine similarity, else use the repr
+            score.
     Return:
         A list of tuples of the form. (term_id, score).
     """
     path_concept_terms = os.path.join(path_out, 'concept_terms/')
-    scores = load_scores(path_concept_terms, node_id)
+    scores = load_scores(path_concept_terms, node_id, cos=cos)
     clus_terms = load_clus_terms(path_concept_terms, node_id)
     concept_term_scores = []
     for term_id in clus_terms:
@@ -97,7 +116,8 @@ def load_taxonomy(path_out: str) -> Dict[int, List[int]]:
 
 
 def load_scores(path_concept_terms: str,
-                node_id: int
+                node_id: int,
+                cos: bool = False
                 ) -> Dict[int, Tuple[str, float]]:
     """Load the term scores for the terms in the given node.
 
@@ -106,16 +126,25 @@ def load_scores(path_concept_terms: str,
         Used to get file of the form:
             term_id SPACE term SPACE score NEWLINE
         node_id: The id of the node.
+        cos: If true, load the cosine similarity, else load the repr
+            score.
     Return:
         A dictionary mapping term-ids to a tuple of the form:
         (term, score).
     """
-    fpath = path_concept_terms + '{}_scores.txt'.format(node_id)
+    if not cos:
+        # Load representativeness scores.
+        fpath = path_concept_terms + '{}_scores.txt'.format(node_id)
+    else:
+        # Load cosine similarities.
+        fpath = path_concept_terms + '{}_cnt_dists.txt'.format(node_id)
+
     term_scores = {}
     with open(fpath, 'r', encoding='utf8') as f:
         for line in f:
             term_id, term, score = line.strip('\n').split(' ')
             term_scores[int(term_id)] = (term, float(score))
+
     return term_scores
 
 
