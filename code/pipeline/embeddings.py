@@ -3,13 +3,20 @@ from collections import defaultdict
 import json
 import numpy as np
 # import fasttext
-import subprocess
+# import subprocess
 import os
 from allennlp.commands.elmo import ElmoEmbedder
-from allennlp.modules.similarity_functions.cosine import CosineSimilarity
+# from allennlp.modules.similarity_functions.cosine import CosineSimilarity
+import logging
+logging.getLogger("gensim.models").setLevel(logging.WARNING)
+logging.getLogger("gensim.scripts.glove2word2vec").setLevel(logging.WARNING)
+logging.getLogger("gensim").setLevel(logging.WARNING)
 from gensim.models import Word2Vec, KeyedVectors
-from gensim.test.utils import datapath, get_tmpfile
+# from gensim.test.utils import datapath, get_tmpfile
 from gensim.scripts.glove2word2vec import glove2word2vec
+logging.getLogger("gensim.models").setLevel(logging.WARNING)
+logging.getLogger("gensim.scripts.glove2word2vec").setLevel(logging.WARNING)
+logging.getLogger("gensim").setLevel(logging.WARNING)
 from utility_functions import get_docs
 
 
@@ -24,9 +31,10 @@ class Embeddings:
         raise NotImplementedError
 
     @staticmethod
-    def load_term_embeddings(term_ids: Set[str],
-                             emb_path: str
-                             ) -> Dict[str, List[float]]:
+    def load_term_embeddings(term_ids: Set[int],
+                             emb_path: str,
+                             term_ids_to_embs_global: Dict[int, List[float]]
+                             ) -> Dict[int, List[float]]:
         """Get all embeddings for the given terms from the given file.
 
         Args:
@@ -35,10 +43,17 @@ class Embeddings:
         Return:
             A dictionary of the form: {term_id: embedding}
         """
+        logging.getLogger("gensim.models").setLevel(logging.WARNING)
+        logging.getLogger("gensim.scripts.glove2word2vec").setLevel(
+            logging.WARNING)
+        logging.getLogger("gensim").setLevel(logging.WARNING)
         model = KeyedVectors.load(emb_path)
         term_id_to_emb = {}
         for term_id in term_ids:
-            term_id_to_emb[term_id] = model.wv[str(term_id)]
+            try:
+                term_id_to_emb[term_id] = model.wv[str(term_id)]
+            except KeyError:
+                term_id_to_emb[term_id] = term_ids_to_embs_global[term_id]
         return term_id_to_emb
 
 
