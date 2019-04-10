@@ -145,7 +145,7 @@ def generate_taxonomy() -> None:
                       cur_corpus=base_corpus,
                       csv_writer=csv_writer,
                       term_ids_to_embs_global=term_ids_to_embs_global,
-                      emb_type=emb_type)
+                      emb_type=emb_type, max_iter=config['max_iter'])
 
     tax_file.close()
 
@@ -171,7 +171,8 @@ def rec_find_children(term_ids_local: Set[int],
                       path_out: str,
                       csv_writer: Any,
                       df: Dict[int, List[int]],
-                      emb_type: str
+                      emb_type: str,
+                      max_iter: int
                       ) -> None:
     """Recursive function to generate child nodes for parent node.
 
@@ -195,6 +196,8 @@ def rec_find_children(term_ids_local: Set[int],
         csv_writer: csv-writer-object used to write taxonomy to file.
         df: Document frequencies of the form: {term-id: List of doc-ids}
         emb_type: The embedding type: 'Word2Vec', 'GloVe' or 'ELMo'.
+        max_iter: The maximum number of iterations for adaptive
+            spherical clustering.
     """
     if level > max_depth or len(term_ids_local) == 0:
         # write_tax_to_file(cur_node_id, {}, [], csv_writer, only_id=True)
@@ -263,6 +266,8 @@ def rec_find_children(term_ids_local: Set[int],
         if len(gen_terms_clus) == 0 or len(term_ids_to_embs_local) == 0:
             # 2. cond for the case if all terms have been pushed up.
             break
+        if i > max_iter:
+            break
         term_ids_to_embs_local = update_title(term_ids_to_embs_local, clusters)
 
     # Start preparation of next iteration.
@@ -281,13 +286,6 @@ def rec_find_children(term_ids_local: Set[int],
     del gen_terms_clus
     del term_ids_to_embs_local
 
-    # if len(general_terms) == 0:
-    #     write_tax_to_file(cur_node_id, {}, [], csv_writer, only_id=True)
-    # else:
-    # for label in clusters:
-    #     general_terms.sort(key=lambda t: t[1])
-    #     repr_terms_clus = repr_terms[label]
-
     print('Start new recursion...')
     for label, clus in clusters.items():
         node_id = child_ids[label]
@@ -299,7 +297,7 @@ def rec_find_children(term_ids_local: Set[int],
                           # cur_repr_terms=repr_terms[label],
                           cur_corpus=subcorpus,
                           path_out=path_out,
-                          csv_writer=csv_writer,
+                          csv_writer=csv_writer, max_iter=max_iter,
                           term_ids_to_embs_global=term_ids_to_embs_global,
                           term_ids_global=term_ids_global, emb_type=emb_type)
 
