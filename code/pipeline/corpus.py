@@ -2,7 +2,7 @@ import pickle
 import os
 from typing import *
 from collections import defaultdict
-from utility_functions import get_sim, get_config
+from utility_functions import get_config
 from numpy import mean
 import numpy as np
 
@@ -15,7 +15,7 @@ term_distr_type = DefaultDict[int, doc_distr_type]
 class Corpus:
 
     @staticmethod
-    def get_doc_embeddings(path_out: str) -> Dict[int, List[float]]:
+    def load_doc_embeddings(path_out: str) -> Dict[int, np.ndarray]:
         """Compute document embeddings using term-embeddings and tfidf.
 
         Compute document embeddings though average of tfidf weighted term
@@ -73,11 +73,77 @@ class Corpus:
         return topic_embeddings
 
     @classmethod
+    def get_subcorpora(cls,
+                       cluster_centers: Dict[int, np.ndarray],
+                       clusters: Dict[int, Set[int]],
+                       term_distr: term_distr_type,
+                       m: int,
+                       path_out: str
+                       ) -> Dict[int, Set[int]]:
+        """Get subcorpora for the given clusters.
+
+        Employ two methods:
+            1. clustering-based: sum up all tfidf-values of terms in
+                documents to obtain a document score per cluster. The
+                document belongs to the cluster with the highest score.
+            2. retrieval-based: for a given topic-embedding, find the
+                top m documents most similar to the topic-embedding.
+                Each document belongs to the cluster with the highest
+                similarity.
+
+        Args:
+            cluster_centers: A dict mapping each cluster label to it's center.
+            clusters: A dict mapping each cluster label to it's term-ids.
+            term_distr: Description in type definitions at the top of the
+                document.
+            m: The maximum number of documents to be returned per
+                subcorpus. It can be the case that less than m documents are
+                returned.
+            path_out: The path to the output directory.
+
+        Return:
+            A dict mapping each cluster label to a set of document ids.
+        """
+        use_retrieval_based = False
+        subcorpus = {}
+        # {doc-id: list of doc-ids ordered by strength from both
+        # retrieval methods}
+        sc_tfidf = cls.get_subcorpora_tfidf(clusters, term_distr)
+        # {label: list of doc-ids ordered by strength descending}
+        for label, sc in sc_tfidf.items():
+            if len(sc) < m:
+                use_retrieval_based = True
+        if use_retrieval_based:
+            sc_emb = cls.get_subcorpora_emb(cluster_centers, path_out)
+            # {label: list of doc-ids ordered by strength descending}
+            # Add retrieval-based docs to clustering-based docs while
+            # avoiding duplicates but retaining the order of both lists.
+            for label in sc_tfidf:
+                cur_sc_tfidf = set(sc_tfidf[label])
+                sc_emb_not_dupl = []
+                for doc_id in sc_emb[label]:
+                    if doc_id not in cur_sc_tfidf:
+                        sc_emb_not_dupl.append(doc_id)
+                subcorpus[label] = sc_tfidf[label] + sc_emb_not_dupl
+
+        # Reduce to m docs per cluster and convert to set.
+        for label in subcorpus:
+            num_docs = len(subcorpus[label])
+            if num_docs >= m:
+                subcorpus[label] = set(subcorpus[label][:m])
+            else:
+                subcorpus[label] = set(subcorpus[label])
+
+            msg = '  {} documents collected for cluster {}...'
+            print(msg.format(num_docs, label))
+
+        return subcorpus
+
+    @classmethod
     def get_subcorpora_tfidf(cls,
-                             n: int,
                              clusters: Dict[int, Set[int]],
                              term_distr: term_distr_type,
-                             ) -> Dict[int, Set[int]]:
+                             ) -> Dict[int, List[int]]:
         """Generate a pseudo corpus (relevant_docs) for given set of terms.
 
         This is the tfidf-only version without usage of embeddings.
@@ -99,22 +165,61 @@ class Corpus:
                 - filter and return the form: {clus-label: {doc-id}}
 
         Args:
-            n: The top n scored documents are chosen for the pseudo corpus.
-                n should be chosen as num_docs / n_clus
-                where num_docs denotes the number of documents in the base
-                corpus and n_clus denotes the number of clusters (or just
-                the number of parts) the base corpus is divided into.
             clusters: {clus-label: set of term-ids}
             term_distr: description in type definitions at the top of the
                 document
         Return:
             {clus-label: doc-ids}
         """
+        subcorpus = {}
         clusters_inv = cls.invert_clusters(clusters)
         topic_doc_strengths = cls.get_topic_doc_strengths(
             clusters_inv, term_distr, len(clusters))
-        topic_doc_strengths = cls.trim_top_n_per_clus(topic_doc_strengths, n)
-        return cls.remove_strengths(topic_doc_strengths)
+
+        for label in topic_doc_strengths:
+            topic_doc_strengths[label].sort(key=lambda tpl: tpl[1],
+                                            reverse=True)
+            subcorpus[label] = [t[0] for t in topic_doc_strengths[label]]
+
+        return subcorpus
+
+    @classmethod
+    def get_subcorpora_emb(cls,
+                           cluster_centers: Dict[int, np.ndarray],
+                           path_out: str,
+                           ) -> Dict[int, List[int]]:
+        """Get the subcorpus for each cluster.
+
+        TODO: describe args
+        Args:
+            cluster_centers: ...
+            path_out: ...
+        Return:
+            A dictionary mapping each clusterlabel to a set of doc-ids.
+        """
+        print('  Load document embeddings...')
+        doc_embeddings = cls.load_doc_embeddings(path_out)
+        # {doc_id: embedding}
+        print('  Get topic_embeddings...')
+        topic_embeddings = cluster_centers
+        # {cluster/topic_label: embedding}
+        print('  Calculate topic document similarities...')
+        doc_topic_sims = cls.get_doc_topic_sims(doc_embeddings,
+                                                topic_embeddings)
+
+        subcorpora = defaultdict(list)  # {label: [(doc_id, strength)]}
+        for doc_id in doc_topic_sims:
+            topic_strengths = doc_topic_sims[doc_id]
+            strongest_label, strongest_score = cls.get_strongest_topic(
+                topic_strengths)
+            subcorpora[strongest_label].append((doc_id, strongest_score))
+
+        for label in subcorpora:
+            subcorpora[label].sort(key=lambda tpl: tpl[1], reverse=True)
+            subcorpora[label] = [t[0] for t in subcorpora[label]]
+
+        # {cluster/topic_label: {set of doc-ids}}
+        return subcorpora
 
     @classmethod
     def get_topic_doc_strengths(cls,
@@ -136,7 +241,7 @@ class Corpus:
         topic_doc_strengths = defaultdict(list)
         # {label: {(doc-id, strength)}}
         for doc_id in word_distr:
-            doc_clus_strengths = num_clusters * [0.0]  # clus-label as index
+            doc_clus_strengths = np.zeros(num_clusters)
             for term_id in word_distr[doc_id]:
                 if term_id not in clusters_term_ids:
                     continue
@@ -197,7 +302,7 @@ class Corpus:
         return subcorpora
 
     @staticmethod
-    def get_strongest_topic(doc_membership: List[float]
+    def get_strongest_topic(doc_membership: np.ndarray
                             ) -> Tuple[int, float]:
         """Get the topic with the highest aggregated tfidf score.
 
@@ -206,41 +311,23 @@ class Corpus:
         getting-key-with-maximum-value-in-dictionary
 
         Args:
-            doc_membership: A dict mapping a topic-label to its
-                strength in the document.
+            doc_membership: A list of membership strengths where the
+                index corresponds with the topic label.
         Return:
             A tuple of the form: (label, strength).
         """
         strongest_score = max(doc_membership)
-        label = doc_membership.index(strongest_score)
+        label = list(doc_membership).index(strongest_score)
         return label, strongest_score
 
-    @staticmethod
-    def get_doc_topic_sims(doc_embeddings: Dict[int, List[float]],
-                           topic_embeddings: Dict[int, List[float]]
-                           ) -> Dict[int, List[float]]:
-        """Get the similarities between topic and document vectors.
-
-        Args:
-            doc_embeddings: Maps doc-ids to their embeddings.
-            topic_embeddings: Maps topic-ids to their embeddings.
-        Return:
-            A dict of the form: {doc-id: {topic/cluster-label: similarity}}
-        """
-        doc_topic_sims = {i: np.empty(5) for i in doc_embeddings}
-        for topic, temb in topic_embeddings.items():
-            for doc, demb in doc_embeddings.items():
-                doc_topic_sims[doc][topic] = get_sim(temb, demb)
-        return doc_topic_sims
-
     @classmethod
-    def get_doc_topic_sims_matrix_mul(cls,
-                                      doc_embeddings: Dict[int, List[float]],
-                                      topic_embeddings: Dict[int, List[float]]
-                                      ) -> Dict[int, List[float]]:
+    def get_doc_topic_sims(cls,
+                           doc_embeddings: Dict[int, np.ndarray],
+                           topic_embeddings: Dict[int, np.ndarray]
+                           ) -> Dict[int, np.ndarray]:
         """Get the similarities between topic and document vectors.
 
-        Faster version using matrix multplication.
+        Faster version using matrix multiplication.
 
         Args:
             doc_embeddings: Maps doc-ids to their embeddings.
@@ -248,16 +335,21 @@ class Corpus:
         Return:
             A dict of the form: {doc-id: {topic/cluster-label: similarity}}
         """
-        doc_topic_sims = {i: np.empty(5) for i in doc_embeddings}
+        num_topics = len(topic_embeddings)
+        doc_topic_sims = {i: np.empty(num_topics) for i in doc_embeddings}
         for tlabel, temb in topic_embeddings.items():
             cls.calc_sims_new_way(temb, doc_embeddings, tlabel, doc_topic_sims)
         return doc_topic_sims
 
     @staticmethod
     def get_matrix(doc_embs):
+        # Get the number of dimensions.
+        key = list(doc_embs.keys())[0]
+        num_dimensions = len(doc_embs[key])
+
         num_embs = len(doc_embs)
         doc_ids = np.zeros(num_embs, dtype=int)
-        matrix = np.empty(shape=(num_embs, 100))
+        matrix = np.empty(shape=(num_embs, num_dimensions))
         i = 0
         for doc_id, emb in doc_embs.items():
             doc_ids[i] = doc_id
@@ -292,7 +384,7 @@ class Corpus:
 
     @classmethod
     def get_topic_docs(cls,
-                       doc_topic_sims: Dict[int, List[float]],
+                       doc_topic_sims: Dict[int, np.ndarray],
                        m: Union[int, None]=None
                        ) -> Dict[int, Set[int]]:
         """Get the topic/cluster for each document.
@@ -326,7 +418,7 @@ class Corpus:
         return topic_docs
 
     @staticmethod
-    def get_topic_with_max_sim(topic_sims: List[float]) -> int:
+    def get_topic_with_max_sim(topic_sims: np.ndarray) -> int:
         """Get the topic with the highest similarity score.
 
         Args:
