@@ -53,7 +53,7 @@ def main():
                 path_in, path_out, path_lang_model, max_docs=10000)
         elif args.corpus == 'sp':
             lpp = SPLingPreprocessor(
-                path_in, path_out, path_lang_model) # , max_docs=10000)
+                path_in, path_out, path_lang_model)  # , max_docs=10000)
         lpp.preprocess_corpus()
         print('Done.')
 
@@ -111,7 +111,6 @@ def main():
         print('Calculate document lengths...')
         fa.calc_dl()
         print('Done.')
-
 
     if not args.skip_embeddings:
         emb_types = ['Word2Vec', 'GloVe']

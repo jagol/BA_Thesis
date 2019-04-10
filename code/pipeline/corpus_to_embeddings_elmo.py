@@ -13,44 +13,6 @@ from utility_functions import get_docs, get_num_docs, split_corpus, concat_corpu
 output = mp.Queue()
 
 
-# def main():
-#     elmo = ElmoE()
-#     path_in = 'output/dblp/processed_corpus/pp_lemma_corpus_1000.txt'
-#     path_out = 'output/dblp/embeddings/elmo_lemma_embeddings.txt'
-#     with open(path_out, 'w', encoding='utf8') as f:
-#         docs_embs = []
-#         start_time = time.time()
-#         for i, doc in enumerate(get_docs(path_in)):
-#             print(i)
-#             doc_embs = []
-#             for sent in doc:
-#                 embs = elmo.get_embeddings(sent)
-#                 doc_embs.append(embs)
-#             docs_embs.append(doc_embs)
-#
-#             if i % 500 == 0:
-#                 docs_str = docs_to_string(docs_embs)
-#                 f.write(docs_str)
-#
-#             if i >= 10:
-#                 break
-#
-#         docs_str = docs_to_string(docs_embs)
-#         f.write(docs_str)
-#
-#     time_stamp = time.time()
-#     time_passed = time_stamp - start_time
-#     print(time_passed)
-#     exp_time = time_passed * 400000
-#     minutes = exp_time / 60
-#     hours = minutes / 60
-#     days = hours / 24
-#     print(exp_time)
-#     print(minutes)
-#     print(hours)
-#     print(days)
-
-
 def embed_corpus_terms(path: str, level: str, num_processes: int):
     """Create elmo embeddings for a given corpus with parallel processing.
 
@@ -59,7 +21,6 @@ def embed_corpus_terms(path: str, level: str, num_processes: int):
         level: 't' if tokens, 'l' if lemmas.
         num_processes: The number of processes.
     """
-    # path_in = 'output/dblp/processed_corpus/pp_lemma_corpus_1000.txt'
     path_out = os.path.join(path, 'embeddings/')
     if level == 't':
         path_in = os.path.join(path,
@@ -68,7 +29,7 @@ def embed_corpus_terms(path: str, level: str, num_processes: int):
                                         'corpus_elmo_{}.emb'.format('tokens'))
     elif level == 'l':
         path_in = os.path.join(path,
-                     'processed_corpus/pp_lemma_corpus.txt')
+                               'processed_corpus/pp_lemma_corpus.txt')
         path_corpus_embs = os.path.join(path_out,
                                         'corpus_elmo_{}.emb'.format('lemmas'))
     print('Split corpus...')
@@ -85,7 +46,7 @@ def embed_corpus_terms(path: str, level: str, num_processes: int):
     time_passed = end_time-start_time
     print('time-passed:', time_passed)
     print('Concatenating corpus files...')
-    merge_dicts(fnames_emb, './all_corpus_term_embs.json')
+    merge_dicts(fnames_emb, './elmo_embeddings_l2_{}.json'.format(level))
     print('Cleaning temporary files...')
     # os.system('rm {}*.emb; rm {}*.txt.split'.format(path_out, path_out))
     print('Done.')
@@ -109,7 +70,10 @@ def parallel_embed_terms(path: str, fnames: List[str], start_nums, level: str):
         path_term_to_idxs = os.path.join(path, 'indexing/token_to_idx.json')
     elif level == 'l':
         path_term_to_idxs = os.path.join(path, 'indexing/lemma_to_idx.json')
-    processes = [mp.Process(target=embed_terms, args=(path_term_to_idxs, path_in, path_out, start_num)) for path_in, path_out, start_num in args]
+    processes = [mp.Process(target=embed_terms,
+                            args=(path_term_to_idxs, path_in, path_out,
+                                  start_num))
+                 for path_in, path_out, start_num in args]
 
     # Run processes
     for p in processes:
@@ -148,8 +112,9 @@ def embed_terms(path_term_to_idxs: str,
 
     for i, doc in enumerate(get_docs(path_in)):
         doc_id = start_num + i
+        print(30*'-')
         print('processing {}...'.format(doc_id))
-        print('doc_id and doc', doc_id, doc)
+        print('doc_id: {}, doc: {}'.format(doc_id, doc))
         for sent in doc:
             sent_terms = []
             for j in range(len(sent)):
@@ -157,18 +122,18 @@ def embed_terms(path_term_to_idxs: str,
                 if word in terms_to_idxs:
                     term_idx = terms_to_idxs[word]
                     sent_terms.append((term_idx, word.split('_'), j))
-            print('doc-id and sent-terms:', doc_id, sent_terms)
+            print('doc-id: {}, sent-terms: {}'.format(doc_id, sent_terms))
             if sent_terms:
                 prepped_sent, term_idxs = prepare_sentence(sent, sent_terms)
-                print(prepped_sent, term_idxs)
-                embs = elmo.get_embeddings(prepped_sent)
+                print('prepared_sent: {}, term_idxs: {}'.format(prepped_sent, term_idxs))
+                embs = elmo.get_embeddings(prepped_sent, mode=1)
                 for h in range(len(sent_terms)):
                     term = sent_terms[h]
                     term_emb = get_term_emb(embs, term_idxs[h])
                     # term_emb = [float(f) for f in embs[term[1]]]
                     term_idx = term[0]
                     term_embs_per_doc[term_idx][doc_id].append(term_emb)
-        if i > 100:
+        if i > 1000:
             break
 
     with open(path_out, 'w', encoding='utf8') as f:
@@ -265,8 +230,8 @@ def merge_dicts(fpaths: List[str], path_out: str) -> None:
                     out_dict_term = out_dict[term_id]
                     for doc_id in cur_term_dict:
                         if doc_id in out_dict_term:
-                            print(
-                                'Two files have the same doc_ids...there is something wrong!')
+                            print(('Two files have the same doc_ids...'
+                                   'there is something wrong!'))
                         else:
                             out_dict_term[doc_id] = cur_term_dict[doc_id]
                 else:
@@ -326,8 +291,9 @@ def merge_dicts(fpaths: List[str], path_out: str) -> None:
 
 
 if __name__ == '__main__':
-    # embed_corpus('mnt/storage/harlie/users/jgoldz/output/dblp/', 'l', 5)
-    embed_corpus_terms('/mnt/storage/harlie/users/jgoldz/output/dblp', 'l', 5)
+    # embed_corpus_terms('mnt/storage/harlie/users/jgoldz/output/dblp/', 'l', 5)
+    embed_corpus_terms('/mnt/storage/harlie/users/jgoldz/output/dblp', 't', 12)
+    # embed_corpus_terms('./output/dblp', 't', 3)
     # elmo = ElmoE()
     # sent = ["This", "is", "an", "example", "."]
     # embs = elmo.get_embeddings(sent)
