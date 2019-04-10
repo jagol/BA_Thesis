@@ -3,15 +3,15 @@ import json
 import pickle
 import csv
 import time
-from numpy import mean
 from collections import defaultdict
-from numpy import median
 from typing import List, Dict, Set, Tuple, Union, Any, DefaultDict
+from numpy import mean, median, ndarray
 from corpus import Corpus as Cp
 from embeddings import Embeddings, get_emb
 from clustering import Clustering
 from score import Scorer
-from utility_functions import get_cmd_args, get_config, get_num_docs, get_docs
+from utility_functions import get_cmd_args, get_config, get_num_docs, \
+    get_docs, get_sim
 
 
 # Define global variables.
@@ -236,14 +236,11 @@ def rec_find_children(term_ids_local: Set[int],
                                                   term_ids_to_embs_local)
 
         print('Get subcorpora for clusters...')
-        subcorpora_emb = get_subcorpora_emb(cluster_centers, path_out, m=m)
-        # {label: doc-ids}
-        subcorpora_tfidf = Cp.get_subcorpora_tfidf(m, clusters,
-                                                   term_distr_base)
+        subcorpora = Cp.get_subcorpora(cluster_centers, clusters,
+                                       term_distr_base, m, path_out)
 
         print('Compute term scores...')
-        term_scores = get_term_scores(clusters, cluster_centers,
-                                      subcorpora_tfidf,
+        term_scores = get_term_scores(clusters, cluster_centers, subcorpora,
                                       term_distr_base, df, level)
         # del term_distr_base
 
@@ -276,6 +273,8 @@ def rec_find_children(term_ids_local: Set[int],
     print('Write concept terms to file...')
     write_pushed_up_terms_to_file(path_out, cur_node_id, general_terms)
     write_term_scores(path_out, child_ids, clusters, term_scores)
+    write_term_center_distances(path_out, child_ids, clusters,
+                                cluster_centers, term_ids_to_embs_local)
     write_tax_to_file(cur_node_id, child_ids, [], csv_writer)
 
     del term_scores
@@ -292,7 +291,7 @@ def rec_find_children(term_ids_local: Set[int],
     print('Start new recursion...')
     for label, clus in clusters.items():
         node_id = child_ids[label]
-        subcorpus = subcorpora_emb[label]
+        subcorpus = subcorpora[label]
         rec_find_children(term_ids_local=clus, base_corpus=base_corpus,
                           path_base_corpus_ids=path_base_corpus_ids,
                           cur_node_id=node_id, level=level + 1, df=df_base,
@@ -373,6 +372,38 @@ def write_pushed_up_terms_to_file(path_out: str,
             f.write(line)
 
 
+def write_term_center_distances(path_out: str,
+                                child_ids: Dict[int, int],
+                                clusters: Dict[int, Set[int]],
+                                cluster_centers: Dict[int, ndarray],
+                                term_ids_to_embs_local: Dict[int, ndarray]
+                                ) -> None:
+    """Write to file how far a term is from it's cluster center.
+
+    Args:
+        path_out: The path to the output directory.
+        child_ids: The A dictionary mapping cluster labels to node ids.
+        clusters: A dictionary mapping a cluster label to a set of
+            term-ids.
+        cluster_centers: Maps the cluster-label to the cluster center
+            /topic-embedding.
+        term_ids_to_embs_local: Maps term indices to the term's
+            embedding.
+    """
+    path_out = os.path.join(path_out, 'concept_terms/')
+    for label, node_id in child_ids.items():
+        fname = '{}_cnt_dists.txt'.format(node_id)
+        fpath = os.path.join(path_out, fname)
+        clus_center = cluster_centers[label]
+        with open(fpath, 'w', encoding='utf8') as f:
+            for term_id in clusters[label]:
+                term_emb = term_ids_to_embs_local[term_id]
+                similarity = get_sim(clus_center, term_emb)
+                term = idx_to_term[term_id]
+                line = '{} {} {}\n'.format(term_id, term, similarity)
+                f.write(line)
+
+
 def write_term_scores(path_out: str,
                       child_ids: Dict[int, int],
                       clusters: Dict[int, Set[int]],
@@ -398,37 +429,6 @@ def write_term_scores(path_out: str,
                 term = idx_to_term[term_id]
                 line = '{} {} {}\n'.format(term_id, term, score)
                 f.write(line)
-
-
-def get_subcorpora_emb(cluster_centers: Dict[int, List[float]],
-                       path_out: str,
-                       m: Union[int, None] = None,
-                       ) -> Dict[int, Set[int]]:
-    """Get the subcorpus for each cluster.
-
-    TODO: describe args
-    Args:
-        cluster_centers: ...
-        path_out: ...
-        m: ...
-    Return:
-        A dictionary mapping each clusterlabel to a set of doc-ids.
-    """
-    print('  Calculate document embeddings...')
-    doc_embeddings = Cp.get_doc_embeddings(path_out)
-    # {doc_id: embedding}
-    print('  Get topic_embeddings...')
-    topic_embeddings = cluster_centers
-    # {cluster/topic_label: embedding}
-    print('  Calculate topic document similarities...')
-    # doc_topic_sims_old = get_doc_topic_sims(doc_embeddings, topic_embeddings)
-    doc_topic_sims = Cp.get_doc_topic_sims_matrix_mul(doc_embeddings,
-                                                      topic_embeddings)
-    # {doc-id: {topic-label: sim}}
-    print('  Determine the top m most similar documents to each topic...')
-    subcorpora = Cp.get_topic_docs(doc_topic_sims, m)
-    # {cluster/topic_label: {set of doc-ids}}
-    return subcorpora
 
 
 def separate_gen_terms(clusters: Dict[int, Set[int]],
@@ -611,9 +611,9 @@ def load_term_ids(path_term_ids: str) -> Set[int]:
     return term_ids
 
 
-def update_title(term_ids_to_embs_local: Dict[int, List[float]],
+def update_title(term_ids_to_embs_local: Dict[int, ndarray],
                  clusters: Dict[int, Set[int]]
-                 ) -> Dict[int, List[float]]:
+                 ) -> Dict[int, ndarray]:
     """Update the term_ids_to_embs-variable (title).
 
     Create a new variable that only contains the terms given in
