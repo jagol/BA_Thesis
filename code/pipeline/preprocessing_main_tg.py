@@ -1,11 +1,18 @@
 import os
-from typing import Dict, Any
+import json
+import pickle
+from collections import defaultdict
+from typing import Dict, Any, DefaultDict, Union, Tuple
 from utility_functions import get_config, get_cmd_args, prep_output_dir
 from indexing import Indexer
 from frequency_analysis import FreqAnalyzer
 from embeddings import get_emb
 from document_embeddings import DocEmbedder
 
+
+doc_distr_type = DefaultDict[int, Union[Tuple[int, int], int]]
+term_distr_type = DefaultDict[int, doc_distr_type]
+term_distr_base: term_distr_type = defaultdict(dict)
 
 """
 Preprocess dblp input based on TaxoGen's preprocessing.
@@ -121,6 +128,35 @@ def main():
         doc_embedder = DocEmbedder(path_out, emb_type)
         doc_embedder.embed_token_docs()
         print('Finished document embeddings.')
+
+    if not args.skip_word_distr:
+        print('Create term distributions pickle file...')
+
+        path_tf = os.path.join(path_out, 'frequencies/tf_tokens.json')
+        path_tfidf = os.path.join(path_out, 'frequencies/tfidf_tokens.json')
+        path_dl = os.path.join(path_out, 'frequencies/dl.json')
+        path_term_distr = os.path.join(
+            path_out, 'frequencies/term_distr_tokens.json')
+
+        # Load frequencies.
+        with open(path_tf, 'r', encoding='utf8') as f_tf:
+            tf_base = json.load(f_tf)
+            with open(path_tfidf, 'r', encoding='utf8') as f_tfidf:
+                tfidf_base = json.load(f_tfidf)
+                with open(path_dl, 'r', encoding='utf8') as f_dl:
+                    dl_base = json.load(f_dl)
+
+        # Create term_distr.
+        for doc_id in tfidf_base:
+            for word_id in tf_base[doc_id]:
+                tf = tf_base[doc_id][word_id]
+                tfidf = tfidf_base[doc_id][word_id]
+                term_distr_base[int(doc_id)][int(word_id)] = (tf, tfidf)
+            term_distr_base[int(doc_id)][-1] = dl_base[doc_id]
+
+        # Dump term_distr.
+        with open(path_term_distr, 'wb') as f:
+            pickle.dump(term_distr_base, f)
 
 
 if __name__ == '__main__':
