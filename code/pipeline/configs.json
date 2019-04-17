@@ -4,6 +4,8 @@
   "pop_sum_version": true,
   "kl_divergence": true,
   "threshold": 0.25,
+  "max_iter": 5,
+  "max_depth": 1,
   "clustering": {
     "type": "sphericalkmeans",
     "linkage": "ward",
