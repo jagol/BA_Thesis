@@ -57,6 +57,7 @@ class Scorer:
         self.config = get_config()
         self.pop_df_version = self.config['pop_df_version']
         self.pop_sum_version = self.config['pop_sum_version']
+        self.kl_divergence = self.config['kl_divergence']
 
     @staticmethod
     def inverse_cluster(clusters: Dict[int, cluster_type]
@@ -110,6 +111,11 @@ class Scorer:
             con = con_scores[term_id]
             total = sqrt(pop*con)
             term_scores[term_id] = (pop, con, total)
+
+        if self.kl_divergence:
+            term_scores = self.get_kl_divergence(term_scores)
+        else:
+            term_scores = self.get_one_score(term_scores)
 
         return term_scores
 
@@ -527,3 +533,52 @@ class Scorer:
                                               3: 0, 4: 0}
                         tf_pd[term_id][label] += term_distr[doc_id][term_id][0]
         return tf_pd
+
+    def get_kl_divergence(self,
+                          term_scores: Dict[int, np.ndarray]
+                          ) -> Dict[int, float]:
+        """Compute the kl-divergence.
+
+        Written after
+        https://github.com/franticnerd/taxogen/blob/master/code/utils.py#L18
+        Code is changed to suit into this environment
+
+        Args:
+            term_scores: Maps the term-id to an array with the
+                term-score for a cluster l at place array[l].
+        Return:
+            term_scores_clus: Maps the term-id to the term-score of the
+                cluster the term belongs to.
+        """
+        term_scores_clus = {}  # {term-id: score}
+        num_clus = len(self.clusters)
+        ed = [1.0 / num_clus] * num_clus  # expected distribution
+        for term_id in term_scores:
+            ad = term_scores[term_id]  # actual distribution
+            if len(ad) != len(ed):
+                print('KL divergence error: p, q have different length')
+            c_entropy = 0
+            for i in range(len(ad)):
+                if ad[i] > 0:
+                    c_entropy += ad[i] * log(float(ad[i]) / ed[i])
+            term_scores_clus[term_id] = c_entropy
+
+        return term_scores_clus
+
+    def get_one_score(self,
+                      term_scores: Dict[int, np.ndarray]
+                      ) -> Dict[int, float]:
+        """Get the one term score for the cluster the term belongs to.
+
+        Args:
+            term_scores: Maps the term-id to an array with the
+                term-score for a cluster l at place array[l].
+        Return:
+            term_scores_clus: Maps the term-id to the term-score of the
+                cluster the term belongs to.
+        """
+        term_scores_clus = {}
+        for term_id in term_scores:
+            label = self.clusters_inv[term_id]
+            term_scores_clus[term_id] = label
+        return term_scores_clus
