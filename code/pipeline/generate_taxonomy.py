@@ -65,6 +65,7 @@ def generate_taxonomy() -> None:
     args = get_cmd_args()
     lemmatized = config['lemmatized']
     emb_type = config['embeddings']
+    threshold = config['threshold']
 
     # Set paths.
     print('Set paths...')
@@ -144,6 +145,7 @@ def generate_taxonomy() -> None:
                       path_out=path_out,
                       cur_corpus=base_corpus,
                       csv_writer=csv_writer,
+                      threshold=threshold,
                       term_ids_to_embs_global=term_ids_to_embs_global,
                       emb_type=emb_type, max_iter=config['max_iter'])
 
@@ -165,6 +167,7 @@ def rec_find_children(term_ids_local: Set[int],
                       # cur_repr_terms: List[Tuple[int, float]],
                       cur_node_id: int,
                       level: int,
+                      threshold: float,
                       base_corpus: Set[int],
                       path_base_corpus_ids: str,
                       cur_corpus: Set[int],
@@ -186,6 +189,8 @@ def rec_find_children(term_ids_local: Set[int],
             term_ids.
         level: The level or deepness of the taxonomy. The root node has
             level 0.
+        threshold: The representativenessthreshold for terms to be
+            pushed up.
         path_base_corpus_ids: Path to the corpus file with all documents
             in index-representation.
         base_corpus: All doc_ids of the documents in the base corpus.
@@ -258,7 +263,8 @@ def rec_find_children(term_ids_local: Set[int],
         print(msg_median.format(median_pop, median_con, median_total))
 
         print('Remove terms from clusters...')
-        clusters, gen_terms_clus = separate_gen_terms(clusters, term_scores)
+        clusters, gen_terms_clus = separate_gen_terms(clusters, term_scores,
+                                                      threshold)
         general_terms.extend(gen_terms_clus)
         cluster_sizes = [len(clus) for label, clus in clusters.items()]
         print('Terms pushed up: {}'.format(len(gen_terms_clus)))
@@ -295,6 +301,7 @@ def rec_find_children(term_ids_local: Set[int],
                           cur_node_id=node_id, level=level + 1, df=df_base,
                           df_base=df_base,
                           # cur_repr_terms=repr_terms[label],
+                          threshold=threshold,
                           cur_corpus=subcorpus,
                           path_out=path_out,
                           csv_writer=csv_writer, max_iter=max_iter,
@@ -430,7 +437,8 @@ def write_term_scores(path_out: str,
 
 
 def separate_gen_terms(clusters: Dict[int, Set[int]],
-                       term_scores: Dict[int, Tuple[float, float, float]]
+                       term_scores: Dict[int, Tuple[float, float, float]],
+                       threshold: float
                        ) -> Tuple[Dict[int, Set[int]],
                                   List[Tuple[int, float]]]:
     """Remove general terms and unpopular terms from clusters.
@@ -442,6 +450,8 @@ def separate_gen_terms(clusters: Dict[int, Set[int]],
         clusters: A list of clusters. Each cluster is a set of doc-ids.
         term_scores: Maps each term-idx to its popularity and
             concentrations.
+        threshold: The representativeness-threshold at which terms are
+            pushed up.
     Return:
         proc_cluster: Same as the input variable 'clusters', but with
             terms removed.
@@ -454,7 +464,7 @@ def separate_gen_terms(clusters: Dict[int, Set[int]],
 
         # clus = remove(clus, terms_to_remove)
 
-        concept_terms_clus = get_concept_terms(clus, term_scores)
+        concept_terms_clus = get_concept_terms(clus, term_scores, threshold)
         concept_terms.extend(concept_terms_clus)
         clus = remove(clus, concept_terms)
 
@@ -463,26 +473,26 @@ def separate_gen_terms(clusters: Dict[int, Set[int]],
     return proc_clusters, concept_terms
 
 
-def get_repr_terms(clusters: Dict[int, Set[int]],
-                   term_scores: Dict[int, Tuple[float, float, float]]
-                   ) -> Dict[int, List[Tuple[int, float]]]:
-    """Get representative terms for the given clusters.
-
-    Args:
-        clusters: A list of clusters. Each cluster is a set of doc-ids.
-        term_scores: Maps each term-idx to its popularity,
-            concentrations and total score.
-    Return:
-        A dict mapping cluster-labels to a list of tuples.
-        Each containing the 10 most representative terms in the form:
-        (term-id: score).
-    """
-    repr_terms = {}
-    for label, clus in clusters.items():
-        clus_terms = [(term_id, term_scores[term_id][2]) for term_id in clus]
-        clus_terms.sort(key=lambda t: t[1], reverse=True)
-        repr_terms[label] = clus_terms[:10]
-    return repr_terms
+# def get_repr_terms(clusters: Dict[int, Set[int]],
+#                    term_scores: Dict[int, Tuple[float, float, float]]
+#                    ) -> Dict[int, List[Tuple[int, float]]]:
+#     """Get representative terms for the given clusters.
+#
+#     Args:
+#         clusters: A list of clusters. Each cluster is a set of doc-ids.
+#         term_scores: Maps each term-idx to its popularity,
+#             concentrations and total score.
+#     Return:
+#         A dict mapping cluster-labels to a list of tuples.
+#         Each containing the 10 most representative terms in the form:
+#         (term-id: score).
+#     """
+#     repr_terms = {}
+#     for label, clus in clusters.items():
+#         clus_terms = [(term_id, term_scores[term_id][2]) for term_id in clus]
+#         clus_terms.sort(key=lambda t: t[1], reverse=True)
+#         repr_terms[label] = clus_terms[:10]
+#     return repr_terms
 
 
 def build_corpus_file(doc_ids: Set[int],
@@ -734,7 +744,8 @@ def get_terms_to_remove(clus: Set[int],
 
 
 def get_concept_terms(clus: Set[int],
-                      term_scores: Dict[int, Tuple[float, float, float]]
+                      term_scores: Dict[int, Tuple[float, float, float]],
+                      threshold: float
                       ) -> List[Tuple[int, float]]:
     """Determine the concept candidates in the cluster.
 
@@ -742,15 +753,15 @@ def get_concept_terms(clus: Set[int],
         clus: A set of doc-ids.
         term_scores: Maps each term-idx to its popularity and
             concentrations.
+        threshold: The representativeness-threshold at which terms are
+            pushed up.
     Return:
         A set of term-ids of the terms to remove.
     """
     concept_terms = []
-    threshhold = 0.25  # According to TaxoGen.
-    # threshhold = 0.30
     for term_id in clus:
         score = term_scores[term_id][2]
-        if score < threshhold:
+        if score < threshold:
             concept_terms.append((term_id, score))
     return concept_terms
 
