@@ -58,6 +58,7 @@ def generate_taxonomy() -> None:
     global idx_to_term
     global path_embeddings_global
     global path_term_distr
+    global max_depth
 
     # Load cmd args and configs.
     print('Load and parse cmd args...')
@@ -66,6 +67,7 @@ def generate_taxonomy() -> None:
     lemmatized = config['lemmatized']
     emb_type = config['embeddings']
     threshold = config['threshold']
+    max_depth = config['max_depth']
 
     # Set paths.
     print('Set paths...')
@@ -272,7 +274,7 @@ def rec_find_children(term_ids_local: Set[int],
         if len(gen_terms_clus) == 0 or len(term_ids_to_embs_local) == 0:
             # 2. cond for the case if all terms have been pushed up.
             break
-        if i > max_iter:
+        if i >= max_iter:
             break
         term_ids_to_embs_local = update_title(term_ids_to_embs_local, clusters)
 
