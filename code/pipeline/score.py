@@ -101,10 +101,10 @@ class Scorer:
             else:
                 pop_scores = self.get_pop_scores(term_distr, df)
 
-        print('  Get concentration scores...')
+        print('  Compute concentration scores...')
         con_scores = self.get_con_scores(term_distr)
 
-        print('  Get repr. scores...')
+        print('  Compute repr. scores...')
         term_scores = {}
         for term_id in pop_scores:
             pop = pop_scores[term_id]
@@ -112,6 +112,7 @@ class Scorer:
             total = np.array([sqrt(pop[i]*con[i]) for i in range(len(pop))])
             term_scores[term_id] = (pop, con, total)
 
+        print('  Compute the KL-Divergence...')
         if self.kl_divergence:
             term_scores = self.get_kl_divergence(term_scores)
         else:
@@ -162,7 +163,7 @@ class Scorer:
     def get_pop_scores(self,
                        term_distr: term_distr_type,
                        df: Dict[int, List[int]]
-                       ) -> Dict[int, np.ndarray[float]]:
+                       ) -> Dict[int, np.ndarray]:
         """Get the popularity scores for all terms in clusters.
 
         For a given cluster (init) and given subcorpora for each cluster
@@ -209,14 +210,14 @@ class Scorer:
             # Divide each raw-pop-score by the total number of
             # occurrences of tokens in Dk (tf_Dk).
             # Equivalent to l1-norm.
-            pop_scores[term_id] = [scores[label] / tf_Dk_clus[label] for
-                                   label in self.clusters]
+            pop_scores[term_id] = np.array([scores[label] / tf_Dk_clus[label]
+                                            for label in self.clusters])
 
         return pop_scores
 
     def get_pop_scores_df(self,
                           df: Dict[int, List[int]]
-                          ) -> Dict[int, np.ndarray[float]]:
+                          ) -> Dict[int, np.ndarray]:
         """Get the df-popularity scores for all terms in clusters.
 
         This Method computes the popularity scores using the document
@@ -257,15 +258,15 @@ class Scorer:
             # Divide each raw-pop-score by the total number of
             # occurrences of tokens in Dk (tf_Dk).
             # Equivalent to l1-norm.
-            pop_scores[term_id] = [scores[label] / df_Dk_clus[label] for
-                                   label in self.clusters]
+            pop_scores[term_id] = np.array([scores[label] / df_Dk_clus[label]
+                                            for label in self.clusters])
 
         return pop_scores
 
     def get_pop_scores_sum(self,
                            term_distr: term_distr_type,
                            df: Dict[int, List[int]]
-                           ) -> Dict[int, np.ndarray[float]]:
+                           ) -> Dict[int, np.ndarray]:
         """Get the popularity scores for all terms in clusters.
 
         This is a sum-version of the method: instead of counting normalizing
@@ -304,7 +305,7 @@ class Scorer:
 
     def get_pop_scores_df_sum(self,
                               df: Dict[int, List[int]]
-                              ) -> Dict[int, np.ndarray[float]]:
+                              ) -> Dict[int, np.ndarray]:
         """Get the popularity scores for all terms in clusters.
 
         This method is a combination of the sum-version and the
@@ -340,7 +341,7 @@ class Scorer:
 
     def get_con_scores(self,
                        term_distr: term_distr_type,
-                       ) -> Dict[int, np.ndarray[float]]:
+                       ) -> Dict[int, np.ndarray]:
         """Get the concentration scores for all terms in clusters.
 
         Args:
@@ -360,8 +361,8 @@ class Scorer:
         con_scores = {tid: np.zeros(num_clus) for tid in self.clusters_inv}
         # {term_id: array of concentration scores}
 
-        for label, clus in self.clusters.items():
-            for term_id in clus:
+        for term_id in self.clusters_inv:
+            for label, clus in self.clusters.items():
                 numerator = exp(bm25_scores[term_id][label])
                 denominator = 1 + exp(bm25_scores_sum[term_id])
                 con_score = numerator/denominator
@@ -587,9 +588,6 @@ class Scorer:
         term_scores_clus = {}
         for term_id in term_scores:
             label = self.clusters_inv[term_id]
-            pop = term_scores[term_id][0]
-            con = term_scores[term_id][1]
-            total = term_scores[term_id][2]
-            clus_scores = (pop[label], con[label], total[label])
-            term_scores_clus[term_id] = clus_scores
+            pop, con, total = term_scores[term_id]
+            term_scores_clus[term_id] = (pop[label], con[label], total[label])
         return term_scores_clus
