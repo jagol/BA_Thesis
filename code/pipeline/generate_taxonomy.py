@@ -236,7 +236,7 @@ def rec_find_children(term_ids_local: Set[int],
         clusters = perform_clustering(term_ids_to_embs_local)
         # Dict[int, Set[int]]
         cluster_centers = Cp.get_topic_embeddings(clusters,
-                                                  term_ids_to_embs_local)
+                                                  term_ids_to_embs_global)
 
         print('Get subcorpora for clusters...')
         subcorpora = Cp.get_subcorpora(cluster_centers, clusters,
@@ -666,9 +666,11 @@ def get_term_scores(clusters: Dict[int, Set[int]],
 
     Args:
         clusters: A list of clusters. Each cluster is a set of term-ids.
-        cluster_centers: ...
+        cluster_centers: Maps the cluster label to a vector as the
+            center direction of the cluster.
         subcorpora: Maps each cluster label to the relevant doc-ids.
-        term_distr: ...
+        term_distr: For description look in the type descriptions at the
+            top of the file.
         df: Document frequencies of the form: {term-id: List of doc-ids}
         level: The recursion level.
     Return:
