@@ -473,28 +473,6 @@ def separate_gen_terms(clusters: Dict[int, Set[int]],
     return proc_clusters, concept_terms
 
 
-# def get_repr_terms(clusters: Dict[int, Set[int]],
-#                    term_scores: Dict[int, Tuple[float, float, float]]
-#                    ) -> Dict[int, List[Tuple[int, float]]]:
-#     """Get representative terms for the given clusters.
-#
-#     Args:
-#         clusters: A list of clusters. Each cluster is a set of doc-ids.
-#         term_scores: Maps each term-idx to its popularity,
-#             concentrations and total score.
-#     Return:
-#         A dict mapping cluster-labels to a list of tuples.
-#         Each containing the 10 most representative terms in the form:
-#         (term-id: score).
-#     """
-#     repr_terms = {}
-#     for label, clus in clusters.items():
-#         clus_terms = [(term_id, term_scores[term_id][2]) for term_id in clus]
-#         clus_terms.sort(key=lambda t: t[1], reverse=True)
-#         repr_terms[label] = clus_terms[:10]
-#     return repr_terms
-
-
 def build_corpus_file(doc_ids: Set[int],
                       path_base_corpus: str,
                       cur_node_id: int,
