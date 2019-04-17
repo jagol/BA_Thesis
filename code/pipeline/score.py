@@ -109,7 +109,7 @@ class Scorer:
         for term_id in pop_scores:
             pop = pop_scores[term_id]
             con = con_scores[term_id]
-            total = sqrt(pop*con)
+            total = np.array([sqrt(pop[i]*con[i]) for i in range(len(pop))])
             term_scores[term_id] = (pop, con, total)
 
         if self.kl_divergence:
@@ -535,8 +535,9 @@ class Scorer:
         return tf_pd
 
     def get_kl_divergence(self,
-                          term_scores: Dict[int, np.ndarray]
-                          ) -> Dict[int, float]:
+                          term_scores: Dict[int, Tuple[np.ndarray, np.ndarray,
+                                                       np.ndarray]]
+                          ) -> Dict[int, Tuple[float, float, float]]:
         """Compute the kl-divergence.
 
         Written after
@@ -554,20 +555,26 @@ class Scorer:
         num_clus = len(self.clusters)
         ed = [1.0 / num_clus] * num_clus  # expected distribution
         for term_id in term_scores:
-            ad = term_scores[term_id]  # actual distribution
+            label = self.clusters_inv[term_id]
+            pop = term_scores[term_id][0]
+            con = term_scores[term_id][1]
+            ad = term_scores[term_id][2]  # actual distribution
+
             if len(ad) != len(ed):
                 print('KL divergence error: p, q have different length')
             c_entropy = 0
             for i in range(len(ad)):
                 if ad[i] > 0:
                     c_entropy += ad[i] * log(float(ad[i]) / ed[i])
-            term_scores_clus[term_id] = c_entropy
+
+            term_scores_clus[term_id] = (pop[label], con[label], c_entropy)
 
         return term_scores_clus
 
     def get_one_score(self,
-                      term_scores: Dict[int, np.ndarray]
-                      ) -> Dict[int, float]:
+                      term_scores: Dict[int, Tuple[np.ndarray, np.ndarray,
+                                                   np.ndarray]]
+                      ) -> Dict[int, Tuple[float, float, float]]:
         """Get the one term score for the cluster the term belongs to.
 
         Args:
@@ -580,5 +587,9 @@ class Scorer:
         term_scores_clus = {}
         for term_id in term_scores:
             label = self.clusters_inv[term_id]
-            term_scores_clus[term_id] = label
+            pop = term_scores[term_id][0]
+            con = term_scores[term_id][1]
+            total = term_scores[term_id][2]
+            clus_scores = (pop[label], con[label], total[label])
+            term_scores_clus[term_id] = clus_scores
         return term_scores_clus
