@@ -1,7 +1,8 @@
 from typing import *
 from math import sqrt, exp, log
 from collections import defaultdict
-from numpy import mean
+import numpy as np
+from utility_functions import get_config
 
 
 """Compute term-candidate scores."""
@@ -53,6 +54,9 @@ class Scorer:
         self.cluster_centers = cluster_centers
         self.subcorpora = subcorpora
         self.level = level
+        self.config = get_config()
+        self.pop_df_version = self.config['pop_df_version']
+        self.pop_sum_version = self.config['pop_sum_version']
 
     @staticmethod
     def inverse_cluster(clusters: Dict[int, cluster_type]
@@ -70,7 +74,7 @@ class Scorer:
 
     def get_term_scores(self,
                         term_distr: term_distr_type,
-                        df: Dict[int, List[int]]
+                        df: Dict[int, List[int]],
                         ) -> Dict[int, Tuple[float, float, float]]:
         """For all terms, compute and get popularity and concentration.
 
@@ -85,7 +89,17 @@ class Scorer:
             {term-id: (popularity, concentration)}
         """
         print('  Get popularity scores...')
-        pop_scores = self.get_pop_scores(term_distr, df)
+        if self.pop_df_version:
+            if self.pop_sum_version:
+                pop_scores = self.get_pop_scores_df_sum(df)
+            else:
+                pop_scores = self.get_pop_scores_df(df)
+        else:
+            if self.pop_sum_version:
+                pop_scores = self.get_pop_scores_sum(term_distr, df)
+            else:
+                pop_scores = self.get_pop_scores(term_distr, df)
+
         print('  Get concentration scores...')
         con_scores = self.get_con_scores(term_distr)
 
@@ -136,6 +150,120 @@ class Scorer:
                 # Calc pop-score.
                 pop_score = log(tf_t_Dk + 1) / log(tf_Dk)
                 pop_scores[term_id] = pop_score
+
+        return pop_scores
+
+    def get_pop_scores_df(self,
+                          df: Dict[int, List[int]]
+                          ) -> Dict[int, float]:
+        """Get the df-popularity scores for all terms in clusters.
+
+        This Method computes the popularity scores using the document
+        frequency instead of the term frequency.
+
+        Args:
+            df: The document frequencies of terms in the base corpus.
+
+        Return:
+            A dictionary mapping each term-id the terms popularity.
+            Form: {term-id: popularity}
+        """
+        pop_scores = {}
+        for label, clus in self.clusters.items():
+            subcorp = self.subcorpora[label]
+
+            # Calc tf_Dk.
+            df_Dk = 0
+            for term_id in df:
+                df_Dk += len(df[term_id])
+
+            # Calc tf_t_Dk.
+            for term_id in clus:
+                df_t_Dk = 0
+                for doc_id in df[term_id]:
+                    if doc_id in subcorp:
+                        df_t_Dk += 1
+
+                # Calc pop-score.
+                pop_score = log(df_t_Dk + 1) / log(df_Dk)
+                pop_scores[term_id] = pop_score
+
+        return pop_scores
+
+    def get_pop_scores_sum(self,
+                           term_distr: term_distr_type,
+                           df: Dict[int, List[int]]
+                           ) -> Dict[int, float]:
+        """Get the popularity scores for all terms in clusters.
+
+        For a given cluster (init) and given subcorpora for each cluster
+        (init) calculate the popularity.
+
+        Args:
+            term_distr: Description at the top of the file in
+                type-definitions.
+            df: The document frequencies of terms in the base corpus.
+
+        Return:
+            A dictionary mapping each term-id the terms popularity.
+            Form: {term-id: popularity}
+        """
+        pop_scores_raw = {}  # {term_id: [pop1, pop2, pop3, pop4, pop5]}
+        for term_id in self.clusters_inv:
+            tf_t_Dk_clus = np.zeros(len(self.clusters))
+            # [pop1, pop2, pop3, pop4, pop5]
+            for label in self.clusters:
+                subcorp = self.subcorpora[label]
+                for doc_id in df[term_id]:
+                    if doc_id in subcorp:
+                        tf_t_Dk_clus[label] += term_distr[doc_id][term_id][0]
+
+                # Calc pop-score.
+                pop_score = np.log2(tf_t_Dk_clus + 1)  # / log(tf_Dk)
+                pop_scores_raw[term_id] = pop_score
+
+        pop_scores = {}
+        for term_id in pop_scores_raw:
+            label = self.clusters_inv[term_id]
+            scores = pop_scores_raw[term_id]
+            pop_scores[term_id] = scores[label] / sum(scores)
+
+        return pop_scores
+
+    def get_pop_scores_df_sum(self,
+                              df: Dict[int, List[int]]
+                              ) -> Dict[int, float]:
+        """Get the popularity scores for all terms in clusters.
+
+        For a given cluster (init) and given subcorpora for each cluster
+        (init) calculate the popularity.
+
+        Args:
+            df: The document frequencies of terms in the base corpus.
+
+        Return:
+            A dictionary mapping each term-id the terms popularity.
+            Form: {term-id: popularity}
+        """
+        pop_scores_raw = {}  # {term_id: [pop1, pop2, pop3, pop4, pop5]}
+        for term_id in self.clusters_inv:
+            df_t_Dk_clus = np.zeros(len(self.clusters))
+            # [pop1, pop2, pop3, pop4, pop5]
+            for label in self.clusters:
+                subcorp = self.subcorpora[label]
+                for doc_id in df[term_id]:
+                    if doc_id in subcorp:
+                        df_t_Dk_clus[label] += 1
+
+                # Calc pop-score.
+                pop_score = np.log2(df_t_Dk_clus + 1)  # / log(tf_Dk)
+                pop_scores_raw[term_id] = pop_score
+
+        pop_scores = {}
+        for term_id in pop_scores_raw:
+            label = self.clusters_inv[term_id]
+            scores = pop_scores_raw[term_id]
+            pop_scores[term_id] = scores[label] / sum(scores)
 
         return pop_scores
 
@@ -194,7 +322,7 @@ class Scorer:
         # {label: len_pd}
         tf_scores_pd = self.get_tf_scores_pd(term_distr)
         # {term-id: [tf_pd0, ...tf_pd4]}
-        avgdl = mean(list(len_pds.values()))
+        avgdl = np.mean(list(len_pds.values()))
         max_df = max(df_scores_pd.values())
         # max_df is the max number of pseudo-docs a term appears in.
 
@@ -234,8 +362,8 @@ class Scorer:
             df_scores_pd[term_id] = count
         return df_scores_pd
 
-    @staticmethod
-    def get_idf_scores_pd(df_scores_pd: Dict[int, int]
+    def get_idf_scores_pd(self,
+                          df_scores_pd: Dict[int, int]
                           ) -> Dict[str, float]:
         """Get idf scores for terms in clusters and pseudo docs.
 
@@ -250,8 +378,7 @@ class Scorer:
         idf = defaultdict(float)
         for term_id in df_scores_pd:
             df = df_scores_pd[term_id]
-            idf[term_id] = log(5/(df+1))
-            # TODO: N = 5 is hardcoded, make env-dependent
+            idf[term_id] = log(len(self.clusters)/(df+1))
         return idf
 
     def form_pseudo_docs_bag_of_words(self,
