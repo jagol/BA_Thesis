@@ -246,11 +246,11 @@ def rec_find_children(term_ids_local: Set[int],
                                                   term_ids_to_embs_global)
 
         print('Get subcorpora for clusters...')
-        subcorpora = Cp.get_subcorpora(cluster_centers, clusters,
+        sc_scoring = Cp.get_subcorpora(cluster_centers, clusters,
                                        term_distr_base, m, path_out)
 
         print('Compute term scores...')
-        term_scores = get_term_scores(clusters, cluster_centers, subcorpora,
+        term_scores = get_term_scores(clusters, cluster_centers, sc_scoring,
                                       term_distr_base, df, level)
         # del term_distr_base
 
@@ -271,10 +271,15 @@ def rec_find_children(term_ids_local: Set[int],
         cluster_sizes = [len(clus) for label, clus in clusters.items()]
         print('Terms pushed up: {}'.format(len(gen_terms_clus)))
         print('Cluster_sizes: {}'.format(cluster_sizes))
-        if len(gen_terms_clus) == 0 or len(term_ids_to_embs_local) == 0:
+        len_gtc = len(gen_terms_clus)
+        num_loct = len(term_ids_to_embs_local)
+        if len_gtc == 0 or num_loct == 0 or i >= max_iter:
             # 2. cond for the case if all terms have been pushed up.
-            break
-        if i >= max_iter:
+            print('Get subcorpora for local embedding training...')
+            sc_emb_training = Cp.get_subcorpora_emb_imp(cluster_centers,
+                                                        clusters,
+                                                        term_ids_to_embs_local,
+                                                        df)
             break
         term_ids_to_embs_local = update_title(term_ids_to_embs_local, clusters)
 
@@ -297,7 +302,7 @@ def rec_find_children(term_ids_local: Set[int],
     print('Start new recursion...')
     for label, clus in clusters.items():
         node_id = child_ids[label]
-        subcorpus = subcorpora[label]
+        subcorpus = sc_emb_training[label]
         rec_find_children(term_ids_local=clus, base_corpus=base_corpus,
                           path_base_corpus_ids=path_base_corpus_ids,
                           cur_node_id=node_id, level=level + 1, df=df_base,
