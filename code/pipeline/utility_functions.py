@@ -15,6 +15,10 @@ doc_type = Union[List[str], List[List[str]], str]
 
 # ------------------ functions to prepare environment ------------------
 
+
+wd = os.path.dirname(os.path.realpath(__file__))
+
+
 def prep_output_dir(path: str) -> None:
     """Prepare the output directory by creating subdirectories.
 
@@ -37,9 +41,9 @@ def prep_output_dir(path: str) -> None:
                    'directories be overwritten? y or n: ')
             y_or_n = input(msg)
 
-            for dir_name in dir_names:
+            for dname in dir_names:
                 if y_or_n == 'y':
-                    path_dir = os.path.join(path, dir_name)
+                    path_dir = os.path.join(path, dname)
                     shutil.rmtree(path_dir)
                 else:
                     sys.exit()
@@ -91,13 +95,13 @@ def get_cmd_args() -> Any:
 
 
 def get_clus_config():
-    with open('configs.json', 'r', encoding='utf8') as f:
+    with open(os.path.join(wd, 'configs.json'), 'r', encoding='utf8') as f:
         configs = json.load(f)
         return configs['clustering']
 
 
 def get_config():
-    with open('configs.json', 'r', encoding='utf8') as f:
+    with open(os.path.join(wd, 'configs.json'), 'r', encoding='utf8') as f:
         configs = json.load(f)
         return configs
 
@@ -236,92 +240,3 @@ def get_sim(v1: Iterator[float], v2: Iterator[float]) -> float:
         The cosine similarity.
     """
     return 1-cosine(v1, v2)
-
-
-def split_corpus(path_in: str,
-                 path_out: str,
-                 n: int
-                 ) -> Tuple[List[str], List[int]]:
-    """Split a corpus into n evenly sized chunks of documents.
-
-    Args:
-        path_in: File containing corpus to be split up.
-        path_out: Path to directory of output file.
-        n: The number of chunks.
-    Return:
-        A list of the filenames that were created.
-        A list of starting numbers (doc id) for each filename.
-    """
-    num_docs = get_num_docs(path_in)
-    split_points = [int(num_docs/n*i) for i in range(1, n+1)]
-    split_points.append(num_docs)
-    j = 0  # pointer to the current split-point
-    num_docs = 0
-
-    fnames = []
-    start_nums = [0]
-    with open(path_in, 'r', encoding='utf8') as f:
-        lines = []
-        for line in f:
-            lines.append(line)
-
-            if line == '\n':
-                num_docs += 1
-
-            if num_docs == split_points[j]:
-                fname = str(start_nums[j]) + '.txt.split'
-                fnames.append(fname)
-                start_nums.append(num_docs)
-                fpath = os.path.join(path_out, fname)
-                f = open(fpath, 'w', encoding='utf8')
-                docs = ''.join(lines)
-                f.write(docs)
-                f.close()
-                lines = []
-                print(j, split_points[j])
-                j += 1
-
-    start_nums = start_nums[:-1]
-
-    return fnames, start_nums
-
-
-def concat_corpus(paths_in: List[str], path_out) -> None:
-    """Concatenate the given files.
-
-    Args:
-        paths_in: The list of paths to the files.
-        path_out: The path to the output file.
-    """
-    paths_in_str = ' '.join(paths_in)
-    os.system('cat {0} > {1}'.format(paths_in_str, path_out))
-
-
-def load_embeddings(emb_path: str) -> Dict[str, List[float]]:
-    """Get the embeddings for the given terms.
-
-    Args:
-        term_ids: The ids of the input terms.
-        emb_path: The path to the given embedding file.
-    Return:
-        A dictionary of the form: {term_id: embedding}
-    """
-    term_id_to_emb = {}
-    with open(emb_path, 'r', encoding='utf8') as f:
-        next(f)
-        for line in f:
-            vals = line.strip(' \n').split(' ')
-            term_id = vals[0]
-            emb = [float(f) for f in vals[1:]]
-            term_id_to_emb[term_id] = emb
-
-    return term_id_to_emb
-
-
-def main():
-    path = 'output/dblp/processed_corpus/pp_lemma_corpus.txt'
-    split_corpus(path, 8)
-
-
-if __name__ == '__main__':
-    main()
