@@ -12,6 +12,7 @@ from clustering import Clustering
 from score import Scorer
 from utility_functions import get_cmd_args, get_config, get_num_docs, \
     get_docs, get_sim
+import pdb
 
 
 # Define global variables.
@@ -268,8 +269,8 @@ def rec_find_children(term_ids_local: Set[int],
         clusters, gen_terms_clus = separate_gen_terms(clusters, term_scores,
                                                       threshold)
         general_terms.extend(gen_terms_clus)
-        cluster_sizes = [len(clus) for label, clus in clusters.items()]
         print('Terms pushed up: {}'.format(len(gen_terms_clus)))
+        cluster_sizes = [len(clus) for label, clus in clusters.items()]
         print('Cluster_sizes: {}'.format(cluster_sizes))
         len_gtc = len(gen_terms_clus)
         num_loct = len(term_ids_to_embs_local)
@@ -465,20 +466,22 @@ def separate_gen_terms(clusters: Dict[int, Set[int]],
         concept_terms: A list of tuples of the form (term-id, score).
     """
     proc_clusters = {}  # {label: clus}
-    concept_terms = []
+    concept_terms = []  # [term_id1, ...]
+    concept_terms_scores = []  # [(term_id, score), ...]
     # Get general terms und repr thresh.
     for label, clus in clusters.items():
         for term_id in clus:
             score = term_scores[term_id][2]
             if score < threshold:
-                concept_terms.append((term_id, score))
+                concept_terms.append(term_id)
+                concept_terms_scores.append((term_id, score))
 
     # Remove general terms from clusters.
     concept_terms_set = set(concept_terms)
     for label, clus in clusters.items():
         proc_clusters[label] = clus - concept_terms_set
 
-    return proc_clusters, concept_terms
+    return proc_clusters, concept_terms_scores
 
 
 def build_corpus_file(doc_ids: Set[int],
@@ -576,19 +579,6 @@ def perform_clustering(term_ids_to_embs: Dict[int, List[float]]
         label = labels[i]
         clusters[label].add(term_id)
     return clusters
-
-
-def remove(clus: Set[int],
-           terms_to_remove: List[Tuple[int, float]]
-           ) -> Set[int]:
-    """Remove terms_to_remove from cluster.
-
-    Args:
-        clus: A set of term-ids.
-        terms_to_remove: A list of term-ids with scores.
-    """
-    terms_to_remove = set([t[0] for t in terms_to_remove])
-    return clus - terms_to_remove
 
 
 def load_term_ids(path_term_ids: str) -> Set[int]:
