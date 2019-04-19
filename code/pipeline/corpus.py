@@ -334,6 +334,17 @@ class Corpus:
             topic_embeddings: Maps topic-ids to their embeddings.
         Return:
             A dict of the form: {doc-id: {topic/cluster-label: similarity}}
+
+        If used to calculate the similarity between a cluster center and
+        its cluster terms the arguments and return values should instead
+        be interpreted as:
+        Args:
+            doc_embeddings -> term_embeddings: A dict mapping term-ids
+                to their embeddings.
+            topic_embeddings -> cluster center: A dict mapping the
+                cluster label to the cluster center vector.
+        Return:
+            A dict of the form: {term-id: {topic/cluster-label: similarity}}
         """
         num_topics = len(topic_embeddings)
         doc_topic_sims = {i: np.empty(num_topics) for i in doc_embeddings}
@@ -363,7 +374,7 @@ class Corpus:
             doc_topic_sims[doc_ids[i]][topic_label] = sim_matrix[i]
 
     @staticmethod
-    def cosine_similarities(vector, matrix):
+    def get_cosine_similarities(vector, matrix):
         vector_norm = np.linalg.norm(vector)
         matrix_norm = np.linalg.norm(matrix, axis=1)
         return (matrix @ vector) / (matrix_norm * vector_norm)
@@ -377,7 +388,7 @@ class Corpus:
                           ):
         matrix, doc_ids = cls.get_matrix(doc_embs)
         del doc_embs
-        sim_matrix = cls.cosine_similarities(topic_emb, matrix)
+        sim_matrix = cls.get_cosine_similarities(topic_emb, matrix)
         del matrix
         del topic_emb
         cls.matrix_to_dict(sim_matrix, doc_ids, topic_label, doc_topic_sims)
@@ -393,10 +404,10 @@ class Corpus:
 
         Args:
             doc_topic_sims: Maps doc-ids to a dict of the form:
-            {cluster-label: similarity}
+            {cluster-l: similarity}
             m: If not None, only the m most similar docs are returned.
         Return:
-            A dict of the form: {cluster-label: {A set of doc-ids}}
+            A dict of the form: {cluster-l: {A set of doc-ids}}
         """
         td_sc = defaultdict(list)  # {topic: [(doc_id, score), ...]}
         for doc in doc_topic_sims:
@@ -434,3 +445,91 @@ class Corpus:
                 topic = i
                 sim_max = sim
         return topic
+
+    @classmethod
+    def get_subcorpora_emb_imp(cls,
+                               clus_centers: Dict[int, np.ndarray],
+                               clusters: Dict[int, Set[int]],
+                               term_ids_to_embs_local: Dict[int, np.ndarray],
+                               df: Dict[int, List[int]]
+                               ) -> Dict[int, Set[int]]:
+        """Get subcorpora for the given clusters.
+
+        This is modeled after the taxogen implementation, not the paper.
+
+        For each cluster get the relevant documents by finding the 100
+        terms nearest to the cluster center and getting all documents
+        in which these terms appear. If k, the number of terms in a
+        cluster, is <100, then only the k terms are used for document
+        extraction.
+
+        Args:
+            clus_centers: Maps the cluster l to its center.
+            clusters: Maps the cluster l to its member terms.
+            term_ids_to_embs_local: Maps term-ids to their local
+                embeddings.
+            df: Maps each term to the document-ids it appears in.
+        Return:
+            A dict mapping the cluster l to a set of document-ids.
+        """
+        clus_terms = cls.get_k_most_center_terms(clus_centers, clusters,
+                                                 term_ids_to_embs_local, 100)
+        # {clus-l: set of term-ids}
+        subcorpora = cls.get_relevant_docs(clus_terms, df)
+        # {clus-l: set of doc-ids}
+        return subcorpora
+
+    @classmethod
+    def get_k_most_center_terms(cls,
+                                clus_centers: Dict[int, np.ndarray],
+                                clusters: Dict[int, Set[int]],
+                                term_ids_to_embs_local: Dict[int, np.ndarray],
+                                k: int
+                                ) -> Dict[int, Set[int]]:
+        """Get the k terms with the highest cos-sim to the cluster center.
+
+        Args:
+            clus_centers: Maps the cluster l to its center.
+            clusters: Maps the cluster l to its member terms.
+            term_ids_to_embs_local: Maps term-ids to their local
+                embeddings.
+            k: The maximum number of terms to return per cluster.
+        Return:
+            A dict mapping cluster ls to a set of term-ids.
+        """
+        clus_terms = {}
+        term_clus_sims = cls.get_doc_topic_sims(term_ids_to_embs_local,
+                                                clus_centers)
+        # {term-id: array with topic/cluster-label as idx and cos-sim as val}
+        for label in clusters:
+            if len(clusters[label]) > k:
+                clus_sims = {}  # {term_id: sim}
+                for term_id in clusters[label]:
+                    clus_sims[term_id] = term_clus_sims[term_id][label]
+                sorted_terms = sorted(clus_sims.items(), reverse=True,
+                                      key=lambda x: x[1])
+                clus_terms[label] = set([idx for idx, sim in sorted_terms[:k]])
+            else:
+                clus_terms[label] = clusters[label]
+        return clus_terms
+
+    @staticmethod
+    def get_relevant_docs(clus_terms: Dict[int, Set[int]],
+                          df: Dict[int, List[int]]
+                          ) -> Dict[int, Set[int]]:
+        """Per cluster get the documents in which the its terms occur.
+
+        Args:
+            clus_terms: A dict mapping cluster ls to a set of
+                term-ids.
+            df: Maps each term to the document-ids it appears in.
+        Return:
+            A dict mapping the cluster l to a set of document-ids.
+        """
+        relevant_docs = {}
+        for label, clus in clus_terms.items():
+            rel_docs_clus = []
+            for term_id in clus:
+                rel_docs_clus.extend(df[term_id])
+            relevant_docs[label] = set(rel_docs_clus)
+        return relevant_docs
