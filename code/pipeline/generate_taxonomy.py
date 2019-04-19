@@ -466,16 +466,17 @@ def separate_gen_terms(clusters: Dict[int, Set[int]],
     """
     proc_clusters = {}  # {label: clus}
     concept_terms = []
+    # Get general terms und repr thresh.
     for label, clus in clusters.items():
-        # terms_to_remove = get_terms_to_remove(clus, term_scores)
+        for term_id in clus:
+            score = term_scores[term_id][2]
+            if score < threshold:
+                concept_terms.append((term_id, score))
 
-        # clus = remove(clus, terms_to_remove)
-
-        concept_terms_clus = get_concept_terms(clus, term_scores, threshold)
-        concept_terms.extend(concept_terms_clus)
-        clus = remove(clus, concept_terms)
-
-        proc_clusters[label] = clus
+    # Remove general terms from clusters.
+    concept_terms_set = set(concept_terms)
+    for label, clus in clusters.items():
+        proc_clusters[label] = clus - concept_terms_set
 
     return proc_clusters, concept_terms
 
@@ -676,28 +677,6 @@ def get_term_scores(clusters: Dict[int, Set[int]],
     return sc.get_term_scores(term_distr, df)
 
 
-def get_tf_corpus(term_ids: Set[int],
-                  corpus: Set[int],
-                  tf_base: Dict[int, Dict[int, int]]
-                  ) -> Dict[int, Dict[int, int]]:
-    """Get the term frequencies for the given corpus.
-
-    Args:
-        term_ids: The term-ids in the current subcategory.
-        corpus: The ids of the documents making up the corpus.
-        tf_base: The term frequencies of the base corpus.
-        {doc_id: {term_id: freq}}
-    """
-    out_dict = {}
-    for doc_id in corpus:
-        out_dict[doc_id] = {}
-        tf_doc = tf_base[doc_id]
-        for term_id in tf_doc:
-            if term_id in term_ids:
-                out_dict[doc_id][term_id] = tf_base[doc_id][term_id]
-    return out_dict
-
-
 def get_base_corpus(path_base_corpus: str):
     """Get the set of indices making up the base corpus.
 
@@ -705,50 +684,6 @@ def get_base_corpus(path_base_corpus: str):
         path_base_corpus: Path to the corpus file.
     """
     return set([i for i in range(get_num_docs(path_base_corpus))])
-
-
-def get_terms_to_remove(clus: Set[int],
-                        term_scores: Dict[int, Tuple[float, float]]
-                        ) -> Set[int]:
-    """Determine which terms to remove from the cluster.
-
-    Args:
-        clus: A set of doc-ids.
-        term_scores: Maps each term-idx to its popularity and
-            concentrations.
-    Return:
-        A set of term-ids of the terms to remove.
-    """
-    terms_to_remove = set()
-    threshhold = 0.0
-    for term_id in clus:
-        pop = term_scores[term_id][0]
-        if pop < threshhold:
-            terms_to_remove.add(term_id)
-    return terms_to_remove
-
-
-def get_concept_terms(clus: Set[int],
-                      term_scores: Dict[int, Tuple[float, float, float]],
-                      threshold: float
-                      ) -> List[Tuple[int, float]]:
-    """Determine the concept candidates in the cluster.
-
-    Args:
-        clus: A set of doc-ids.
-        term_scores: Maps each term-idx to its popularity and
-            concentrations.
-        threshold: The representativeness-threshold at which terms are
-            pushed up.
-    Return:
-        A set of term-ids of the terms to remove.
-    """
-    concept_terms = []
-    for term_id in clus:
-        score = term_scores[term_id][2]
-        if score < threshold:
-            concept_terms.append((term_id, score))
-    return concept_terms
 
 
 if __name__ == '__main__':
