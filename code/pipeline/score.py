@@ -27,6 +27,7 @@ cluster_centers_type = Dict[int, List[float]]
 # {doc-id: {word-id: (term-freq, tfidf)}} doc-length is at word-id -1
 term_distr_type = DefaultDict[int, DefaultDict[int, Union[Tuple[int, int],
                                                           int]]]
+term_scores_type = Dict[int, Tuple[np.ndarray, np.ndarray, np.ndarray]]
 
 # ----------------------------------------------------------------------
 
@@ -57,6 +58,7 @@ class Scorer:
         self.config = get_config()
         self.pop_df_version = self.config['pop_df_version']
         self.pop_sum_version = self.config['pop_sum_version']
+        self.l1_normalize = self.config['l1_normalize']
         self.kl_divergence = self.config['kl_divergence']
 
     @staticmethod
@@ -112,8 +114,12 @@ class Scorer:
             total = np.array([sqrt(pop[i]*con[i]) for i in range(len(pop))])
             term_scores[term_id] = (pop, con, total)
 
-        print('  Compute the KL-Divergence...')
+        if self.l1_normalize:
+            print('  Compute the l1-normalization...')
+            term_scores = self.get_l1_normalization(term_scores)
+
         if self.kl_divergence:
+            print('  Compute the KL-Divergence...')
             term_scores = self.get_kl_divergence(term_scores)
         else:
             term_scores = self.get_one_score(term_scores)
@@ -535,9 +541,33 @@ class Scorer:
                         tf_pd[term_id][label] += term_distr[doc_id][term_id][0]
         return tf_pd
 
+    @staticmethod
+    def get_l1_normalization(term_scores: term_scores_type
+                             ) -> term_scores_type:
+        """Compute the l1 normalization of the term-scores distribution.
+
+        Written after
+        https://github.com/franticnerd/taxogen/blob/master/code/utils.py#L39
+        Code is changed to suit into this environment.
+
+        Args:
+            term_scores: Maps the term-id to an array with the
+                term-score for a cluster l at place array[l].
+        Return:
+            term_scores_clus: Maps the term-id to the term-score of the
+                cluster the term belongs to.
+        """
+        for term_id in term_scores:
+            pop, con, total = term_scores[term_id]
+            sum_total = sum(total)
+            if sum_total <= 0:
+                print('Normalizing invalid distribution')
+            total = np.array([s / sum_total for s in total])
+            term_scores[term_id] = (pop, con, total)
+        return term_scores
+
     def get_kl_divergence(self,
-                          term_scores: Dict[int, Tuple[np.ndarray, np.ndarray,
-                                                       np.ndarray]]
+                          term_scores: term_scores_type
                           ) -> Dict[int, Tuple[float, float, float]]:
         """Compute the kl-divergence.
 
@@ -557,16 +587,11 @@ class Scorer:
         ed = [1.0 / num_clus] * num_clus  # expected distribution
         for term_id in term_scores:
             label = self.clusters_inv[term_id]
-            pop = term_scores[term_id][0]
-            con = term_scores[term_id][1]
-            ad = term_scores[term_id][2]  # actual distribution
-
-            if len(ad) != len(ed):
-                print('KL divergence error: p, q have different length')
+            pop, con, ad = term_scores[term_id]  # actual distribution
             c_entropy = 0
             for i in range(len(ad)):
                 if ad[i] > 0:
-                    c_entropy += ad[i] * log(float(ad[i]) / ed[i])
+                    c_entropy += ad[i] * log(ad[i] / ed[i])
 
             term_scores_clus[term_id] = (pop[label], con[label], c_entropy)
 
@@ -580,7 +605,7 @@ class Scorer:
 
         Args:
             term_scores: Maps the term-id to an array with the
-                term-score for a cluster l at place array[l].
+                term-score for a cluster label at place array[label].
         Return:
             term_scores_clus: Maps the term-id to the term-score of the
                 cluster the term belongs to.
