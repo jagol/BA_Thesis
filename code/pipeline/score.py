@@ -58,6 +58,7 @@ class Scorer:
         self.config = get_config()
         self.pop_df_version = self.config['pop_df_version']
         self.pop_sum_version = self.config['pop_sum_version']
+        self.pop_no_denominator = self.config['pop_no_denominator']
         self.l1_normalize = self.config['l1_normalize']
         self.kl_divergence = self.config['kl_divergence']
 
@@ -93,10 +94,13 @@ class Scorer:
         """
         print('  Get popularity scores...')
         if self.pop_df_version:
-            if self.pop_sum_version:
-                pop_scores = self.get_pop_scores_df_sum(df)
+            if self.pop_no_denominator:
+                pop_scores = self.get_pop_scores_df_no_denom(df)
             else:
-                pop_scores = self.get_pop_scores_df(df)
+                if self.pop_sum_version:
+                    pop_scores = self.get_pop_scores_df_sum(df)
+                else:
+                    pop_scores = self.get_pop_scores_df(df)
         else:
             if self.pop_sum_version:
                 pop_scores = self.get_pop_scores_sum(term_distr, df)
@@ -255,8 +259,8 @@ class Scorer:
                     if doc_id in subcorp:
                         df_t_Dk_clus[label] += 1
 
-                # Calc pop_score_raw.
-                pop_scores_raw[term_id] = np.log2(df_t_Dk_clus + 1)
+            # Calc pop_score_raw.
+            pop_scores_raw[term_id] = np.log2(df_t_Dk_clus + 1)
 
         pop_scores = {}
         for term_id in pop_scores_raw:
@@ -266,6 +270,39 @@ class Scorer:
             # Equivalent to l1-norm.
             pop_scores[term_id] = np.array([scores[label] / df_Dk_clus[label]
                                             for label in self.clusters])
+
+        return pop_scores
+
+    def get_pop_scores_df_no_denom(self,
+                                   df: Dict[int, List[int]]
+                                   ) -> Dict[int, np.ndarray]:
+        """Get the df-popularity scores for all terms in clusters.
+
+        This Method computes the popularity scores using the document
+        frequency instead of the term frequency.
+
+        Args:
+            df: The document frequencies of terms in the base corpus.
+
+        Return:
+            A dictionary mapping each term-id the terms popularity.
+            Form: {term-id: array of popularity per cluster}
+        """
+        pop_scores = {}  # {term_id: [pop1, pop2, pop3, pop4, pop5]}
+
+        for term_id in self.clusters_inv:
+            df_t_Dk_clus = np.zeros(len(self.clusters))
+            # [pop1, pop2, pop3, pop4, pop5]
+
+            for label in self.clusters:
+                subcorp = self.subcorpora[label]
+
+                for doc_id in df[term_id]:
+                    if doc_id in subcorp:
+                        df_t_Dk_clus[label] += 1
+
+            # Calc pop_score.
+            pop_scores[term_id] = np.log2(df_t_Dk_clus + 1)
 
         return pop_scores
 
@@ -298,9 +335,9 @@ class Scorer:
                     if doc_id in subcorp:
                         tf_t_Dk_clus[label] += term_distr[doc_id][term_id][0]
 
-                # Calc pop-score.
-                pop_score = np.log2(tf_t_Dk_clus + 1)  # / log(tf_Dk)
-                pop_scores_raw[term_id] = pop_score
+            # Calc pop-score.
+            pop_score = np.log2(tf_t_Dk_clus + 1)  # / log(tf_Dk)
+            pop_scores_raw[term_id] = pop_score
 
         pop_scores = {}
         for term_id in pop_scores_raw:
@@ -334,9 +371,9 @@ class Scorer:
                     if doc_id in subcorp:
                         df_t_Dk_clus[label] += 1
 
-                # Calc pop-score.
-                pop_score = np.log2(df_t_Dk_clus + 1)  # / log(tf_Dk)
-                pop_scores_raw[term_id] = pop_score
+            # Calc pop-score.
+            pop_score = np.log2(df_t_Dk_clus + 1)  # / log(tf_Dk)
+            pop_scores_raw[term_id] = pop_score
 
         pop_scores = {}
         for term_id in pop_scores_raw:
