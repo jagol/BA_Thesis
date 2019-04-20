@@ -24,13 +24,13 @@ def main():
     path_tax_frep = os.path.join(path_out, 'concept_terms/tax_labels_repr.csv')
     tax_label_file = open(path_tax_frep, 'w', encoding='utf8')
     csv_writer = csv.writer(tax_label_file, delimiter=',')
-    rec_find_labels(path_out, taxonomy, 10, 0, csv_writer)
+    rec_find_labels(path_out, taxonomy, 10, 0, csv_writer, cos=False)
 
     # Run labeling with cosine similarity as metric.
     path_tax_fsim = os.path.join(path_out, 'concept_terms/tax_labels_sim.csv')
     tax_label_file = open(path_tax_fsim, 'w', encoding='utf8')
     csv_writer = csv.writer(tax_label_file, delimiter=',')
-    rec_find_labels(path_out, taxonomy, 10, 0, csv_writer)
+    rec_find_labels(path_out, taxonomy, 10, 0, csv_writer, cos=True)
 
 
 def rec_find_labels(path_out: str,
@@ -38,7 +38,7 @@ def rec_find_labels(path_out: str,
                     top_k: int,
                     node_id: int,
                     csv_writer: Any,
-                    cos: bool = False
+                    cos: bool
                     ) -> None:
     """Find the most representative labels for each cluster.
 
@@ -62,17 +62,17 @@ def rec_find_labels(path_out: str,
 
     for child_id in child_ids:
         print(node_id, child_id)
-        rec_find_labels(path_out, taxonomy, top_k, child_id, csv_writer)
+        rec_find_labels(path_out, taxonomy, top_k, child_id, csv_writer, cos)
 
 
 def get_top_k_terms(path_out: str,
                     top_k: int,
                     node_id: int,
-                    cos: bool = False
+                    cos: bool
                     ) -> List[Tuple[int, float]]:
     """Get the top k terms.
 
-    If cos is false, use the term-representaiveness score, if it is true
+    If cos is false, use the term-representativeness score, if it is true
     use the cosine similarity between term and cluster-center as a
     metric.
 
