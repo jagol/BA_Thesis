@@ -12,13 +12,12 @@ from clustering import Clustering
 from score import Scorer
 from utility_functions import get_cmd_args, get_config, get_num_docs, \
     get_docs, get_sim
-import pdb
 
 
 # Define global variables.
 node_counter = 0
 idx_to_term = {}
-max_depth = 1
+
 
 """
 Insight:
@@ -158,7 +157,7 @@ def generate_taxonomy() -> None:
 
 
 def load_term_distr() -> Dict[int, Dict[int, Union[List[float], int]]]:
-    """Load the word distrubutions from pickle file."""
+    """Load the word distributions from pickle file."""
     with open(path_term_distr, 'rb') as f:
         return pickle.load(f)
 
@@ -216,6 +215,7 @@ def rec_find_children(term_ids_local: Set[int],
                                                                   cur_node_id)
     print(msg)
     print('Number of candidate terms: {}'.format(len(term_ids_local)))
+    print('Number of documents in corpus: {}'.format(len(cur_corpus)))
     print('Build corpus file...')
     corpus_path = build_corpus_file(cur_corpus, path_base_corpus_ids,
                                     cur_node_id, path_out)
@@ -253,7 +253,6 @@ def rec_find_children(term_ids_local: Set[int],
         print('Compute term scores...')
         term_scores = get_term_scores(clusters, cluster_centers, sc_scoring,
                                       term_distr_base, df, level)
-        # del term_distr_base
 
         print('Get average and median score...')
         avg_pop, avg_con, avg_total = get_avg_score(term_scores)
@@ -265,7 +264,14 @@ def rec_find_children(term_ids_local: Set[int],
         print(msg_avg.format(avg_pop, avg_con, avg_total))
         print(msg_median.format(median_pop, median_con, median_total))
 
-        print('Remove terms from clusters...')
+        # print('Remove terms from clusters...')
+        # if cur_node_id != 0:
+        #     clusters, gen_terms_clus = separate_gen_terms(clusters,
+        #                                                   term_scores,
+        #                                                   threshold)
+        #     general_terms.extend(gen_terms_clus)
+        # else:
+        #     gen_terms_clus = []
         clusters, gen_terms_clus = separate_gen_terms(clusters, term_scores,
                                                       threshold)
         general_terms.extend(gen_terms_clus)
@@ -304,6 +310,10 @@ def rec_find_children(term_ids_local: Set[int],
     for label, clus in clusters.items():
         node_id = child_ids[label]
         subcorpus = sc_emb_training[label]
+        if len(clus) < 5 or len(subcorpus) < 5:
+            print('Stopped recursion to few term or docs.')
+            print('terms: {}, docs: {}'.format(len(clus), len(subcorpus)))
+            continue
         rec_find_children(term_ids_local=clus, base_corpus=base_corpus,
                           path_base_corpus_ids=path_base_corpus_ids,
                           cur_node_id=node_id, level=level + 1, df=df_base,
@@ -556,7 +566,7 @@ def perform_clustering(term_ids_to_embs: Dict[int, List[float]]
         term_ids_to_embs: A dictionary mapping term-ids to their
             embeddings.
     Return:
-        A dictionary of mapping each cluster label to it0s cluster.
+        A dictionary of mapping each cluster label to its cluster.
         Each cluster is a set of term-ids.
     """
     # Case less than 5 terms to cluster.
@@ -661,7 +671,7 @@ def get_term_scores(clusters: Dict[int, Set[int]],
         level: The recursion level.
     Return:
         A dictionary mapping each term-id to a tuple of the form:
-        (popularity, concentration)
+        (popularity, concentration, total)
     """
     sc = Scorer(clusters, cluster_centers, subcorpora, level)
     return sc.get_term_scores(term_distr, df)
