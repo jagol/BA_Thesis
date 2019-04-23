@@ -226,7 +226,7 @@ class Corpus:
                                 clusters_inv: Dict[int, int],
                                 word_distr: term_distr_type,
                                 num_clusters: int
-                                ) -> DefaultDict[int, List[Tuple[int, float]]]:
+                                ) -> Dict[int, List[Tuple[int, float]]]:
         """For each document get the strength for each cluster.
 
         Args:
@@ -238,7 +238,8 @@ class Corpus:
             {clus-label: [(doc-id, strength), ...]}
         """
         clusters_term_ids = set(clusters_inv.keys())
-        topic_doc_strengths = defaultdict(list)
+        labels = set(clusters_inv.values())
+        topic_doc_strengths = {l: [] for l in labels}
         # {label: {(doc-id, strength)}}
         for doc_id in word_distr:
             doc_clus_strengths = np.zeros(num_clusters)
@@ -246,10 +247,16 @@ class Corpus:
                 if term_id not in clusters_term_ids:
                     continue
                 tfidf = word_distr[doc_id][term_id][1]
+                tf = word_distr[doc_id][term_id][0]
+                idf = tfidf/tf
                 clus_label = clusters_inv[term_id]
-                doc_clus_strengths[clus_label] += tfidf
+                # doc_clus_strengths[clus_label] += tfidf
+                doc_clus_strengths[clus_label] += idf
             clus_label, strength = cls.get_strongest_topic(doc_clus_strengths)
             topic_doc_strengths[clus_label].append((doc_id, strength))
+        # for label in topic_doc_strengths:
+        #     if len(topic_doc_strengths[label]) == 0:
+        #         pdb.set_trace()
         return topic_doc_strengths
 
     @staticmethod
