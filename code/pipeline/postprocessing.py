@@ -16,8 +16,8 @@ def get_paths() -> Dict[str, str]:
     pout = config['paths'][args.location][args.corpus]['path_out']
     paths = {
         'out': pout,
-        'tax_csv': os.path.join(pout, 'hierarchy/taxonomy.csv'),
-        'tax_png': os.path.join(pout, 'hierarchy/taxonomy.png')
+        'tax_csv': os.path.join(pout, 'concept_terms/tax_labels_sim.csv'),
+        'tax_png': os.path.join(pout, 'concept_terms/taxonomy.png')
     }
     return paths
 
@@ -87,6 +87,7 @@ def rec_add_nodes(source_id: str,
 def main():
     paths = get_paths()
     nodes = read_csv(paths['tax_csv'])
+    nodes['0'] = {'child_ids': ['1', '2', '3', '4', '5'], 'terms': ['root']}
     nodes = rec_remove_empty_child_ids(nodes['0'], nodes)
     make_dot_tree(paths['tax_png'], nodes)
 
