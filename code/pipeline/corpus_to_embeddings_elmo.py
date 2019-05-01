@@ -2,12 +2,13 @@ from typing import *
 import time
 import re
 import os
+import pickle
 import json
 import multiprocessing as mp
 from collections import defaultdict
 from numpy import mean
 from embeddings import ElmoE
-from utility_functions import get_docs, get_num_docs, split_corpus, concat_corpus
+from utility_functions import get_docs, split_corpus
 
 
 output = mp.Queue()
@@ -25,13 +26,15 @@ def embed_corpus_terms(path: str, level: str, num_processes: int):
     if level == 't':
         path_in = os.path.join(path,
                                'processed_corpus/pp_token_corpus.txt')
-        path_corpus_embs = os.path.join(path_out,
-                                        'corpus_elmo_{}.emb'.format('tokens'))
+        # path_corpus_embs = os.path.join(
+        #     path_out, 'corpus_elmo_{}.emb'.format('tokens'))
     elif level == 'l':
         path_in = os.path.join(path,
                                'processed_corpus/pp_lemma_corpus.txt')
-        path_corpus_embs = os.path.join(path_out,
-                                        'corpus_elmo_{}.emb'.format('lemmas'))
+        # path_corpus_embs = os.path.join(
+        #     path_out, 'corpus_elmo_{}.emb'.format('lemmas'))
+    else:
+        raise Exception("Error! Choose 't' or 'l'")
     print('Split corpus...')
     fnames, start_nums = split_corpus(path_in, path_out, num_processes)
     print('fnames:', fnames)
@@ -46,7 +49,7 @@ def embed_corpus_terms(path: str, level: str, num_processes: int):
     time_passed = end_time-start_time
     print('time-passed:', time_passed)
     print('Concatenating corpus files...')
-    merge_dicts(fnames_emb, './elmo_embeddings_l2_{}.json'.format(level))
+    merge_dicts(fnames_emb, './elmo_embeddings_l2_{}.pickle'.format(level))
     print('Cleaning temporary files...')
     # os.system('rm {}*.emb; rm {}*.txt.split'.format(path_out, path_out))
     print('Done.')
@@ -70,6 +73,8 @@ def parallel_embed_terms(path: str, fnames: List[str], start_nums, level: str):
         path_term_to_idxs = os.path.join(path, 'indexing/token_to_idx.json')
     elif level == 'l':
         path_term_to_idxs = os.path.join(path, 'indexing/lemma_to_idx.json')
+    else:
+        raise Exception("Error! Choose 't' or 'l'")
     processes = [mp.Process(target=embed_terms,
                             args=(path_term_to_idxs, path_in, path_out,
                                   start_num))
@@ -101,6 +106,8 @@ def embed_terms(path_term_to_idxs: str,
         path_in: Path to input file.
         path_out: Path to output file.
         start_num: The starting doc id.
+
+    term_embs_per_doc: {term_idx: {doc_idx: list of embeddings}}
     """
     print('Loading terms...')
     with open(path_term_to_idxs, 'r', encoding='utf8') as f:
@@ -108,7 +115,7 @@ def embed_terms(path_term_to_idxs: str,
 
     print('Instanciating ELMo...')
     elmo = ElmoE()
-    term_embs_per_doc = defaultdict(lambda: defaultdict(list))
+    term_embs_per_doc = {}
 
     for i, doc in enumerate(get_docs(path_in)):
         doc_id = start_num + i
@@ -124,25 +131,33 @@ def embed_terms(path_term_to_idxs: str,
                     sent_terms.append((term_idx, word.split('_'), j))
             print('doc-id: {}, sent-terms: {}'.format(doc_id, sent_terms))
             if sent_terms:
-                prepped_sent, term_idxs = prepare_sentence(sent, sent_terms)
-                print('prepared_sent: {}, term_idxs: {}'.format(prepped_sent, term_idxs))
-                embs = elmo.get_embeddings(prepped_sent, mode=1)
-                for h in range(len(sent_terms)):
-                    term = sent_terms[h]
-                    term_emb = get_term_emb(embs, term_idxs[h])
+                # prepped_sent, term_idxs = prepare_sentence(sent, sent_terms)
+                # print('prepared_sent: {}, term_idxs: {}'.format(prepped_sent,
+                #                                                 term_idxs))
+                # print('sent:', sent)
+                embs = elmo.get_embeddings(sent, mode=1)
+                for k in range(len(sent_terms)):
+                    # term_emb = get_term_emb(embs, term_idxs[h])
                     # term_emb = [float(f) for f in embs[term[1]]]
-                    term_idx = term[0]
+                    term_idx_in_sent = sent_terms[k][2]
+                    term_emb = embs[term_idx_in_sent]
+                    term_idx = sent_terms[k][0]
+                    if term_idx not in term_embs_per_doc:
+                        term_embs_per_doc[term_idx] = {}
+                    if doc_id not in term_embs_per_doc[term_idx]:
+                        term_embs_per_doc[term_idx][doc_id] = []
                     term_embs_per_doc[term_idx][doc_id].append(term_emb)
+
         if i > 1000:
             break
 
-    with open(path_out, 'w', encoding='utf8') as f:
-        json.dump(term_embs_per_doc, f)
+    with open(path_out, 'wb') as f:
+        pickle.dump(term_embs_per_doc, f)
 
     output.put('Done')
 
 
-def get_term_emb(embs: List[List[float]],
+def get_term_emb(embs: List[Iterator[float]],
                  term: List[int]
                  ) -> List[float]:
     """Get the embedding for the given term.
@@ -176,15 +191,16 @@ def prepare_sentence(sent: List[str],
         2. Dict of term-indices of the form: {i: [indices_in_sent]}
         i is the position of the term in sent_terms.
     """
+    sent_widx = [w for w in sent]
     for i in range(len(sent_terms))[::-1]:
         term = sent_terms[i]
         term_idx = term[2]
         term_words = [t + '__' + str(i) for t in term[1]]
-        sent[term_idx] = term_words
+        sent_widx[term_idx] = term_words
 
     # Flatten list.
     flat_sent = []
-    for w in sent:
+    for w in sent_widx:
         if isinstance(w, list):
             for v in w:
                 flat_sent.append(v)
@@ -221,9 +237,9 @@ def merge_dicts(fpaths: List[str], path_out: str) -> None:
     """
     out_dict = {}
     for fp in fpaths:
-        with open(fp, 'r', encoding='utf8') as f:
-            cur_dict = json.load(f)
-            print(cur_dict.keys())
+        with open(fp, 'rb') as f:
+            cur_dict = pickle.load(f)
+            # print(cur_dict.keys())
             for term_id in cur_dict:
                 if term_id in out_dict:
                     cur_term_dict = cur_dict[term_id]
@@ -236,8 +252,8 @@ def merge_dicts(fpaths: List[str], path_out: str) -> None:
                             out_dict_term[doc_id] = cur_term_dict[doc_id]
                 else:
                     out_dict[term_id] = cur_dict[term_id]
-    with open(path_out, 'w', encoding='utf8') as f:
-        json.dump(out_dict, f)
+    with open(path_out, 'wb') as f:
+        pickle.dump(out_dict, f)
 
 
 # def embed_docs(path_in: str, path_out: str) -> None:
@@ -291,8 +307,9 @@ def merge_dicts(fpaths: List[str], path_out: str) -> None:
 
 
 if __name__ == '__main__':
-    # embed_corpus_terms('mnt/storage/harlie/users/jgoldz/output/dblp/', 'l', 5)
-    embed_corpus_terms('/mnt/storage/harlie/users/jgoldz/output/dblp', 't', 12)
+    # embed_corpus_terms(
+    # 'mnt/storage/harlie/users/jgoldz/output/dblp/', 'l', 5)
+    embed_corpus_terms('/mnt/storage/harlie/users/jgoldz/output/dblp', 't', 16)
     # embed_corpus_terms('./output/dblp', 't', 3)
     # elmo = ElmoE()
     # sent = ["This", "is", "an", "example", "."]

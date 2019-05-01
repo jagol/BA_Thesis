@@ -1,3 +1,4 @@
+import pickle
 from typing import *
 from collections import defaultdict
 import json
@@ -7,6 +8,10 @@ import numpy as np
 import os
 from allennlp.commands.elmo import ElmoEmbedder
 # from allennlp.modules.similarity_functions.cosine import CosineSimilarity
+# For pickle to KeyedVectors-conversion.
+from numpy import float32 as REAL
+from gensim import utils
+
 import logging
 logging.getLogger("gensim.models").setLevel(logging.WARNING)
 logging.getLogger("gensim.scripts.glove2word2vec").setLevel(logging.WARNING)
@@ -14,6 +19,7 @@ logging.getLogger("gensim").setLevel(logging.WARNING)
 from gensim.models import Word2Vec, KeyedVectors
 # from gensim.test.utils import datapath, get_tmpfile
 from gensim.scripts.glove2word2vec import glove2word2vec
+from gensim.models.keyedvectors import Word2VecKeyedVectors
 logging.getLogger("gensim.models").setLevel(logging.WARNING)
 logging.getLogger("gensim.scripts.glove2word2vec").setLevel(logging.WARNING)
 logging.getLogger("gensim").setLevel(logging.WARNING)
@@ -27,7 +33,12 @@ class Embeddings:
     """Interface to all embeddings used in the pipeline."""
 
     @staticmethod
-    def train(path_corpus: str, fname: str, path_out_dir: str) -> str:
+    def train(path_corpus: str,
+              fname: str,
+              path_out_dir: str,
+              term_ids: Set[int],
+              doc_ids: Set[int]
+              ) -> str:
         raise NotImplementedError
 
     @staticmethod
@@ -73,7 +84,8 @@ class ElmoE(Embeddings):
                 if 0: The context insensitive repr is returned.
                 if 1: The last LSTM-layer is returned (context
                     sensitive repr).
-                if 2: The concatenation of option 0 and 1 is returned.
+                if 2: The average of the context insensitive repr. and
+                    the two lstm layers is returned.
         """
         # character_ids = batch_to_ids([sent])
         # embeddings = self._elmo(character_ids)
@@ -88,90 +100,76 @@ class ElmoE(Embeddings):
         elif mode == 1:
             return embeddings[2]
         elif mode == 2:
-            concatenation = [np.concatenate((tpl[0], tpl[1]), 0)
-                             for tpl in zip(embeddings[0], embeddings[2])]
-            return concatenation
+            average = [np.mean((tpl[0], tpl[1], tpl[2]), axis=0) for tpl in
+                       zip(embeddings[0], embeddings[1], embeddings[2])]
+            return average
 
-    # def calc_avg_embs_per_doc(self,
-    #                           path: str,
-    #                           level: str
-    #                           ) -> None:
-    #     """Compute the average ELMo embedding per document.
-    #
-    #     Produce a dict of the form:
-    #     {term_id: {doc_id: [avg<float>, weight<int>]}
-    #
-    #     Save it under '/embeddings/avg_embs_per_doc.json'.
-    #
-    #     Args:
-    #         cpath: Path to the output directory.
-    #         level: 't' if token, 'l' if lemma.
-    #     """
-    #     if level == 't':
-    #         cpath = os.path.join(
-    #             path, 'processed_corpus/pp_token_corpus.txt')
-    #         cpath_idx = os.path.join(
-    #             path, 'processed_corpus/token_idx_corpus.txt')
-    #         path_terms = os.path.join(
-    #             path, 'processed_corpus/token_terms_idxs.txt')
-    #         path_out = os.path.join(
-    #             path, 'embeddings/elmo_avg_embs_per_doc_tokens.json')
-    #     elif level == 'l':
-    #         cpath = os.path.join(
-    #             path, 'processed_corpus/pp_lemma_corpus.txt')
-    #         cpath_idx = os.path.join(
-    #             path, 'processed_corpus/lemma_idx_corpus.txt')
-    #         path_terms = os.path.join(
-    #             path, 'processed_corpus/lemma_terms_idxs.txt')
-    #         path_out = os.path.join(
-    #             path, 'embeddings/elmo_avg_embs_per_doc_lemmas.json')
-    #
-    #     terms = set()
-    #     with open(path_terms, 'r', encoding='utf8') as fin:
-    #         for line in fin:
-    #             terms.add(line.strip('\n'))
-    #
-    #     avg_embs = defaultdict(lambda: defaultdict(int))
-    #     # Loop though both corpus files at once. Get term embeddings.
-    #     doc_counter = -1
-    #     # for word_doc, idx_doc in zip(get_docs(cpath), get_docs(cpath_idx)):
-    #     #     doc_counter += 1
-    #     #     print('processing {}'.format(doc_counter))
-    #     #     doc_embs = defaultdict(list)   #  {term_idx: [emb1, emb2, ...]}
-    #     #     for i in range(len(idx_doc)):
-    #     #         idx_sent = idx_doc[i]
-    #     #         word_sent = word_doc[i]
-    #     #         for j in range(len(idx_sent)):
-    #     #             idx = idx_sent[j]
-    #     #             if idx in terms:
-    #     #                 emb = self.get_embeddings(word_sent)[j]
-    #     #                 doc_embs[idx].append(emb)
-    #     for doc in get_docs(cpath):
-    #         doc_counter += 1
-    #         print('processing {}'.format(doc_counter))
-    #         for i in range(len(doc)):
-    #             word_sent = doc[i]
-    #             emb = self.get_embeddings(word_sent)
-    #
-    #         # # Calculate average term embeddings per document
-    #         # # and it's weight (=number of term occurences).
-    #         # for idx in doc_embs:
-    #         #     embs = doc_embs[idx]
-    #         #     weight = len(embs)
-    #         #     avg_emb = np.mean(embs)
-    #         #     avg_embs[idx][doc_counter] = [avg_emb.tolist(), weight]
-    #
-    #         if doc_counter >= 10:
-    #             break
-    #
-    #     with open(path_out, 'w', encoding='utf8') as f:
-    #         json.dump(avg_embs, f)
+    def train(self,
+              path_corpus: str,
+              fname: str,
+              path_out_dir: str,
+              term_ids: Set[int],
+              doc_ids: Set[int]
+              ) -> str:
+        """'Train' ELMo embeddings. This means averaging for context.
+
+        Args:
+            path_corpus: The path to the text file used for training.
+            fname: The filename for the embedding file.
+            path_out_dir: The path to the output directory.
+            term_ids: The set of current term-ids.
+            doc_ids: The set of doc-ids making up the current subcorpus.
+        Return:
+            The path to the embedding file.
+        """
+        raw_path = 'embeddings/{}.vec'.format(fname)
+        path_out = os.path.join(path_out_dir, raw_path)
+        raw_path_elmo_context = 'embeddings/embs_token_ELMo_context.pickle'
+        path_elmo_context = os.path.join(path_out_dir, raw_path_elmo_context)
+        elmo_c_embs = pickle.load(path_elmo_context)
+        averaged_embs = self.get_averaged_embs(elmo_c_embs, term_ids, doc_ids)
+        vector_size = len(averaged_embs[list(averaged_embs.values())[0]])
+        m = Word2VecKeyedVectors(vector_size=vector_size)
+        m.vocab = averaged_embs
+        m.vectors = np.array(list(averaged_embs.values()))
+        my_save_word2vec_format(binary=True, fname='train.bin',
+                                total_vec=len(averaged_embs), vocab=m.vocab,
+                                vectors=m.vectors)
+        return path_out
+
+    @staticmethod
+    def get_averaged_embs(elmo_c_embs: Dict[int, Dict[int, List[np.ndarray]]],
+                          term_ids: Set[int],
+                          doc_ids: Set[int]
+                          ) -> Dict[int, np.ndarray]:
+        """Get the average elmo embeddings for given terms and doc-ids.
+
+        Args:
+            elmo_c_embs: {term_id: doc_id: [list of embeddings]}
+            term_ids: A set of term-ids.
+            doc_ids: A set of doc-ids.
+        Return:
+            averaged_embs: {term_id: average-embedding}
+        """
+        averaged_embs = {}
+        for term_id in term_ids:
+            term_embs = []
+            for doc_id in elmo_c_embs[term_id]:
+                if doc_id in doc_ids:
+                    term_embs.extend(elmo_c_embs[term_id][doc_id])
+            averaged_embs[term_id] = np.mean(term_embs, axis=0)
+        return averaged_embs
 
 
 class GloVeE(Embeddings):
 
     @staticmethod
-    def train(path_corpus: str, fname: str, path_out_dir: str) -> str:
+    def train(path_corpus: str,
+              fname: str,
+              path_out_dir: str,
+              term_ids: Set[int],
+              doc_ids: Set[int]
+              ) -> str:
         """Train GloVe embeddings.
 
         All setting are default (as in demo-script) except for the
@@ -182,6 +180,8 @@ class GloVeE(Embeddings):
             path_corpus: The path to the text file used for training.
             fname: The filename for the embedding file.
             path_out_dir: The path to the output directory.
+            term_ids: The set of current term-ids.
+            doc_ids: The set of doc-ids making up the current subcorpus.
         Return:
             The path to the embedding file.
         """
@@ -295,13 +295,20 @@ class Word2VecE(Embeddings):
     #     return term_id_to_emb
 
     @staticmethod
-    def train(path_corpus: str, fname: str, path_out_dir: str) -> str:
+    def train(path_corpus: str,
+              fname: str,
+              path_out_dir: str,
+              term_ids: Set[int],
+              doc_ids: Set[int]
+              ) -> str:
         """Train word2vec embeddings.
 
         Args:
             path_corpus: The path to the text file used for training.
             fname: The filename for the embedding file.
             path_out_dir: The path to the output directory.
+            term_ids: The set of current term-ids.
+            doc_ids: The set of doc-ids making up the current subcorpus.
         Return:
             The path to the embedding file.
         """
@@ -394,6 +401,51 @@ class CombinedEmbeddings(Embeddings):
             combined_vectors.append(word_vec)
 
         return combined_vectors
+
+
+def my_save_word2vec_format(fname, vocab, vectors, binary=True,
+                            total_vec=2):
+    """Store the input-hidden weight matrix in the same format used by
+    the original C word2vec-tool, for compatibility.
+
+    :: Code copied from here:
+    https://stackoverflow.com/questions/45981305/
+    convert-python-dictionary-to-word2vec-object
+    ::
+
+    Parameters
+    ----------
+    fname : str
+        The file path used to save the vectors in.
+    vocab : dict
+        The vocabulary of words.
+    vectors : numpy.array
+        The vectors to be stored.
+    binary : bool, optional
+        If True, the data wil be saved in binary word2vec format, else
+        it will be saved in plain text.
+    total_vec : int, optional
+        Explicitly specify total number of vectors
+        (in case word vectors are appended with document vectors afterwards).
+
+    """
+    if not (vocab or vectors):
+        raise RuntimeError("no input")
+    if total_vec is None:
+        total_vec = len(vocab)
+    vector_size = vectors.shape[1]
+    assert (len(vocab), vector_size) == vectors.shape
+    with utils.smart_open(fname, 'wb') as fout:
+        print(total_vec, vector_size)
+        fout.write(utils.to_utf8("%s %s\n" % (total_vec, vector_size)))
+        # store in sorted order: most frequent words at the top
+        for word, row in vocab.items():
+            if binary:
+                row = row.astype(REAL)
+                fout.write(utils.to_utf8(word) + b" " + row.tostring())
+            else:
+                fout.write(utils.to_utf8(
+                    "%s %s\n" % (word, ' '.join(repr(val) for val in row))))
 
 
     # def get_avg_emb(self, term_id: str, corpus: List[int]) -> Iterator[float]:
