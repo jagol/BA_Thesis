@@ -240,3 +240,63 @@ def get_sim(v1: Iterator[float], v2: Iterator[float]) -> float:
         The cosine similarity.
     """
     return 1-cosine(v1, v2)
+
+
+# ------------------ elmo processing functions -----------------------
+
+
+def concat_corpus(paths_in: List[str], path_out: str) -> None:
+    """Concatenate the given files.
+    Args:
+        paths_in: The list of paths to the files.
+        path_out: The path to the output file.
+    """
+    paths_in_str = ' '.join(paths_in)
+    os.system('cat {0} > {1}'.format(paths_in_str, path_out))
+
+
+def split_corpus(path_in: str,
+                 path_out: str,
+                 n: int
+                 ) -> Tuple[List[str], List[int]]:
+    """Split a corpus into n evenly sized chunks of documents.
+    Args:
+        path_in: File containing corpus to be split up.
+        path_out: Path to directory of output file.
+        n: The number of chunks.
+    Return:
+        A list of the filenames that were created.
+        A list of starting numbers (doc id) for each filename.
+    """
+    num_docs = get_num_docs(path_in)
+    split_points = [int(num_docs/n*i) for i in range(1, n+1)]
+    split_points.append(num_docs)
+    j = 0  # pointer to the current split-point
+    num_docs = 0
+
+    fnames = []
+    start_nums = [0]
+    with open(path_in, 'r', encoding='utf8') as f:
+        lines = []
+        for line in f:
+            lines.append(line)
+
+            if line == '\n':
+                num_docs += 1
+
+            if num_docs == split_points[j]:
+                fname = str(start_nums[j]) + '.txt.split'
+                fnames.append(fname)
+                start_nums.append(num_docs)
+                fpath = os.path.join(path_out, fname)
+                f = open(fpath, 'w', encoding='utf8')
+                docs = ''.join(lines)
+                f.write(docs)
+                f.close()
+                lines = []
+                print(j, split_points[j])
+                j += 1
+
+    start_nums = start_nums[:-1]
+
+    return fnames, start_nums
