@@ -43,6 +43,8 @@ Steps:
     a) Train token embeddings.
 5. Calculate Doc-Embeddings.
     a) Calculate token_doc_embeddings.
+
+python3 preprocessing_main_tg.py -c dblp -l server -spd -se -sde
 """
 
 
@@ -93,10 +95,13 @@ def main():
 
     # Index corpus.
     if not args.skip_idxer:
-        print('Start indexing...')
+        # print('Start indexing...')
         idxer = Indexer(path_out)
-        idxer.index_tokens()
-        print('Finished indexing.')
+        # idxer.index_tokens()
+        # print('Finished indexing.')
+        print('Start building subtoken index...')
+        idxer.build_token_contains()
+        print('Finished building subtoken index.')
 
     # Frequency analysis.
     if not args.skip_freq_an:

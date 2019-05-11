@@ -42,6 +42,10 @@ class FreqAnalyzer:
 
         self.path_dl = os.path.join(
             path, 'frequencies/dl.json')
+        self.path_token_contains = os.path.join(
+            path, 'processed_corpus/token_contains.json')
+        self.path_lemma_contains = os.path.join(
+            path, 'processed_corpus/lemma_contains.json')
 
         self._file_write_threshhold = 100
         # self._num_docs = 1000
@@ -59,22 +63,32 @@ class FreqAnalyzer:
             term_idxs = self._load_term_idxs('t')
             path_in = self.path_token_idx_corpus
             path_out = self.path_tf_tokens
+            contains = self.load_contains(self.path_token_contains)
         elif level == 'l':
             term_idxs = self._load_term_idxs('l')
             path_in = self.path_lemma_idx_corpus
             path_out = self.path_tf_lemmas
+            contains = self.load_contains(self.path_lemma_contains)
+        else:
+            raise Exception('Error! Level not know!')
 
         tf = {}
         for doc_idx, doc in enumerate(get_docs(path_in)):
             tf[doc_idx] = {}
             tf_doc = tf[doc_idx]
             for sent in doc:
-                for lemma_idx in sent:
-                    if lemma_idx in term_idxs:
-                        if lemma_idx in tf_doc:
-                            tf_doc[lemma_idx] += 1
+                for term_idx in sent:
+                    if term_idx in term_idxs:
+                        if term_idx in tf_doc:
+                            tf_doc[term_idx] += 1
                         else:
-                            tf_doc[lemma_idx] = 1
+                            tf_doc[term_idx] = 1
+                        # add counts for all terms contained
+                        for tc_idx in contains[term_idx]:
+                            if tc_idx in tf_doc:
+                                tf_doc[tc_idx] += 1
+                            else:
+                                tf_doc[tc_idx] = 1
                         # print(doc_idx, lemma_idx)
                         # print(type(doc_idx), type(lemma_idx))
                         # tf[doc_id][lemma_idx] += 1
@@ -97,16 +111,30 @@ class FreqAnalyzer:
         Args:
             level: 't' if tokens, 'l' if lemmas.
         """
-        term_idxs = set()
+        term_idxs = []
         if level == 't':
             path = self.path_token_terms_idxs
         elif level == 'l':
             path = self.path_lemma_terms_idxs
+        else:
+            raise Exception('Error! Level not know!')
 
         with open(path, 'r', encoding='utf8') as f:
             for line in f:
-                term_idxs.add(line.strip('\n'))
-        return term_idxs
+                term_idxs.append(line.strip('\n'))
+        return set(term_idxs)
+
+    @staticmethod
+    def load_contains(path: str) -> Dict[str, List[str]]:
+        """Load contain infos from file.
+
+        Args:
+            path: Path to json file.
+        Return:
+            {term_id: List of term_ids contained in term_id}
+        """
+        with open(path, 'r', encoding='utf8') as f:
+            return json.load(f)
 
     def _get_write_mode(self) -> str:
         """Return the mode in which the file should be written to."""
@@ -127,17 +155,25 @@ class FreqAnalyzer:
         if level == 't':
             path_df = self.path_df_tokens
             path_idx_corpus = self.path_token_idx_corpus
+            contains = self.load_contains(self.path_token_contains)
         elif level == 'l':
             path_df = self.path_df_lemmas
             path_idx_corpus = self.path_lemma_idx_corpus
+            contains = self.load_contains(self.path_lemma_contains)
+        else:
+            raise Exception('Error! Level not know!')
 
         term_idxs = self._load_term_idxs(level)
         df = defaultdict(list)
         for i, doc in enumerate(get_docs(path_idx_corpus,
                                          sent_tokenized=False)):
-            for word_id in set(doc):
-                if word_id in term_idxs:
-                    df[word_id].append(i)
+            for term_idx in set(doc):
+                if term_idx in term_idxs:
+                    df[term_idx].append(i)
+
+                    # add contained words to df
+                    for tc_idx in contains[term_idx]:
+                        df[tc_idx].append(i)
 
             self._docs_processed += 1
             self._update_cmd_counter()
@@ -197,11 +233,13 @@ class FreqAnalyzer:
             path_df = self.path_df_tokens
             path_tfidf = self.path_tfidf_tokens
             path_idx_corpus = self.path_token_idx_corpus
-        if level == 'l':
+        elif level == 'l':
             path_tf = self.path_tf_lemmas
             path_df = self.path_df_lemmas
             path_tfidf = self.path_tfidf_lemmas
             path_idx_corpus = self.path_lemma_idx_corpus
+        else:
+            raise Exception('Error! Level not know!')
 
         with open(path_tf, 'r', encoding='utf8') as f:
             tf = json.load(f)

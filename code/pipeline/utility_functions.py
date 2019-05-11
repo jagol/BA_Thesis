@@ -90,6 +90,8 @@ def get_cmd_args() -> Any:
     parser.add_argument('-sde', '--skip_doc_embs',
                         help='Skip doc embeddings',
                         action='store_true')
+    parser.add_argument('-swd', '--skip_word_distr',
+                        help='Skip pickling of word distr.')
     args = parser.parse_args()
     return args
 
@@ -240,6 +242,19 @@ def get_sim(v1: Iterator[float], v2: Iterator[float]) -> float:
         The cosine similarity.
     """
     return 1-cosine(v1, v2)
+
+
+def get_sublists(in_list: List[Any]) -> List[List[Any]]:
+    """Get all consecutive sublists for given list.
+
+    Args:
+        in_list: list to get sublists from.
+    """
+    sublists = []
+    for n in range(1, len(in_list)):
+        for i in range(len(in_list) - n + 1):
+            sublists.append(in_list[i:i+n])
+    return sublists
 
 
 # ------------------ elmo processing functions -----------------------
