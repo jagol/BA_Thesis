@@ -2,8 +2,8 @@ import os
 import json
 import time
 from typing import *
-from utility_functions import get_docs
-
+from utility_functions import get_docs, get_sublists
+import pdb
 
 class Indexer:
 
@@ -55,6 +55,11 @@ class Indexer:
         self.path_idx_lemma_terms = os.path.join(
             self.path_out_corpus, 'lemma_terms_idxs.txt')
 
+        self.path_token_contains = os.path.join(
+            self.path_out_corpus, 'token_contains.json')
+        self.path_lemma_contains = os.path.join(
+            self.path_out_corpus, 'lemma_contains.json')
+
         self.path_hierarch_rels_tokens = os.path.join(
             path, 'hierarchy/hierarchical_relations_tokens.json')
         self.path_hierarch_rels_lemmas = os.path.join(
@@ -69,12 +74,13 @@ class Indexer:
         self._already_written_to_file = False
         self._start_time = 0
         self._upper_bound = None
+        self.subtoken_index = {}
+        self.sublemma_index = {}
 
     def index_tokens(self):
         print('indexing of tokens...')
         token_to_idx, idx_to_token = self.index(self.path_in_tokens,
-                                                self.path_out_idx_tokens,
-                                                self.path_token_terms)
+                                                self.path_out_idx_tokens)
 
         print('Writing idx-word-mappings to file...')
         with open(self.path_token_to_idx, 'w', encoding='utf8') as f:
@@ -89,8 +95,7 @@ class Indexer:
     def index_lemmas(self):
         print('indexing of lemmas...')
         lemma_to_idx, idx_to_lemma = self.index(self.path_in_lemmas,
-                                                self.path_out_idx_lemmas,
-                                                self.path_lemma_terms)
+                                                self.path_out_idx_lemmas)
 
         print('Writing idx-word-mappings to file...')
         with open(self.path_lemma_to_idx, 'w', encoding='utf8') as f:
@@ -105,7 +110,7 @@ class Indexer:
     def index(self,
               path_in: str,
               path_out: str,
-              path_terms: str
+              # path_terms: str
               ) -> Tuple[Dict[str, int], Dict[int, str]]:
         """Create an index representation for the input corpus.
 
@@ -147,7 +152,7 @@ class Indexer:
                 idx_sent = [word_to_idx[word] for word in sent]
                 doc_idx.append(idx_sent)
             corpus_idx.append(doc_idx)
-            doc_idx = []
+            # doc_idx = []
             self._docs_processed += 1
             self._update_cmd_counter()
 
@@ -200,6 +205,8 @@ class Indexer:
         elif level == 'lemma':
             path_in = self.path_lemma_terms
             path_out = self.path_idx_lemma_terms
+        else:
+            raise Exception('Error! Level not known.')
 
         terms = set()
 
@@ -212,6 +219,92 @@ class Indexer:
             for t in terms:
                 term_cmd.append(term_to_idx[t])
                 fout.write(str(term_to_idx[t]) + '\n')
+
+    def build_token_contains(self) -> None:
+        """Build contains json-file.
+
+        Output file: {idx: List of idxs}
+        """
+        self.build_subtoken_index()
+        with open(self.path_token_to_idx, 'r', encoding='utf8') as f:
+            token_to_idx = json.load(f)
+        terms = []
+        with open(self.path_token_terms, 'r', encoding='utf8') as f:
+            for line in f:
+                terms.append(line.strip('\n'))
+        # Build dict only mapping token terms to idxs.
+        tt_to_idx = {k: v for k, v in token_to_idx.items() if k in terms}
+        x_contains_y = {}
+        num_tokens = len(tt_to_idx)
+        i = 0
+        for token_outer, idx_outer in tt_to_idx.items():
+            i += 1
+            print('Processecing token {} of {}...\r'.format(i, num_tokens),
+                  end='\r', flush=True)
+            x_contains_y[idx_outer] = []
+            subtokens = self.subtoken_index[token_outer]
+            for token_inner, idx_inner in tt_to_idx.items():
+                if token_inner.split('_') in subtokens:
+                    x_contains_y[idx_outer].append(idx_inner)
+        with open(self.path_token_contains, 'w', encoding='utf8') as f:
+            json.dump(x_contains_y, f)
+
+    def build_lemma_contains(self) -> None:
+        """Build contains json-file.
+
+        Output file: {idx: List of idxs}
+        """
+        self.build_sublemma_index()
+        with open(self.path_lemma_to_idx, 'r', encoding='utf8') as f:
+            lemma_to_idx = json.load(f)
+        terms = []
+        with open(self.path_lemma_terms, 'r', encoding='utf8') as f:
+            for line in f:
+                terms.append(line.strip('\n'))
+        # Build dict only mapping token terms to idxs.
+        lt_to_idx = {k: v for k, v in lemma_to_idx.items() if k in terms}
+        pdb.set_trace()
+        x_contains_y = {}
+        num_lemmas = len(lt_to_idx)
+        i = 0
+        for lemma_outer, idx_outer in lt_to_idx.items():
+            x_contains_y[lemma_outer] = []
+            for lemma_inner, idx_inner in lt_to_idx.items():
+                if lemma_inner in self.sublemma_index[lemma_outer]:
+                    x_contains_y[idx_outer].append(idx_inner)
+            i += 1
+            print('Processed {} of {} lemmas\r'.format(i, num_lemmas),
+                  end='\r', flush=True)
+        pdb.set_trace()
+        with open(self.path_lemma_contains, 'w', encoding='utf8') as f:
+            json.dump(x_contains_y, f)
+
+    def build_subtoken_index(self):
+        """Build a dict mapping a token term to its subtokens."""
+        terms = []
+        with open(self.path_token_terms, 'r', encoding='utf8') as f:
+            for line in f:
+                term = line.strip('\n')
+                terms.append(term)
+        terms = set(terms)
+        for term in terms:
+            term_list = term.split('_')
+            subterms = get_sublists(term_list)
+            self.subtoken_index[term] = [t for t in subterms
+                                         if '_'.join(t) in terms]
+
+    def build_sublemma_index(self):
+        """Build a dict mapping a lemma term to its sublemmas."""
+        terms = []
+        with open(self.path_lemma_terms, 'r', encoding='utf8') as f:
+            for line in f:
+                term = line.strip('\n')
+                terms.append(term)
+        terms = set(terms)
+        for term in terms:
+            term_list = term.split('_')
+            subterms = get_sublists(term_list)
+            self.sublemma_index[term] = [t for t in subterms if t in terms]
 
     def hierarch_rels_to_token_idx(self) -> None:
         """Convert 'hierarchical_relations_tokens.json' to index repr.
@@ -230,7 +323,8 @@ class Indexer:
             hypos_idxs = [token_to_idx[hypo] for hypo in hypos]
             hr_idx[hyper_idx] = hypos_idxs
 
-        with open(self.path_hierarch_rels_tokens_idx, 'w', encoding='utf8') as f:
+        with open(self.path_hierarch_rels_tokens_idx,
+                  'w', encoding='utf8') as f:
             json.dump(hr_idx, f)
 
     def hierarch_rels_to_lemma_idx(self) -> None:
@@ -250,7 +344,8 @@ class Indexer:
             hypos_idxs = [lemma_to_idx[hypo] for hypo in hypos]
             hr_idx[hyper_idx] = hypos_idxs
 
-        with open(self.path_hierarch_rels_lemmas_idx, 'w', encoding='utf8') as f:
+        with open(self.path_hierarch_rels_lemmas_idx,
+                  'w', encoding='utf8') as f:
             json.dump(hr_idx, f)
 
     def _update_cmd_counter(self) -> None:
@@ -299,6 +394,8 @@ def main():
     idxer = Indexer(path)
     idxer.index_tokens()
     idxer.index_lemmas()
+    idxer.build_token_contains()
+    idxer.build_lemma_contains()
     idxer.hierarch_rels_to_token_idx()
     idxer.hierarch_rels_to_lemma_idx()
 
