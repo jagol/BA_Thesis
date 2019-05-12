@@ -6,7 +6,7 @@ from numpy import mean
 from math import log
 from utility_functions import get_docs, get_num_docs
 # from text_processing_unit import TextProcessingUnit
-
+import pdb
 
 class FreqAnalyzer:
 
@@ -86,9 +86,9 @@ class FreqAnalyzer:
                         # add counts for all terms contained
                         for tc_idx in contains[term_idx]:
                             if tc_idx in tf_doc:
-                                tf_doc[tc_idx] += 1
+                                tf_doc[str(tc_idx)] += 1
                             else:
-                                tf_doc[tc_idx] = 1
+                                tf_doc[str(tc_idx)] = 1
                         # print(doc_idx, lemma_idx)
                         # print(type(doc_idx), type(lemma_idx))
                         # tf[doc_id][lemma_idx] += 1
@@ -146,7 +146,7 @@ class FreqAnalyzer:
         """Calculate the document frequency for all terms.
 
         Do plus one smoothing to avoid zero division errors. Write
-        output to 'frequency_analysis/df_lemmas.json' in form
+        output to 'frequency_analysis/df_<tokens/lemmas>.json' in form
         of a dict: {<term_id>: [doc_id1, ...]}
 
         Args:
@@ -172,8 +172,10 @@ class FreqAnalyzer:
                     df[term_idx].append(i)
 
                     # add contained words to df
+                    pdb.set_trace()
                     for tc_idx in contains[term_idx]:
-                        df[tc_idx].append(i)
+                        df[str(tc_idx)].append(i)
+                    pdb.set_trace()
 
             self._docs_processed += 1
             self._update_cmd_counter()
