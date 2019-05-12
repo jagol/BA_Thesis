@@ -6,7 +6,7 @@ from numpy import mean
 from math import log
 from utility_functions import get_docs, get_num_docs
 # from text_processing_unit import TextProcessingUnit
-import pdb
+
 
 class FreqAnalyzer:
 
@@ -172,10 +172,8 @@ class FreqAnalyzer:
                     df[term_idx].append(i)
 
                     # add contained words to df
-                    pdb.set_trace()
                     for tc_idx in contains[term_idx]:
                         df[str(tc_idx)].append(i)
-                    pdb.set_trace()
 
             self._docs_processed += 1
             self._update_cmd_counter()
