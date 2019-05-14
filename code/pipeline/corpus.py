@@ -83,7 +83,6 @@ class Corpus:
                        term_distr: term_distr_type,
                        m: int,
                        path_out: str,
-                       clus_centers: Dict[int, np.ndarray],
                        term_ids_to_embs_local: Dict[int, np.ndarray],
                        df: Dict[int, List[int]]
                        ) -> Tuple[Dict[int, Set[int]], Dict[int, Set[int]]]:
@@ -107,7 +106,6 @@ class Corpus:
                 subcorpus. It can be the case that less than m documents are
                 returned.
             path_out: The path to the output directory.
-            clus_centers: Maps cluster labels to their centers.
             df: Document frequencies.
             term_ids_to_embs_local: Maps term-ids to local-embeddings.
 
@@ -123,10 +121,13 @@ class Corpus:
 
         sca_tfidf = cls.get_subcorpora_tfidf(clusters, term_distr)
         # {label: list of doc-ids ordered by strength descending}
-        clus_terms = cls.get_k_most_center_terms(clus_centers, clusters,
-                                                 term_ids_to_embs_local, 100)
-        # {clus-l: set of term-ids}
-        sca_emb_imp = cls.get_relevant_docs(clus_terms, df)
+
+        # clus_terms = cls.get_k_most_center_terms(clus_centers, clusters,
+        #                                          term_ids_to_embs_local, 100)
+        # # {clus-l: set of term-ids}
+        # sca_emb_imp = cls.get_relevant_docs(clus_terms, df)
+        sca_emb_imp = cls.get_relevant_docs_iter(cluster_centers, clusters,
+                                                 term_ids_to_embs_local, df, m)
         # {label: list of doc-ids}
         for label in sca_tfidf:
             if len(sca_tfidf[label]) < m:
@@ -192,9 +193,8 @@ class Corpus:
                 red_subcorpora[label] = set(subcorpora[label][:m])
             else:
                 red_subcorpora[label] = set(subcorpora[label])
-
-            msg = '  {} documents collected for cluster {}...'
-            print(msg.format(num_docs, label))
+            msg = '  {} documents collected for cluster {}.'
+            print(msg.format(len(red_subcorpora[label]), label))
         return red_subcorpora
 
     @classmethod
@@ -445,11 +445,21 @@ class Corpus:
 
     @classmethod
     def calc_sims_new_way(cls,
-                          topic_emb,
-                          doc_embs,
-                          topic_label,
-                          doc_topic_sims
+                          topic_emb: np.ndarray,
+                          doc_embs: Dict[int, np.ndarray],
+                          topic_label: int,
+                          doc_topic_sims: Dict[int, Dict[int, np.ndarray]]
                           ):
+        """Compute similarities between topic and document embeddings.
+
+        New version of this method, using numpy arrays, for faster calculation.
+
+        Args:
+            topic_emb: Maps a topic label to its embedding.
+            doc_embs: Maps doc-ids to embeddings.
+            topic_label: The current topic label.
+            doc_topic_sims: asdf
+        """
         matrix, doc_ids = cls.get_matrix(doc_embs)
         del doc_embs
         sim_matrix = cls.get_cosine_similarities(topic_emb, matrix)
@@ -537,7 +547,7 @@ class Corpus:
             A dict mapping the cluster l to a set of document-ids.
         """
         clus_terms = cls.get_k_most_center_terms(clus_centers, clusters,
-                                                 term_ids_to_embs_local, 100)
+                                                 term_ids_to_embs_local, 200)
         # {clus-l: set of term-ids}
         subcorpora = cls.get_relevant_docs(clus_terms, df)
         # {clus-l: set of doc-ids}
@@ -569,8 +579,8 @@ class Corpus:
         for label in clusters:
             len_clus = len(clusters[label])
             if len_clus > k:
-                if len_clus > 3*k:
-                    k = int(len_clus / 3)
+                # if len_clus > 3*k:
+                #     k = int(len_clus / 3)
                 clus_sims = {}  # {term_id: sim}
                 for term_id in clusters[label]:
                     clus_sims[term_id] = term_clus_sims[term_id][label]
@@ -580,6 +590,99 @@ class Corpus:
             else:
                 clus_terms[label] = clusters[label]
         return clus_terms
+
+    @classmethod
+    def get_relevant_docs_iter(cls,
+                               clus_centers: Dict[int, np.ndarray],
+                               clusters: Dict[int, Set[int]],
+                               term_ids_to_embs_local: Dict[int, np.ndarray],
+                               df: Dict[int, List[int]],
+                               m: int
+                               ) -> Dict[int, List[int]]:
+        """Get relevant docs for the given clusters using df-imp.
+
+        This method is a extension of get_relevant_docs. It iteratively
+        considers more term-ids until m documents are retrieved or no
+        term-ids are left.
+
+        Method to avoid too small local embedding corpus and avoid
+        out-of-vocabulary terms.
+        """
+        subcorpora = {l: [] for l in clusters}
+        sorted_terms = cls.sort_terms_by_center_distance(
+            clus_centers, clusters, term_ids_to_embs_local)
+        bound_l = 0
+        bound_r = 100
+        for label, terms in clusters.items():
+            num_terms = len(terms)
+            while len(set(subcorpora[label])) < m:
+                rel_docs = cls.get_relevant_docs_clus(sorted_terms[label], df,
+                                                      bound_l, bound_r)
+                subcorpora[label].extend(rel_docs)
+                if bound_r == num_terms:
+                    break
+                bound_l += 100
+                bound_r += 100
+                if bound_r >= num_terms:
+                    bound_r = num_terms
+            bound_l = 0
+            bound_r = 100
+
+        return subcorpora
+
+    @classmethod
+    def sort_terms_by_center_distance(
+            cls,
+            clus_centers: Dict[int, np.ndarray],
+            clusters: Dict[int, Set[int]],
+            term_ids_to_embs_local: Dict[int, np.ndarray]
+    ) -> Dict[int, List[int]]:
+        """Sort cluster terms by cos-distance to the cluster center.
+
+        The most center terms come first.
+
+        Args:
+            clus_centers: Maps cluster labels to cluster centers.
+            clusters: Maps cluster labels to their term-ids.
+            term_ids_to_embs_local: Maps term ids to their embeddings.
+        Return:
+            Maps cluster labels to a ordered list of term-ids.
+        """
+        ordered_terms = {}
+        term_clus_sims = cls.get_doc_topic_sims(term_ids_to_embs_local,
+                                                clus_centers)
+        for label, clus in clusters.items():
+            clus_sims = {}
+            for term_id in clusters[label]:
+                clus_sims[term_id] = term_clus_sims[term_id][label]
+            sorted_terms = sorted(clus_sims.items(), reverse=True,
+                                  key=lambda x: x[1])
+            ordered_terms[label] = [term for term, dist in sorted_terms]
+        return ordered_terms
+
+    @staticmethod
+    def get_relevant_docs_clus(terms: List[int],
+                               df: Dict[int, List[int]],
+                               bound_l: int,
+                               bound_r: int
+                               ) -> List[int]:
+        """Get the relevant docs for a cluster/label in clusters.
+
+        Like get_relevant_docs but only for one cluster.
+
+        Args:
+            terms: A list of term-ids.
+            df: The document frequencies.
+            bound_l: Left bound of relevant terms.
+            bound_r: Right bound of relevant terms.
+        """
+        if bound_r >= len(terms):
+            bound_r = len(terms) - 1
+        rel_terms = terms[bound_l: bound_r]
+        rel_docs_clus = []
+        for term_id in rel_terms:
+            rel_docs_clus.extend(df[term_id])
+        return rel_docs_clus
 
     @staticmethod
     def get_relevant_docs(clus_terms: Dict[int, Set[int]],
