@@ -122,7 +122,7 @@ def generate_taxonomy() -> None:
         idx_to_term = {int(k): v for k, v in idx_to_term_str.items()}
     print('Load global embeddings...')
     term_ids_to_embs_global = Embeddings.load_term_embeddings(
-        term_ids, path_embeddings_global, {})
+        term_ids, path_embeddings_global, {}, idx_to_term)
 
     print('Load base corpus...')
     base_corpus = get_base_corpus(path_base_corpus)
@@ -223,10 +223,12 @@ def rec_find_children(term_ids_local: Set[int],
     if level != 0:
         m = int(len(base_corpus) / (5 * level))
         emb_path_local = train_embeddings(emb_type, corpus_path,
-                                          cur_node_id, path_out)
+                                          cur_node_id, path_out,
+                                          term_ids_local, cur_corpus)
         print('Get term embeddings...')
         term_ids_to_embs_local = Embeddings.load_term_embeddings(
-            term_ids_local, emb_path_local, term_ids_to_embs_global)
+            term_ids_local, emb_path_local, term_ids_to_embs_global,
+            idx_to_term)
         # {id: embedding}
     else:
         term_ids_to_embs_local = term_ids_to_embs_global
@@ -243,12 +245,15 @@ def rec_find_children(term_ids_local: Set[int],
         print('Cluster terms...')
         clusters = perform_clustering(term_ids_to_embs_local)
         # Dict[int, Set[int]]
+        cluster_sizes = [len(clus) for label, clus in clusters.items()]
+        print('Cluster_sizes: {}'.format(cluster_sizes))
         cluster_centers = Cp.get_topic_embeddings(clusters,
                                                   term_ids_to_embs_global)
 
         print('Get subcorpora for clusters...')
-        sc_scoring = Cp.get_subcorpora(cluster_centers, clusters,
-                                       term_distr_base, m, path_out)
+        sc_scoring, sc_emb_training = Cp.get_subcorpora(
+            cluster_centers, clusters, term_distr_base, m, path_out,
+            cluster_centers, term_ids_to_embs_local, df)
 
         print('Compute term scores...')
         term_scores = get_term_scores(clusters, cluster_centers, sc_scoring,
@@ -273,20 +278,18 @@ def rec_find_children(term_ids_local: Set[int],
         # else:
         #     gen_terms_clus = []
         clusters, gen_terms_clus = separate_gen_terms(clusters, term_scores,
-                                                      threshold)
+                                                      threshold, level)
         general_terms.extend(gen_terms_clus)
         print('Terms pushed up: {}'.format(len(gen_terms_clus)))
-        cluster_sizes = [len(clus) for label, clus in clusters.items()]
-        print('Cluster_sizes: {}'.format(cluster_sizes))
         len_gtc = len(gen_terms_clus)
         num_loct = len(term_ids_to_embs_local)
         if len_gtc == 0 or num_loct == 0 or i >= max_iter:
             # 2. cond for the case if all terms have been pushed up.
-            print('Get subcorpora for local embedding training...')
-            sc_emb_training = Cp.get_subcorpora_emb_imp(cluster_centers,
-                                                        clusters,
-                                                        term_ids_to_embs_local,
-                                                        df)
+            # print('Get subcorpora for local embedding training...')
+            # sc_emb_training = Cp.get_subcorpora_emb_imp(cluster_centers,
+            #                                             clusters,
+            #                                             term_ids_to_embs_local,
+            #                                             df)
             break
         term_ids_to_embs_local = update_title(term_ids_to_embs_local, clusters)
 
@@ -456,7 +459,8 @@ def write_term_scores(path_out: str,
 
 def separate_gen_terms(clusters: Dict[int, Set[int]],
                        term_scores: Dict[int, Tuple[float, float, float]],
-                       threshold: float
+                       threshold: float,
+                       level
                        ) -> Tuple[Dict[int, Set[int]],
                                   List[Tuple[int, float]]]:
     """Remove general terms and unpopular terms from clusters.
@@ -470,6 +474,7 @@ def separate_gen_terms(clusters: Dict[int, Set[int]],
             concentrations.
         threshold: The representativeness-threshold at which terms are
             pushed up.
+        level: The current taxonomy level.
     Return:
         proc_cluster: Same as the input variable 'clusters', but with
             terms removed.
@@ -479,6 +484,8 @@ def separate_gen_terms(clusters: Dict[int, Set[int]],
     concept_terms = []  # [term_id1, ...]
     concept_terms_scores = []  # [(term_id, score), ...]
     # Get general terms und repr thresh.
+    if level == 0:
+        threshold = 0.1
     for label, clus in clusters.items():
         for term_id in clus:
             score = term_scores[term_id][2]
@@ -540,7 +547,9 @@ def build_corpus_file(doc_ids: Set[int],
 def train_embeddings(emb_type: str,
                      path_corpus: str,
                      cur_node_id: int,
-                     path_out_dir: str
+                     path_out_dir: str,
+                     term_ids: Set[int],
+                     doc_ids: Set[int],
                      ) -> str:
     """Train word2vec embeddings on the given corpus.
 
@@ -550,12 +559,15 @@ def train_embeddings(emb_type: str,
         cur_node_id: Id of the current node. Used for the name of the
             embedding file.
         path_out_dir: The path to the output directory.
+        term_ids: ...
+        doc_ids: ...
     Return:
         The path to the embedding file:
         'embeddings/<cur_node_id>_w2v.vec'
     """
     embedding = get_emb(emb_type)
-    return embedding.train(path_corpus, str(cur_node_id), path_out_dir)
+    return embedding.train(path_corpus, str(cur_node_id), path_out_dir,
+                           term_ids, doc_ids)
 
 
 def perform_clustering(term_ids_to_embs: Dict[int, List[float]]
@@ -678,7 +690,7 @@ def get_term_scores(clusters: Dict[int, Set[int]],
 
 
 def get_base_corpus(path_base_corpus: str):
-    """Get the set of indices making up the base corpus.
+    """Get the set of doc-ids making up the base corpus.
 
     Args:
         path_base_corpus: Path to the corpus file.
