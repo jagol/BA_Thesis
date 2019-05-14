@@ -14,6 +14,10 @@ term_distr_type = DefaultDict[int, doc_distr_type]
 
 class Corpus:
 
+    # If true, expand embedding corpus, using retrieval method,
+    # if subcorpus length is below m.
+    expand_emb = True
+
     @staticmethod
     def load_doc_embeddings(path_out: str) -> Dict[int, np.ndarray]:
         """Compute document embeddings using term-embeddings and tfidf.
@@ -78,8 +82,11 @@ class Corpus:
                        clusters: Dict[int, Set[int]],
                        term_distr: term_distr_type,
                        m: int,
-                       path_out: str
-                       ) -> Dict[int, Set[int]]:
+                       path_out: str,
+                       clus_centers: Dict[int, np.ndarray],
+                       term_ids_to_embs_local: Dict[int, np.ndarray],
+                       df: Dict[int, List[int]]
+                       ) -> Tuple[Dict[int, Set[int]], Dict[int, Set[int]]]:
         """Get subcorpora for the given clusters.
 
         Employ two methods:
@@ -100,44 +107,95 @@ class Corpus:
                 subcorpus. It can be the case that less than m documents are
                 returned.
             path_out: The path to the output directory.
+            clus_centers: Maps cluster labels to their centers.
+            df: Document frequencies.
+            term_ids_to_embs_local: Maps term-ids to local-embeddings.
 
         Return:
             A dict mapping each cluster label to a set of document ids.
         """
-        use_retrieval_based = False
-        subcorpus = {}
-        # {doc-id: list of doc-ids ordered by strength from both
-        # retrieval methods}
-        sc_tfidf = cls.get_subcorpora_tfidf(clusters, term_distr)
+        use_retrieval_based_on_tfidf = False
+        use_retrieval_based_on_emb_imp = False
+
+        # Subcorpora for scoring and embedding training.
+        sca_scoring = {}
+        sca_emb = {}
+
+        sca_tfidf = cls.get_subcorpora_tfidf(clusters, term_distr)
         # {label: list of doc-ids ordered by strength descending}
-        for label, sc in sc_tfidf.items():
-            if len(sc) < m:
-                use_retrieval_based = True
-        if use_retrieval_based:
-            sc_emb = cls.get_subcorpora_emb(cluster_centers, path_out)
+        clus_terms = cls.get_k_most_center_terms(clus_centers, clusters,
+                                                 term_ids_to_embs_local, 100)
+        # {clus-l: set of term-ids}
+        sca_emb_imp = cls.get_relevant_docs(clus_terms, df)
+        # {label: list of doc-ids}
+        for label in sca_tfidf:
+            if len(sca_tfidf[label]) < m:
+                use_retrieval_based_on_tfidf = True
+            if len(sca_emb_imp[label]) < m:
+                use_retrieval_based_on_emb_imp = True
+
+        if not cls.expand_emb:
+            use_retrieval_based_on_emb_imp = False
+
+        if use_retrieval_based_on_tfidf or use_retrieval_based_on_emb_imp:
+            sca_retr = cls.get_subcorpora_retrieval(cluster_centers, path_out)
             # {label: list of doc-ids ordered by strength descending}
-            # Add retrieval-based docs to clustering-based docs while
-            # avoiding duplicates but retaining the order of both lists.
-            for label in sc_tfidf:
-                cur_sc_tfidf = set(sc_tfidf[label])
-                sc_emb_not_dupl = []
-                for doc_id in sc_emb[label]:
-                    if doc_id not in cur_sc_tfidf:
-                        sc_emb_not_dupl.append(doc_id)
-                subcorpus[label] = sc_tfidf[label] + sc_emb_not_dupl
+
+            if use_retrieval_based_on_tfidf:
+                sca_scoring = cls.extend_sc(sca_tfidf, sca_retr)
+
+            if use_retrieval_based_on_emb_imp:
+                sca_emb = cls.extend_sc(sca_emb_imp, sca_retr)
 
         # Reduce to m docs per cluster and convert to set.
-        for label in subcorpus:
-            num_docs = len(subcorpus[label])
+        sca_scoring = cls.reduce_to_m(sca_scoring, m)
+        sca_emb = cls.reduce_to_m(sca_emb, m)
+
+        return sca_scoring, sca_emb
+
+    @staticmethod
+    def extend_sc(sca1: Dict[int, List[int]],
+                  sca2: Dict[int, List[int]]
+                  ) -> Dict[int, List[int]]:
+        """Extend value of subcorpora1 by subcorpora2, avoid duplicates.
+
+        Args:
+            sc1, sc2: Dict mapping a label to its subcorpus.
+        Return:
+            The expanded subcorpora.
+        """
+        for label in sca1:
+            cur_sca1 = set(sca1[label])
+            sca2_not_dupl = []
+            for doc_id in sca2[label]:
+                if doc_id not in cur_sca1:
+                    sca2_not_dupl.append(doc_id)
+            sca1[label] = sca1[label] + sca2_not_dupl
+        return sca1
+
+    @staticmethod
+    def reduce_to_m(subcorpora: Dict[int, List[int]],
+                    m: int
+                    ) -> Dict[int, Set[int]]:
+        """Reduce the value list to m entries.
+
+        Args:
+            subcorpora: Dict to be reduced.
+            m: number of entries to reduce to.
+        Return:
+            Reduced dict.
+        """
+        red_subcorpora = {}
+        for label in subcorpora:
+            num_docs = len(subcorpora[label])
             if num_docs >= m:
-                subcorpus[label] = set(subcorpus[label][:m])
+                red_subcorpora[label] = set(subcorpora[label][:m])
             else:
-                subcorpus[label] = set(subcorpus[label])
+                red_subcorpora[label] = set(subcorpora[label])
 
             msg = '  {} documents collected for cluster {}...'
             print(msg.format(num_docs, label))
-
-        return subcorpus
+        return red_subcorpora
 
     @classmethod
     def get_subcorpora_tfidf(cls,
@@ -184,18 +242,17 @@ class Corpus:
         return subcorpus
 
     @classmethod
-    def get_subcorpora_emb(cls,
-                           cluster_centers: Dict[int, np.ndarray],
-                           path_out: str,
-                           ) -> Dict[int, List[int]]:
+    def get_subcorpora_retrieval(cls,
+                                 cluster_centers: Dict[int, np.ndarray],
+                                 path_out: str
+                                 ) -> Dict[int, List[int]]:
         """Get the subcorpus for each cluster.
 
-        TODO: describe args
         Args:
-            cluster_centers: ...
-            path_out: ...
+            cluster_centers: Maps cluster labels to their centers.
+            path_out: Path to the local embeddings.
         Return:
-            A dictionary mapping each clusterlabel to a set of doc-ids.
+            A dictionary mapping each clusterlabel to a list of doc-ids.
         """
         print('  Load document embeddings...')
         doc_embeddings = cls.load_doc_embeddings(path_out)
@@ -484,6 +541,7 @@ class Corpus:
         # {clus-l: set of term-ids}
         subcorpora = cls.get_relevant_docs(clus_terms, df)
         # {clus-l: set of doc-ids}
+        subcorpora = {k: set(v) for k, v in subcorpora.items()}
         return subcorpora
 
     @classmethod
@@ -509,7 +567,10 @@ class Corpus:
                                                 clus_centers)
         # {term-id: array with topic/cluster-label as idx and cos-sim as val}
         for label in clusters:
-            if len(clusters[label]) > k:
+            len_clus = len(clusters[label])
+            if len_clus > k:
+                if len_clus > 3*k:
+                    k = int(len_clus / 3)
                 clus_sims = {}  # {term_id: sim}
                 for term_id in clusters[label]:
                     clus_sims[term_id] = term_clus_sims[term_id][label]
@@ -523,7 +584,7 @@ class Corpus:
     @staticmethod
     def get_relevant_docs(clus_terms: Dict[int, Set[int]],
                           df: Dict[int, List[int]]
-                          ) -> Dict[int, Set[int]]:
+                          ) -> Dict[int, List[int]]:
         """Per cluster get the documents in which the its terms occur.
 
         Args:
@@ -531,12 +592,12 @@ class Corpus:
                 term-ids.
             df: Maps each term to the document-ids it appears in.
         Return:
-            A dict mapping the cluster l to a set of document-ids.
+            A dict mapping the cluster l to a list of document-ids.
         """
         relevant_docs = {}
         for label, clus in clus_terms.items():
             rel_docs_clus = []
             for term_id in clus:
                 rel_docs_clus.extend(df[term_id])
-            relevant_docs[label] = set(rel_docs_clus)
+            relevant_docs[label] = rel_docs_clus
         return relevant_docs
