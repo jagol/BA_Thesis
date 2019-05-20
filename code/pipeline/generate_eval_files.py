@@ -16,16 +16,19 @@ class EFGenerator:
     """Class to handle functions to generate evaluation files."""
 
     def __init__(self, path_in: str, path_out: str) -> None:
-        self.path_in = path_in
-        self.path_taxonomy = os.path.join(self.path_in, 'tax_labels_sim.csv')
+        # self.path_in = path_in
+        # self.path_taxonomy = os.path.join(self.path_in, 'tax_labels_sim.csv')
+        self.path_taxonomy = path_in
         self.path_out = path_out
-        self.path_prev_labels = ('./evaluations/results/evaluations/'
-                                 'prev_labels/')
+        self.path_prev_labels = ('../evaluation/results/evaluations/'
+                                 'previous_labels')
         self.taxogen_tax = self.load_taxogen_tax()
         self.prev_hypernym_labels = self.load_prev_hypernym_labels()
         self.prev_subtopic_labels = self.load_prev_subtopic_labels()
         self.taxonomy = self.read_taxonomy()
-        self.rels = []  # List of relations (hypernym, hyponym)
+        self.taxonomy[0] = {'terms': [], 'child_ids': [1, 2, 3, 4, 5]}
+        self.hyp_rels = []  # List of relations (hypernym, hyponym)
+        self.subtopic_rels = []
         self.topic_rels = []
 
     # ---------- Methods to load eval-files ----------
@@ -107,16 +110,16 @@ class EFGenerator:
         """Generate a csv file to evaluate the hypernym relation precision."""
         n = 100
         top_n = 1
-        self.rec_get_rels(0, top_n)
-        rels_subset = sample(self.rels, n)
+        self.rec_get_hyp_rels(0, top_n)
+        rels_subset = sample(self.hyp_rels, n)
         self.write_hyp_rels_to_file(rels_subset)
 
     def generate_issubtopic_eval_file(self):
         """Generate a csv file to evaluate issubtopic relation precision."""
         n = 100
         top_n = 3
-        self.rec_get_rels(0, top_n)
-        rels_subset = sample(self.rels, n)
+        self.rec_get_subtopic_rels(0, top_n)
+        rels_subset = sample(self.subtopic_rels, n)
         self.write_subtopic_rels_to_file(rels_subset)
 
     def generate_topic_level_eval_file(self):
@@ -128,7 +131,7 @@ class EFGenerator:
 
     # ---------- Methods to recursively generate relations ----------
 
-    def rec_get_rels(self, node_id: int, top_n: int) -> None:
+    def rec_get_hyp_rels(self, node_id: int, top_n: int) -> None:
         """Recursively get all relation from node_id down the tree.
 
         Args:
@@ -146,10 +149,33 @@ class EFGenerator:
 
         for hyper in hyper_terms:
             for hypo in hypo_terms:
-                self.rels.append((hyper, hypo))
+                self.hyp_rels.append((hyper, hypo))
 
         for child_id in self.taxonomy[node_id]['child_ids']:
-            self.rec_get_rels(child_id, top_n)
+            self.rec_get_hyp_rels(child_id, top_n)
+
+    def rec_get_subtopic_rels(self, node_id: int, top_n: int) -> None:
+        """Recursively get all relations from node_id down the tree.
+
+        Args:
+            node_id: The id of the top node to get the relations.
+            top_n: The top_n terms of each topic are chosen for relation
+                term pairs.
+        """
+        topic_terms = self.taxonomy[node_id]['terms']
+        subtopic_terms = []
+
+        for child_id in self.taxonomy[node_id]['child_ids']:
+            if child_id not in self.taxonomy:
+                return
+            subtopic_terms.extend(self.taxonomy[child_id]['terms'][:top_n])
+
+        for hyper in topic_terms:
+            for hypo in subtopic_terms:
+                self.subtopic_rels.append((hyper, hypo))
+
+        for child_id in self.taxonomy[node_id]['child_ids']:
+            self.rec_get_subtopic_rels(child_id, top_n)
 
     def rec_get_topic_rels(self,
                            node_id: int
@@ -225,7 +251,7 @@ class EFGenerator:
         Each row has the form:
         hyper_idx,hyper_name,hyper_score,hypo_idx,hyper_name,hyper_score
         """
-        outf = os.path.join(self.path_out, 'hypernym_eval.csv')
+        outf = os.path.join(self.path_out, 'issubtopic_eval.csv')
         with open(outf, 'w', encoding='utf8') as f:
             writer = csv.writer(f)
             for rel in rels_subset:
@@ -244,16 +270,6 @@ class EFGenerator:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        '-l',
-        '--location',
-        help='indicate if local paths or server paths should be used',
-    )
-    parser.add_argument(
-        '-c',
-        '--corpus',
-        help='name of corpus to be processed: europarl; dblp; sp;'
-    )
     parser.add_argument(
         '-i',
         '--path_in_dir',
