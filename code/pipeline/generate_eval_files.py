@@ -6,7 +6,10 @@ from random import sample
 from typing import Dict, Any, List, Tuple, Union
 
 
-"""Generate evaluation files."""
+"""Generate evaluation files.
+
+python3 generate_eval_files.py -i ../evaluation/results/taxonomies/all_true_like_taxogen_depth_3_4_th_0.35.csv -o ../evaluation/results/evaluations/all_true_depth_3_4_th_0.35_test
+"""
 
 
 term_type = Tuple[int, str, int]
@@ -34,7 +37,7 @@ class EFGenerator:
     # ---------- Methods to load eval-files ----------
 
     @staticmethod
-    def load_taxogen_tax():
+    def load_taxogen_tax() -> Dict[str, Dict[str, str]]:
         """Load the taxonomy created by the taxogen paper.
 
         Load the top 5 topics.
@@ -55,7 +58,7 @@ class EFGenerator:
             for row in reader:
                 hyper = row[0]
                 hypo = row[1]
-                label = row[2]
+                label = int(row[2])
                 prev_hyp_labels[(hyper, hypo)] = label
         return prev_hyp_labels
 
@@ -68,7 +71,7 @@ class EFGenerator:
             for row in reader:
                 topic = row[0]
                 subt = row[1]
-                label = row[2]
+                label = int(row[2])
                 prev_subt_labels[(topic, subt)] = label
         return prev_subt_labels
 
@@ -98,7 +101,7 @@ class EFGenerator:
         """Generate 3 eval files under the directory path_out.
 
         Files generated:
-            hyponym_eval.csv
+            hypernym_eval.csv
             issubtopic.csv
             topic_level.csv
         """
