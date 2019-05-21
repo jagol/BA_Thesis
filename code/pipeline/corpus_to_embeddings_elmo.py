@@ -119,9 +119,9 @@ def embed_terms(path_term_to_idxs: str,
 
     for i, doc in enumerate(get_docs(path_in)):
         doc_id = start_num + i
-        print(30*'-')
+        # print(30*'-')
         print('processing {}...'.format(doc_id))
-        print('doc_id: {}, doc: {}'.format(doc_id, doc))
+        # print('doc_id: {}, doc: {}'.format(doc_id, doc))
         for sent in doc:
             sent_terms = []
             for j in range(len(sent)):
@@ -129,12 +129,14 @@ def embed_terms(path_term_to_idxs: str,
                 if word in terms_to_idxs:
                     term_idx = terms_to_idxs[word]
                     sent_terms.append((term_idx, word.split('_'), j))
-            print('doc-id: {}, sent-terms: {}'.format(doc_id, sent_terms))
+            # print('doc-id: {}, sent-terms: {}'.format(doc_id, sent_terms))
             if sent_terms:
                 # prepped_sent, term_idxs = prepare_sentence(sent, sent_terms)
                 # print('prepared_sent: {}, term_idxs: {}'.format(prepped_sent,
                 #                                                 term_idxs))
                 # print('sent:', sent)
+                assert isinstance(sent, list)
+                assert isinstance(sent[0], str)
                 embs = elmo.get_embeddings(sent, mode=1)
                 for k in range(len(sent_terms)):
                     # term_emb = get_term_emb(embs, term_idxs[h])
@@ -147,9 +149,6 @@ def embed_terms(path_term_to_idxs: str,
                     if doc_id not in term_embs_per_doc[term_idx]:
                         term_embs_per_doc[term_idx][doc_id] = []
                     term_embs_per_doc[term_idx][doc_id].append(term_emb)
-
-        if i > 1000:
-            break
 
     with open(path_out, 'wb') as f:
         pickle.dump(term_embs_per_doc, f)
