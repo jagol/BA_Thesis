@@ -219,9 +219,11 @@ def rec_find_children(term_ids_local: Set[int],
     print('Build corpus file...')
     corpus_path = build_corpus_file(cur_corpus, path_base_corpus_ids,
                                     cur_node_id, path_out)
+    lbc = len(base_corpus)
+    m = int(lbc / (5 * (level + 1)))
+    print('Length of basecorpus is at {}, m is at {}.'.format(lbc, m))
     print('Train embeddings...')
     if level != 0:
-        m = int(len(base_corpus) / (5 * level))
         emb_path_local = train_embeddings(emb_type, corpus_path,
                                           cur_node_id, path_out,
                                           term_ids_local, cur_corpus)
@@ -232,7 +234,6 @@ def rec_find_children(term_ids_local: Set[int],
         # {id: embedding}
     else:
         term_ids_to_embs_local = term_ids_to_embs_global
-        m = len(base_corpus)
 
     general_terms = []
     print('Start finding general terms...')
@@ -253,7 +254,7 @@ def rec_find_children(term_ids_local: Set[int],
         print('Get subcorpora for clusters...')
         sc_scoring, sc_emb_training = Cp.get_subcorpora(
             cluster_centers, clusters, term_distr_base, m, path_out,
-            cluster_centers, term_ids_to_embs_local, df)
+            term_ids_to_embs_local, df)
 
         print('Compute term scores...')
         term_scores = get_term_scores(clusters, cluster_centers, sc_scoring,
@@ -484,8 +485,8 @@ def separate_gen_terms(clusters: Dict[int, Set[int]],
     concept_terms = []  # [term_id1, ...]
     concept_terms_scores = []  # [(term_id, score), ...]
     # Get general terms und repr thresh.
-    if level == 0:
-        threshold = 0.1
+    # if level == 0:
+    #     threshold = 0.25
     for label, clus in clusters.items():
         for term_id in clus:
             score = term_scores[term_id][2]
