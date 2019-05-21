@@ -91,7 +91,8 @@ def get_cmd_args() -> Any:
                         help='Skip doc embeddings',
                         action='store_true')
     parser.add_argument('-swd', '--skip_word_distr',
-                        help='Skip pickling of word distr.')
+                        help='Skip pickling of word distr.',
+                        action='store_true')
     args = parser.parse_args()
     return args
 
