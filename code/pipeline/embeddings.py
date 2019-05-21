@@ -11,6 +11,7 @@ from allennlp.commands.elmo import ElmoEmbedder
 # For pickle to KeyedVectors-conversion.
 from numpy import float32 as REAL
 from gensim import utils
+from numpy import mean
 
 import logging
 logging.getLogger("gensim.models").setLevel(logging.WARNING)
@@ -44,7 +45,8 @@ class Embeddings:
     @staticmethod
     def load_term_embeddings(term_ids: Set[int],
                              emb_path: str,
-                             term_ids_to_embs_global: Dict[int, List[float]]
+                             term_ids_to_embs_global: Dict[int, List[float]],
+                             idx_to_term
                              ) -> Dict[int, List[float]]:
         """Get all embeddings for the given terms from the given file.
 
@@ -54,17 +56,41 @@ class Embeddings:
         Return:
             A dictionary of the form: {term_id: embedding}
         """
-        logging.getLogger("gensim.models").setLevel(logging.WARNING)
-        logging.getLogger("gensim.scripts.glove2word2vec").setLevel(
-            logging.WARNING)
-        logging.getLogger("gensim").setLevel(logging.WARNING)
-        model = KeyedVectors.load(emb_path)
+        pck = False
+        if emb_path.endswith('.pickle'):
+            pck = True
+            print('  SPECIAL CASE: load embeddings from pickle...')
+            # if stored as pickle, each term-id is mapped to multiple
+            # embeddings. So average the embeddings per term id.
+            with open(emb_path, 'rb') as f:
+                emb_dict = pickle.load(f)
+                print('  Calculating average embeddings...')
+                model = {}
+                for term_id in emb_dict:
+                    embs = []
+                    for doc_id in emb_dict[term_id]:
+                        embs.extend(emb_dict[term_id][doc_id])
+                    model[term_id] = mean(embs, axis=0)
+        else:
+            logging.getLogger("gensim.models").setLevel(logging.WARNING)
+            logging.getLogger("gensim.scripts.glove2word2vec").setLevel(
+                logging.WARNING)
+            logging.getLogger("gensim").setLevel(logging.WARNING)
+            model = KeyedVectors.load(emb_path)
         term_id_to_emb = {}
+        global_embs_ids = []
         for term_id in term_ids:
             try:
-                term_id_to_emb[term_id] = model.wv[str(term_id)]
+                if pck:
+                    term_id_to_emb[term_id] = model[term_id]
+                else:
+                    term_id_to_emb[term_id] = model.wv[str(term_id)]
             except KeyError:
-                term_id_to_emb[term_id] = term_ids_to_embs_global[term_id]
+                global_embs_ids.append((term_id, idx_to_term[term_id]))
+                # term_id_to_emb[term_id] = term_ids_to_embs_global[term_id]
+        if global_embs_ids:
+            print('WARNING: No embeddings found for:', global_embs_ids)
+            print('WARNING: {} terms excluded.'.format(len(global_embs_ids)))
         return term_id_to_emb
 
 
@@ -201,18 +227,11 @@ class GloVeE(Embeddings):
         call_glove = ('{}glove -save-file {} -threads 10 -input-file '
                       'cooccurrence.shuf.bin -x-max 10 -iter 15 -vector-size '
                       '100 -binary 0 -vocab-file vocab.txt -verbose 2')
-        # path_corpus = 'output/dblp/processed_corpus/pp_lemma_corpus.txt'
+
         os.system(call_vocab_count.format(path_glove, path_corpus))
         os.system(call_coocur.format(path_glove, path_corpus, path_glove))
         os.system(call_shuffle.format(path_glove, path_glove, path_glove))
         os.system(call_glove.format(path_glove, path_glove_format, path_glove))
-        # print('raw_fout_glove:', raw_fout_glove)
-        # print('raw_fout_w2v:', raw_fout_w2v)
-        # print('path_glove_format:', path_glove_format)
-        # print('path_w2v_format:', path_w2v_format)
-        # print('path_corpus:', path_corpus)
-        # print('fname', fname)
-        # print('path_out_dir:', path_out_dir)
 
         # Turn glove format to w2v format.
         _ = glove2word2vec(path_glove_format+'.txt', path_w2v_format+'.vec')
@@ -224,75 +243,10 @@ class GloVeE(Embeddings):
         cmd = os.path.join(path_out_dir, 'embeddings/glove*')
         os.system('rm {}'.format(cmd))
 
-        return path_w2v_format+'_GloVe.vec'
-
-
-# class FastTextE(Embeddings):
-#
-#     def __init__(self):
-#         self.mpath = 'fasttext_model.bin'
-#         self.model = None
-#
-#     def train(self, input_data: str, path_model: str) -> None:
-#         """Train a fasttext model.
-#
-#         Args:
-#             input_data: The path to the text file used for training.
-#             path_model: Name under which the model is saved.
-#         Output:
-#             The model is saved in self.model.
-#             The model is saved as a binary file in <model_name>.bin.
-#             The model is saved as a vector text file in <model_name>.vec.
-#         """
-#         self.model = fasttext.skipgram(input_data, path_model)
-#
-#     def load_model(self, fpath: Union[None, str] = None) -> None:
-#         if fpath:
-#             self.mpath = fpath
-#         self.model = fasttext.load_model(self.mpath)
-#
-#     def get_embeddings(self, sent: List[str]) -> embeddings_type:
-#         return [self.model[word] for word in sent]
-#
-#     def get_embedding(self, word: str):
-#         return self.model[word]
+        return path_w2v_format+'.vec'
 
 
 class Word2VecE(Embeddings):
-
-    # def __init__(self):
-    #     self._mpath = 'GoogleNews-vectors-negative300.bin'
-    #     self._model = gensim.models.KeyedVectors.load_word2vec_format(
-    #         self._mpath, binary=True)
-    #
-    # def get_embedding(self, word: str) -> Iterator[float]:
-    #     """Get the word2vec embeddings for all tokens in <sent>."""
-    #     return self._model.wv[word]
-    #
-    # def get_embeddings(self, sent: List[str]) -> embeddings_type:
-    #     """Get the word2vec embeddings for all tokens in <sent>."""
-    #     return [self._model.wv[word] for word in sent]
-
-    # @staticmethod
-    # def load_term_embeddings(term_ids: Set[str],
-    #                          emb_path: str
-    #                          )-> Dict[str, List[float]]:
-    #     """Get all embeddings for the given terms from the given file.
-    #
-    #     Args:
-    #         term_ids: The ids of the input terms.
-    #         emb_path: The path to the given embedding file.
-    #     Return:
-    #         A dictionary of the form: {term_id: embedding}
-    #     """
-    #     # model = gensim.models.KeyedVectors.load_word2vec_format(
-    #     #     emb_path, binary=True)
-    #     # model = gensim.models.Word2Vec.load(emb_path)
-    #     model = KeyedVectors.load(emb_path)
-    #     term_id_to_emb = {}
-    #     for term_id in term_ids:
-    #         term_id_to_emb[term_id] = model.wv[term_id]
-    #     return term_id_to_emb
 
     @staticmethod
     def train(path_corpus: str,
