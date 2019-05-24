@@ -3,6 +3,7 @@ import csv
 import json
 # from generate_taxonomy import write_tax_to_file
 from typing import Dict, List, Set, Tuple, Any
+from label_scoring import LabelScorer
 
 
 def main():
@@ -20,17 +21,22 @@ def main():
 
     taxonomy = load_taxonomy(path_out)
 
+    global ls
+    ls = LabelScorer(path_out)
+
     # Run labeling with repr score as metric.
     path_tax_frep = os.path.join(path_out, 'concept_terms/tax_labels_repr.csv')
     tax_label_file = open(path_tax_frep, 'w', encoding='utf8')
     csv_writer = csv.writer(tax_label_file, delimiter=',')
-    rec_find_labels(path_out, taxonomy, 10, 0, csv_writer, cos=False)
+    rec_find_labels(path_out, taxonomy, 10, 0, csv_writer, cos=False,
+                    label_score=False)
 
     # Run labeling with cosine similarity as metric.
     path_tax_fsim = os.path.join(path_out, 'concept_terms/tax_labels_sim.csv')
     tax_label_file = open(path_tax_fsim, 'w', encoding='utf8')
     csv_writer = csv.writer(tax_label_file, delimiter=',')
-    rec_find_labels(path_out, taxonomy, 10, 0, csv_writer, cos=True)
+    rec_find_labels(path_out, taxonomy, 10, 0, csv_writer, cos=True,
+                    label_score=False)
 
 
 def rec_find_labels(path_out: str,
@@ -38,7 +44,8 @@ def rec_find_labels(path_out: str,
                     top_k: int,
                     node_id: int,
                     csv_writer: Any,
-                    cos: bool
+                    cos: bool,
+                    label_score: bool
                     ) -> None:
     """Find the most representative labels for each cluster.
 
@@ -50,25 +57,31 @@ def rec_find_labels(path_out: str,
         csv_writer: file-object to which the labels are written.
         cos: If true, use the cosine similarity, else use the repr
             score.
+        label_score: If true, use the label score to find the top labels
+            of a topic.
     """
     child_ids = taxonomy.get(node_id)
     if not child_ids:
         return
 
     if node_id != 0:
-        top_k_terms = get_top_k_terms(path_out, top_k, node_id, cos=cos)
+        top_k_terms = get_top_k_terms(path_out, taxonomy, top_k, node_id,
+                                      cos=cos, label_score=label_score)
         child_ids_as_dict = {i: chid for i, chid in enumerate(child_ids)}
         write_tax_to_file(node_id, child_ids_as_dict, top_k_terms, csv_writer)
 
     for child_id in child_ids:
         print(node_id, child_id)
-        rec_find_labels(path_out, taxonomy, top_k, child_id, csv_writer, cos)
+        rec_find_labels(path_out, taxonomy, top_k, child_id, csv_writer, cos,
+                        label_score=False)
 
 
 def get_top_k_terms(path_out: str,
+                    taxonomy: Dict[int, List[int]],
                     top_k: int,
                     node_id: int,
-                    cos: bool
+                    cos: bool,
+                    label_score: bool
                     ) -> List[Tuple[int, float]]:
     """Get the top k terms.
 
@@ -78,19 +91,27 @@ def get_top_k_terms(path_out: str,
 
     Args:
         path_out: The path to the output directory.
+        taxonomy: Dictionary that maps each node-id to its child-ids
+            and terms.
         top_k: The k most representative terms are selected as labels.
         node_id: The id of the root node.
         cos: If true, use the cosine similarity, else use the repr
             score.
+        label_score: If true, use the label score to find the top labels
+            of a topic.
     Return:
         A list of tuples of the form. (term_id, score).
     """
     path_concept_terms = os.path.join(path_out, 'concept_terms/')
-    scores = load_scores(path_concept_terms, node_id, cos=cos)
+    term_scores = load_scores(path_concept_terms, node_id, cos=cos)
+    if label_score:
+        label_scores = ls.score(term_scores, taxonomy)
+    else:
+        label_scores = term_scores
     clus_terms = load_clus_terms(path_concept_terms, node_id)
     concept_term_scores = []
     for term_id in clus_terms:
-        score = scores[term_id][1]
+        score = label_scores[term_id][1]
         concept_term_scores.append((term_id, score))
     concept_term_scores.sort(key=lambda t: t[1], reverse=True)
     return concept_term_scores[:top_k]
