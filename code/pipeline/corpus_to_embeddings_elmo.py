@@ -48,9 +48,9 @@ def embed_corpus_terms(path: str, level: str, num_processes: int):
     print('end-time:', end_time)
     time_passed = end_time-start_time
     print('time-passed:', time_passed)
-    print('Concatenating corpus files...')
-    merge_dicts(fnames_emb, './elmo_embeddings_l2_{}.pickle'.format(level))
-    print('Cleaning temporary files...')
+    # print('Concatenating corpus files...')
+    # merge_dicts(fnames_emb, './elmo_embeddings_l2_{}.pickle'.format(level))
+    # print('Cleaning temporary files...')
     # os.system('rm {}*.emb; rm {}*.txt.split'.format(path_out, path_out))
     print('Done.')
 
@@ -109,6 +109,7 @@ def embed_terms(path_term_to_idxs: str,
 
     term_embs_per_doc: {term_idx: {doc_idx: list of embeddings}}
     """
+    dump_counter = 0
     print('Loading terms...')
     with open(path_term_to_idxs, 'r', encoding='utf8') as f:
         terms_to_idxs = json.load(f)
@@ -150,8 +151,21 @@ def embed_terms(path_term_to_idxs: str,
                         term_embs_per_doc[term_idx][doc_id] = []
                     term_embs_per_doc[term_idx][doc_id].append(term_emb)
 
-    with open(path_out, 'wb') as f:
+        if i % 5000 == 0:
+            fpath = path_out + str(dump_counter)
+            print('Write embeddings to file at: {}...'.format(fpath))
+            with open(fpath, 'wb') as f:
+                pickle.dump(term_embs_per_doc, f)
+            print('Finished writing embeddings.')
+            term_embs_per_doc = {}
+            dump_counter += 1
+
+    fpath = path_out + str(dump_counter)
+    print('Write embeddings to file at: {}...'.format(fpath))
+    with open(fpath, 'wb') as f:
         pickle.dump(term_embs_per_doc, f)
+    print('Finished writing embeddings.')
+    term_embs_per_doc = {}
 
     output.put('Done')
 
@@ -308,7 +322,7 @@ def merge_dicts(fpaths: List[str], path_out: str) -> None:
 if __name__ == '__main__':
     # embed_corpus_terms(
     # 'mnt/storage/harlie/users/jgoldz/output/dblp/', 'l', 5)
-    embed_corpus_terms('/mnt/storage/harlie/users/jgoldz/output/dblp', 't', 16)
+    embed_corpus_terms('/mnt/storage/harlie/users/jgoldz/output/dblp', 't', 22)
     # embed_corpus_terms('./output/dblp', 't', 3)
     # elmo = ElmoE()
     # sent = ["This", "is", "an", "example", "."]
