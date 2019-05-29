@@ -304,7 +304,7 @@ def get_emb(emb_type: str) -> Any:
     elif emb_type == 'GloVe':
         return GloVeE
     elif emb_type == 'ELMo':
-        raise NotImplementedError
+        return ElmoE
     else:
         raise Exception('Error. Embedding type {} not known.'.format(emb_type))
 
