@@ -44,7 +44,7 @@ Steps:
 5. Calculate Doc-Embeddings.
     a) Calculate token_doc_embeddings.
 
-python3 preprocessing_main_tg.py -c dblp -l server -spd -se -sde
+python3 preprocessing_main_tg.py -c dblp -l server -spd -sl -spe-sid-sfa-se-swe
 """
 
 
@@ -118,7 +118,7 @@ def main():
         print('Finished frequency analysis.')
 
     if not args.skip_embeddings:
-        emb_types = ['Word2Vec', 'GloVe']
+        emb_types = ['Word2Vec', 'GloVe', 'ELMo']
         for etype in emb_types:
             Embedding = get_emb(etype)
             print('Train {} token embeddings...'.format(etype))
