@@ -1,29 +1,14 @@
-import pickle
-from typing import *
-from collections import defaultdict
-import json
-import numpy as np
-# import fasttext
-# import subprocess
 import os
-from allennlp.commands.elmo import ElmoEmbedder
-# from allennlp.modules.similarity_functions.cosine import CosineSimilarity
-# For pickle to KeyedVectors-conversion.
-from numpy import float32 as REAL
-from gensim import utils
-from numpy import mean
-
+import pickle
+# import sqlite3
 import logging
-logging.getLogger("gensim.models").setLevel(logging.WARNING)
-logging.getLogger("gensim.scripts.glove2word2vec").setLevel(logging.WARNING)
-logging.getLogger("gensim").setLevel(logging.WARNING)
+from typing import Dict, List, Set, Any, Iterator
+import numpy as np
+from allennlp.commands.elmo import ElmoEmbedder
+from gensim import utils
 from gensim.models import Word2Vec, KeyedVectors
-# from gensim.test.utils import datapath, get_tmpfile
 from gensim.scripts.glove2word2vec import glove2word2vec
 from gensim.models.keyedvectors import Word2VecKeyedVectors
-logging.getLogger("gensim.models").setLevel(logging.WARNING)
-logging.getLogger("gensim.scripts.glove2word2vec").setLevel(logging.WARNING)
-logging.getLogger("gensim").setLevel(logging.WARNING)
 from utility_functions import get_docs
 
 
@@ -45,14 +30,14 @@ class Embeddings:
     @staticmethod
     def load_term_embeddings(term_ids: Set[int],
                              emb_path: str,
-                             term_ids_to_embs_global: Dict[int, List[float]],
-                             idx_to_term
+                             idx_to_term: Dict[int, str]
                              ) -> Dict[int, List[float]]:
         """Get all embeddings for the given terms from the given file.
 
         Args:
             term_ids: The ids of the input terms.
             emb_path: The path to the given embedding file.
+            idx_to_term: Maps term_id to term.
         Return:
             A dictionary of the form: {term_id: embedding}
         """
@@ -64,19 +49,26 @@ class Embeddings:
             # embeddings. So average the embeddings per term id.
             with open(emb_path, 'rb') as f:
                 emb_dict = pickle.load(f)
-                print('  Calculating average embeddings...')
-                model = {}
-                for term_id in emb_dict:
-                    embs = []
-                    for doc_id in emb_dict[term_id]:
-                        embs.extend(emb_dict[term_id][doc_id])
-                    model[term_id] = mean(embs, axis=0)
+                # print('  Calculating average embeddings...')
+                # model = {}
+                # for term_id in emb_dict:
+                #     embs = []
+                #     for doc_id in emb_dict[term_id]:
+                #         embs.extend(emb_dict[term_id][doc_id])
+                #     model[term_id] = np.mean(embs, axis=0)
+                model = {tid: emb for tid, emb in emb_dict.items()}
         else:
             logging.getLogger("gensim.models").setLevel(logging.WARNING)
             logging.getLogger("gensim.scripts.glove2word2vec").setLevel(
                 logging.WARNING)
             logging.getLogger("gensim").setLevel(logging.WARNING)
-            model = KeyedVectors.load(emb_path)
+            print('Load embeddings from:')
+            print(emb_path)
+            try:
+                model = KeyedVectors.load(emb_path)
+            except:
+                model = Word2VecKeyedVectors.load_word2vec_format(emb_path,
+                                                                  binary=True)
         term_id_to_emb = {}
         global_embs_ids = []
         for term_id in term_ids:
@@ -96,9 +88,9 @@ class Embeddings:
 
 class ElmoE(Embeddings):
 
+    # get_term_embs_stmt = 'SELECT DocID, Embedding WHERE TermID = {}'
+
     def __init__(self):
-        # self._options = 'elmo_2x4096_512_2048cnn_2xhighway_5.5B_options.json'
-        # self._weights = 'elmo_2x4096_512_2048cnn_2xhighway_5.5B_weights.hdf5'
         self.elmo = ElmoEmbedder()
 
     def get_embeddings(self, sent: List[str], mode: int) -> embeddings_type:
@@ -130,14 +122,45 @@ class ElmoE(Embeddings):
                        zip(embeddings[0], embeddings[1], embeddings[2])]
             return average
 
-    def train(self,
-              path_corpus: str,
+    # @classmethod
+    # def get_avg_emb_by_term_id(cls, term_id: int, conn) -> np.ndarray:
+    #     """Get average term embedding for the given term-id.
+    #
+    #     Args:
+    #         term_id: The id of the term.
+    #         conn: The connection to the elmo-database.
+    #     """
+    #     embeddings = cls.get_embs_by_id(term_id, conn)  # {doc_id: emb}
+    #     return np.mean(embeddings.keys(), 0)
+    #
+    # @classmethod
+    # def get_embs_by_id(cls, term_id: int, conn) -> Dict[int, np.ndarray]:
+    #     """Get all embeddings of a term by document.
+    #
+    #     Args:
+    #         term_id: The id of the term.
+    #         conn: The connection to the elmo-database.
+    #     """
+    #     cursor = conn.execute(cls.get_term_embs_stmt.format(term_id))
+    #     for row in cursor:
+    #         doc_id = int(row[0])
+    #         emb_str = row[1]
+    #         emb = np.array([float(i) for i in emb_str.split(',')])
+    #
+
+    @staticmethod
+    def train(path_corpus: str,
               fname: str,
               path_out_dir: str,
               term_ids: Set[int],
               doc_ids: Set[int]
               ) -> str:
-        """'Train' ELMo embeddings. This means averaging for context.
+        """'Train ELMo embeddings. This means averaging for context.
+
+        ******
+        IMPORTANT: At the moment no averaging is done! So the input
+        embeddings are just returned as output embeddings!
+        ******
 
         Args:
             path_corpus: The path to the text file used for training.
@@ -150,15 +173,23 @@ class ElmoE(Embeddings):
         """
         raw_path = 'embeddings/{}.vec'.format(fname)
         path_out = os.path.join(path_out_dir, raw_path)
-        raw_path_elmo_context = 'embeddings/embs_token_ELMo_context.pickle'
-        path_elmo_context = os.path.join(path_out_dir, raw_path_elmo_context)
-        elmo_c_embs = pickle.load(path_elmo_context)
-        averaged_embs = self.get_averaged_embs(elmo_c_embs, term_ids, doc_ids)
-        vector_size = len(averaged_embs[list(averaged_embs.values())[0]])
+        # raw_path_elmo_context = 'embeddings/embs_token_ELMo_avg.pickle'
+        # path_elmo_context = os.path.join(path_out_dir, raw_path_elmo_context)
+        # elmo_c_embs = pickle.load(path_elmo_context)
+        # averaged_embs = self.get_averaged_embs
+
+        # *** tmp lines ***
+        tmp_path_in = os.path.join(path_out_dir,
+                                   'embeddings/embs_token_ELMo_avg.pickle')
+        averaged_embs = pickle.load(open(tmp_path_in, 'rb'))
+        averaged_embs = {str(k): v for k, v in averaged_embs.items()}
+        # *** tmp lines ***
+        key = list(averaged_embs.keys())[0]
+        vector_size = len(averaged_embs[key])
         m = Word2VecKeyedVectors(vector_size=vector_size)
         m.vocab = averaged_embs
         m.vectors = np.array(list(averaged_embs.values()))
-        my_save_word2vec_format(binary=True, fname='train.bin',
+        my_save_word2vec_format(binary=True, fname=path_out,
                                 total_vec=len(averaged_embs), vocab=m.vocab,
                                 vectors=m.vectors)
         return path_out
@@ -309,52 +340,52 @@ def get_emb(emb_type: str) -> Any:
         raise Exception('Error. Embedding type {} not known.'.format(emb_type))
 
 
-class CombinedEmbeddings(Embeddings):
-
-    def __init__(self,
-                 model_types: List[str] = ('fasttext', 'elmo'),
-                 model_paths: List[str] = ('', '')
-                 ) -> None:
-        self.model_types = model_types
-        self.model_paths = model_paths
-        self.model_mapping = {
-            'word2vec': Word2VecE,
-            'glove': GloVeE,
-            # 'fasttext': FastTextE,
-            'elmo': ElmoE
-        }
-        self.models = self._get_models()
-
-    def _get_models(self):
-        models = []
-
-        for i in range(len(self.model_types)):
-            mtype = self.model_types[i]
-            mpath = self.model_paths[i]
-            model = self.model_mapping[mtype]()
-            if mpath:
-                model.load_model(mpath)
-            models.append(model)
-
-        return models
-
-    def get_embeddings(self,
-                       sent: List[str]
-                       ) -> embeddings_type:
-        combined_vectors = []
-        model_word_matrix = []  # rows -> models, columns -> words
-        for model in self.models:
-            embeddings = model.get_embeddings(sent)
-            model_word_matrix.append(embeddings)
-
-        # rows -> words, columns -> models
-        word_model_matrix = list(zip(*model_word_matrix))
-
-        for word_tpl in word_model_matrix:
-            word_vec = np.hstack(word_tpl)
-            combined_vectors.append(word_vec)
-
-        return combined_vectors
+# class CombinedEmbeddings(Embeddings):
+#
+#     def __init__(self,
+#                  model_types: List[str] = ('fasttext', 'elmo'),
+#                  model_paths: List[str] = ('', '')
+#                  ) -> None:
+#         self.model_types = model_types
+#         self.model_paths = model_paths
+#         self.model_mapping = {
+#             'word2vec': Word2VecE,
+#             'glove': GloVeE,
+#             # 'fasttext': FastTextE,
+#             'elmo': ElmoE
+#         }
+#         self.models = self._get_models()
+#
+#     def _get_models(self):
+#         models = []
+#
+#         for i in range(len(self.model_types)):
+#             mtype = self.model_types[i]
+#             mpath = self.model_paths[i]
+#             model = self.model_mapping[mtype]()
+#             if mpath:
+#                 model.load_term_embeddings(mpath)
+#             models.append(model)
+#
+#         return models
+#
+#     def get_embeddings(self,
+#                        sent: List[str]
+#                        ) -> embeddings_type:
+#         combined_vectors = []
+#         model_word_matrix = []  # rows -> models, columns -> words
+#         for model in self.models:
+#             embeddings = model.get_embeddings(sent, 2)
+#             model_word_matrix.append(embeddings)
+#
+#         # rows -> words, columns -> models
+#         word_model_matrix = list(zip(*model_word_matrix))
+#
+#         for word_tpl in word_model_matrix:
+#             word_vec = np.hstack(word_tpl)
+#             combined_vectors.append(word_vec)
+#
+#         return combined_vectors
 
 
 def my_save_word2vec_format(fname, vocab, vectors, binary=True,
@@ -390,121 +421,28 @@ def my_save_word2vec_format(fname, vocab, vectors, binary=True,
     vector_size = vectors.shape[1]
     assert (len(vocab), vector_size) == vectors.shape
     with utils.smart_open(fname, 'wb') as fout:
-        print(total_vec, vector_size)
+        # print(total_vec, vector_size)
         fout.write(utils.to_utf8("%s %s\n" % (total_vec, vector_size)))
         # store in sorted order: most frequent words at the top
         for word, row in vocab.items():
             if binary:
-                row = row.astype(REAL)
+                row = row.astype(np.float32)
                 fout.write(utils.to_utf8(word) + b" " + row.tostring())
             else:
                 fout.write(utils.to_utf8(
                     "%s %s\n" % (word, ' '.join(repr(val) for val in row))))
 
 
-    # def get_avg_emb(self, term_id: str, corpus: List[int]) -> Iterator[float]:
-    #     """Get the average Embedding for all occurences of a term.
-    #
-    #     Args:
-    #         term_id: The term for which the avg embeddings is computed.
-    #         corpus: A list of document indices which make up the corpus.
-    #     Return:
-    #         The average term embedding as a numpy array.
-    #     """
-    #     sents, indices = get_term_sents(term_id, corpus)
-    #     # returns list of tuples (lemmatized sentences, index at which term is)
-    #     occurence_embeddings = []  # List of embeddings of term
-    #     for i in range(len(sents)):
-    #         sent, idx = sents[i], indices[i]
-    #         term_embedding = self.get_embeddings(sent)[idx]
-    #         occurence_embeddings.append(term_embedding)
-    #     # avg the occurence embeddings
-    #     avg_embeddings = np.mean(occurence_embeddings, axis=1)
-    #     return avg_embeddings
-
-
-# def train_fasttext(path: str, level: str) -> None:
-#     """Train fasttext models for tokens and lemmas.
-#
-#     Args:
-#         path: Path to the output directory.
-#         level: 't' if token, 'l' if lemma.
-#     """
-#     if level == 't':
-#         path_corpus = 'processed_corpus/pp_token_corpus_1000.txt'
-#         path_model = 'embeddings/fasttext_token_embeddings'
-#     elif level == 'l':
-#         path_corpus = 'processed_corpus/pp_lemma_corpus_1000.txt'
-#         path_model = 'embeddings/fasttext_lemma_embeddings'
-#
-#     path_in = os.path.join(
-#         path, path_corpus)
-#     path_out = os.path.join(
-#         path, path_model)
-#     embedder = FastTextE()
-#     embedder.train(path_in, path_out)
-
-
-# def train_w2v(path: str) -> None:
-#     """Train w2v models for tokens and lemmas.
-#
-#     Args:
-#         path: Path to the output directory.
-#     """
-#     # Train fasttext on tokens.
-#     path_in = os.path.join(
-#         path, 'output/dblp/processed_corpus/pp_token_corpus_1000.txt')
-#     path_out = os.path.join(
-#         path, 'output/dblp/embeddings/w2v_token_embeddings')
-#     embedder = Word2VecE()
-#     embedder.train(path_in, path_out)
-#
-#     # Train fasttext on lemmas.
-#     path_in = os.path.join(
-#         path, 'output/dblp/processed_corpus/pp_lemma_corpus_1000.txt')
-#     path_out = os.path.join(
-#         path, 'output/dblp/embeddings/w2v_lemma_embeddings')
-#     embedder = Word2VecE()
-#     embedder.train(path_in, path_out)
-
-
-# if __name__ == '__main__':
-#     elmo = ElmoE()
-#     this_embedding = elmo.get_embeddings(['This', 'is', 'a', 'man', '.'])[0]
-#     is_embedding = elmo.get_embeddings(['This', 'is', 'a', 'man', '.'])[1]
-#     man_embedding = elmo.get_embeddings(['This', 'is', 'a', 'man', '.'])[3]
-#     woman_embedding = elmo.get_embeddings(['This', 'is', 'a', 'woman', '.'])[3]
-#     sim_man_woman = CosineSimilarity().forward(man_embedding, woman_embedding)
-#     sim_this_woman = CosineSimilarity().forward(
-#         this_embedding, woman_embedding)
-#     sim_is_woman = CosineSimilarity().forward(is_embedding, woman_embedding)
-#     sim_this_is = CosineSimilarity().forward(this_embedding, is_embedding)
-#     print('man vs woman:', sim_man_woman)
-#     print('this vs woman:', sim_this_woman)
-#     print('is vs woman:', sim_is_woman)
-#     print('this vs is:', sim_this_is)
-#     print('--------')
-#     this_embedding = elmo.get_embeddings(['This', 'is', 'a', 'cat', '.'])[0]
-#     is_embedding = elmo.get_embeddings(['This', 'is', 'a', 'dog', '.'])[1]
-#     cat_embedding = elmo.get_embeddings(['This', 'is', 'a', 'cat', '.'])[3]
-#     dog_embedding = elmo.get_embeddings(['This', 'is', 'a', 'dog', '.'])[3]
-#     sim_cat_dog = CosineSimilarity().forward(cat_embedding, dog_embedding)
-#     sim_this_dog = CosineSimilarity().forward(this_embedding, dog_embedding)
-#     sim_is_dog = CosineSimilarity().forward(is_embedding, dog_embedding)
-#     print('cat vs dog:', sim_cat_dog)
-#     print('this vs dog:', sim_this_dog)
-#     print('is vs dog:', sim_is_dog)
-#     print('--------')
-#     w2v = Word2VecE()
-#     sent1 = ['woman']
-#     sent2 = ['man']
-#     woman_embedding = w2v.get_embeddings(sent1)[0]
-#     man_embedding = w2v.get_embeddings(sent2)[0]
-#     sim_man_woman = w2v._model.similarity('man', 'woman')
-#     print('man vs woman:', sim_man_woman)
-#     print(man_embedding)
-#     print(len(man_embedding))
-#     ft = FastTextE()
-#     print(ft.get_embeddings(sent1)[0])
-#     print(ft.get_embeddings(sent2)[0])
-#     print(len(ft.get_embeddings(sent2)[0]))
+if __name__ == '__main__':
+    path_corpus = ('/mnt/storage/harlie/users/jgoldz/output/dblp/'
+                   'processed_corpus/1.txt')
+    fname = '1'
+    path_out_dir = '/mnt/storage/harlie/users/jgoldz/output/dblp/'
+    term_ids = set()
+    doc_ids = set()
+    idx_to_term = {}
+    ElmoE.train(path_corpus, fname, path_out_dir, term_ids, doc_ids)
+    m2 = Word2VecKeyedVectors.load_word2vec_format(
+        path_out_dir+'embeddings/1.vec', binary=True)
+    # ElmoE.load_term_embeddings(term_ids, path_out_dir+'embeddings/1.vec',
+    # idx_to_term)
