@@ -3,9 +3,10 @@ import json
 import pickle
 from random import shuffle, randint
 from typing import *
-# import numpy as np
+import numpy as np
 from sklearn.svm import SVC
-import embeddings
+from embeddings import Embeddings
+from utility_functions import get_config, get_cmd_args
 
 
 class HypernymClassifier:
@@ -17,31 +18,56 @@ class HypernymClassifier:
         Args:
             path: The path to the output directory.
         """
+        # Set paths.
         self.path = path
+        self.path_idx_to_term = os.path.join(
+            path_out, 'indexing/idx_to_token.json')
+        self.path_term_to_idx = os.path.join(
+            path_out, 'indexing/token_to_idx.json')
+        self.path_embs = os.path.join(
+            path_out, 'embeddings/embs_token_global_Word2Vec.vec')
+        self.path_hearst = os.path.join(
+            path_out, 'hierarchy/hierarch_rels_tokens_idx.json')
+
+        # Load data.
+        with open(self.path_idx_to_term, 'r', encoding='utf8') as f:
+            self.idx_to_term = {int(k): v for k, v in json.load(f).items()}
+        with open(self.path_term_to_idx, 'r', encoding='utf8') as f:
+            self.term_to_idx = json.load(f)
+        with open(self.path_hearst, 'r', encoding='utf8') as f:
+            self.hearst = {int(k): v for k, v in json.load(f).items()}
+        self.term_ids = set(self.hearst.keys())
+        for k in self.hearst:
+            hypos = self.hearst[k]
+            self.term_ids = self.term_ids.union(set(hypos))
+        self.embedding_dict = Embeddings.load_term_embeddings(
+            self.term_ids, self.path_embs, self.idx_to_term)
+
+        # Instanciate classifier.
         self.clf = SVC(kernel='rbf', C=10, gamma=0.1, probability=True,
                        random_state=0)
-        self.embedding_dict = embeddings.load_embedding_dict('combined')
 
-    def train(self, X: List[List[float]], y: List[int]) -> None:
+    def train(self, x: List[List[float]], y: List[int]) -> None:
         """Train the hypernym classifier.
 
         Args:
-            X: A numpy array containing the input data.
+            x: A numpy array containing the input data.
             y: The labels to be predicted. The have to be in the same
                 order as the elements in X. A 1 indicates hypernymy,
                 a 0 indicates, that there is no hypernymy.
         """
-        self.clf.fit(X, y)
+        self.clf.fit(x, y)
 
-    def test(self, X, y):
+    def test(self, x, y):
         """Test the trained classifier. Return the mean accuracy.
 
         Args:
-            X: The test samples.
+            x: The test samples.
             y: The test labels
         """
+        pass
 
-    def classify_prob(self, relations: List[List[float]]) -> List[float]:
+    def classify_prob(self, relations: np.ndarray) -> List[float]:
         """Classify the given relations but return only probabilities.
 
         For each relation return the hypernym probability.
@@ -56,42 +82,36 @@ class HypernymClassifier:
         return hypernym_probs
 
     def save(self):
-        """Save the model under in output dir 'hyp_clf.pickle'."""
-        pickle.dump(self.clf, os.path.join(self.path, 'hyp_clf.pickle'))
+        """Save the model under in hierarchy dir 'hyp_clf.pickle'."""
+        pickle.dump(self.clf, os.path.join(
+            self.path, 'hierarchy/hyp_clf.pickle'))
 
     def load(self):
         """Load model from file."""
-        self.clf = pickle.load(os.path.join(self.path, 'hyp_clf.pickle'))
+        self.clf = pickle.load(os.path.join(
+            self.path, 'hierarchy/hyp_clf.pickle'))
 
-    def get_train_rels(self, level: str) -> List[Tuple[str, str]]:
+    def get_pos_rels(self) -> List[Tuple[int, int]]:
         """Get hypernym relation to train from file.
 
         Get the hypernym relations for training from
-        'hierarchical_relations_{tokens/lemmas}.json'. The relations in
+        'hierarchical_relations_tokens.json'. The relations in
         this file have been extracted using Hearst Patterns.
-
-        Args:
-            level: 't' of tokens, 'l' if lemmas.
         """
-        if level == 't':
-            path = os.path.join(self.path,
-                                'hierarchy/hierarchical_relations_tokens.json')
-        elif level == 'l':
-            path = os.path.join(self.path,
-                                'hierarchy/hierarchical_relations_lemmas.json')
-
-        with open(path, 'r', encoding='utf8') as f:
-            rel_dict = json.load(f)
+        # path = os.path.join(self.path,
+        #                     'hierarchy/hierarchical_relations_tokens.json')
+        #
+        # with open(path, 'r', encoding='utf8') as f:
+        #     rel_dict = json.load(f)
         relations = []
-        for hyper in rel_dict:
-            for hypo in rel_dict[hyper]:
+        for hyper in self.hearst:
+            for hypo in self.hearst[hyper]:
                 relations.append((hypo, hyper))
         return relations
 
-    def generate_negative_examples(self,
-                                   relations_pos: List[Tuple[str, str]],
-                                   level: str
-                                   ) -> List[Tuple[str, str]]:
+    def get_neg_rels(self,
+                     relations_pos: List[Tuple[int, int]],
+                     ) -> List[Tuple[int, int]]:
         """Generate negative examples for training.
 
         Negative samples are generated by two processes:
@@ -106,20 +126,15 @@ class HypernymClassifier:
         samples are generated.
 
         Args:
-            relations_pos: A list of positive samples. First hyponym,
-                then hypernym.
-            level: 't' of tokens, 'l' if lemmas.
+            relations_pos: A list of positive samples. First hyponym-idx,
+                then hypernym-idx.
         """
         relations_neg = []
         for rel in relations_pos:
             relations_neg.append((rel[1], rel[0]))
 
-        if level == 't':
-            path = os.path.join(self.path,
-                                'processed_corpus/{token/lemma}_terms.txt')
-        elif level == 'l':
-            path = os.path.join(self.path,
-                                'processed_corpus/{token/lemma}_terms.txt')
+        path = os.path.join(
+            self.path, 'processed_corpus/token_term_idxs.txt')
 
         terms = set()
         with open(path, 'r', encoding='utf8') as f:
@@ -128,23 +143,23 @@ class HypernymClassifier:
 
         len_pos = len(relations_pos)
         # Store tuples of indices (ints) of chosen relations.
-        chosen_relations = set()
-        num_neg_samples = 0
+        rand_chosen_relations = set()
 
-        while num_neg_samples < len_pos:
+        while len(rand_chosen_relations) < len_pos:
             ri1 = randint(0, len_pos-1)
             ri2 = randint(0, len_pos-1)
             sample_idx = (ri1, ri2)
-            if sample_idx not in chosen_relations:
-                sample = (terms[ri1], terms[ri2])
-                if sample not in relations_pos:
-                    relations_neg.append(sample)
-                    chosen_relations.add(sample_idx)
+            if sample_idx not in rand_chosen_relations:
+                if sample_idx not in relations_pos:
+                    rand_chosen_relations.add(sample_idx)
+
+        relations_neg.extend(rand_chosen_relations)
+
         return relations_neg
 
     def get_rel_embeddings(self,
-                           rels: List[Tuple[str, str]]
-                           ) -> List[Tuple[List[float]]]:
+                           rels: List[Tuple[int, int]]
+                           ) -> List[Tuple[np.array, np.array]]:
         """Get embeddings for the given relations.
 
         Args:
@@ -158,18 +173,30 @@ class HypernymClassifier:
             rel_embs.append((hypo_emb, hyper_emb))
         return rel_embs
 
-    def get_training_data(self, level):
-        """Get and prepare the data for the hypernym classifier.
+    @staticmethod
+    def get_rel_embs_diff(relations_embs: List[Tuple[np.ndarray, np.ndarray]]
+                          ) -> List[np.ndarray]:
+        """Get the difference between hypernym and hyponym embedding.
 
         Args:
-            level: 't' of tokens, 'l' if lemmas.
+            relations_embs: A list of tuples. Each tuple is of the form:
+                (hyponym-embedding, hypernym-embedding)
         """
-        relations_pos = self.get_train_rels(level)
-        relations_neg = self.generate_negative_examples(relations_pos, level)
-        rel_embs_pos = self.get_rel_embeddings(relations_pos)
-        rel_embs_neg = self.get_rel_embeddings(relations_neg)
-        labeled_pos = [(t, 1) for t in rel_embs_pos]
-        labeled_neg = [(t, 0) for t in rel_embs_neg]
+        embs_diff = []
+        for hypo_emb, hyper_emb in relations_embs:
+            embs_diff.append(hypo_emb-hyper_emb)
+        return embs_diff
+
+    def get_training_data(self):
+        """Get and prepare the data for the hypernym classifier."""
+        pos_rels = self.get_pos_rels()
+        neg_rels = self.get_neg_rels(pos_rels)
+        rel_embs_pos = self.get_rel_embeddings(pos_rels)
+        rel_embs_neg = self.get_rel_embeddings(neg_rels)
+        rel_embs_pos_diff = self.get_rel_embs_diff(rel_embs_pos)
+        rel_embs_neg_diff = self.get_rel_embs_diff(rel_embs_neg)
+        labeled_pos = [(t, 1) for t in rel_embs_pos_diff]
+        labeled_neg = [(t, 0) for t in rel_embs_neg_diff]
 
         # Generate the same number of negative examples as there are
         # positive examples.
@@ -182,16 +209,12 @@ class HypernymClassifier:
         return train_data, test_data
 
 
-def train_hypernym_classifier(path: str, level: str):
-    """Train a hypernym classifier.
-
-    Args:
-        level: 't' of tokens, 'l' if lemmas.
-    """
+def train_hypernym_classifier(path: str):
+    """Train a hypernym classifier."""
     print('Prepare training data...')
     clf = HypernymClassifier(path)
     print('Read relations from file and generate negative sampels...')
-    train_data, test_data = clf.get_training_data('l')
+    train_data, test_data = clf.get_training_data()
     train_samples = [t[0] for t in train_data]
     train_labels = [t[1] for t in train_data]
     test_samples = [t[0] for t in test_data]
@@ -202,4 +225,7 @@ def train_hypernym_classifier(path: str, level: str):
 
 
 if __name__ == '__main__':
-    train_hypernym_classifier('./output/dblp/', 'l')
+    config = get_config()
+    args = get_cmd_args()
+    path_out = config['paths'][args.location][args.corpus]['path_out']
+    train_hypernym_classifier(path_out)
