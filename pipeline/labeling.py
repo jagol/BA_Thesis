@@ -22,26 +22,27 @@ def main():
     taxonomy = load_taxonomy(path_out)
 
     global ls
-    ls = LabelScorer(path_out)
+    ls = LabelScorer(config, args)
 
     # Run labeling with repr score as metric.
     path_tax_frep = os.path.join(path_out, 'concept_terms/tax_labels_repr.csv')
     tax_label_file = open(path_tax_frep, 'w', encoding='utf8')
     csv_writer = csv.writer(tax_label_file, delimiter=',')
-    rec_find_labels(path_out, taxonomy, 10, 0, csv_writer, cos=False,
+    rec_find_labels(path_out, taxonomy, 10, [], 0, csv_writer, cos=False,
                     label_score=False)
 
     # Run labeling with cosine similarity as metric.
     path_tax_fsim = os.path.join(path_out, 'concept_terms/tax_labels_sim.csv')
     tax_label_file = open(path_tax_fsim, 'w', encoding='utf8')
     csv_writer = csv.writer(tax_label_file, delimiter=',')
-    rec_find_labels(path_out, taxonomy, 10, 0, csv_writer, cos=True,
+    rec_find_labels(path_out, taxonomy, 10, [], 0, csv_writer, cos=True,
                     label_score=False)
 
 
 def rec_find_labels(path_out: str,
                     taxonomy: Dict[int, List[int]],
                     top_k: int,
+                    top_parent_terms: List[Tuple[int, float]],
                     node_id: int,
                     csv_writer: Any,
                     cos: bool,
@@ -53,6 +54,7 @@ def rec_find_labels(path_out: str,
         path_out: The path to the output directory.
         taxonomy: Dictionary that maps each node-id to its child-ids.
         top_k: The k most representative terms are selected as labels.
+        top_parent_terms: The top k terms of the parent.
         node_id: The id of the root node.
         csv_writer: file-object to which the labels are written.
         cos: If true, use the cosine similarity, else use the repr
@@ -65,20 +67,22 @@ def rec_find_labels(path_out: str,
         return
 
     if node_id != 0:
-        top_k_terms = get_top_k_terms(path_out, taxonomy, top_k, node_id,
-                                      cos=cos, label_score=label_score)
+        top_k_terms = get_top_k_terms(path_out, top_k, top_parent_terms,
+                                      node_id, cos, label_score)
         child_ids_as_dict = {i: chid for i, chid in enumerate(child_ids)}
         write_tax_to_file(node_id, child_ids_as_dict, top_k_terms, csv_writer)
+    else:
+        top_k_terms = top_parent_terms
 
     for child_id in child_ids:
         print(node_id, child_id)
-        rec_find_labels(path_out, taxonomy, top_k, child_id, csv_writer, cos,
-                        label_score=False)
+        rec_find_labels(path_out, taxonomy, top_k, top_k_terms, child_id,
+                        csv_writer, cos, label_score=False)
 
 
 def get_top_k_terms(path_out: str,
-                    taxonomy: Dict[int, List[int]],
                     top_k: int,
+                    parent_terms: List[Tuple[int, float]],
                     node_id: int,
                     cos: bool,
                     label_score: bool
@@ -91,9 +95,8 @@ def get_top_k_terms(path_out: str,
 
     Args:
         path_out: The path to the output directory.
-        taxonomy: Dictionary that maps each node-id to its child-ids
-            and terms.
         top_k: The k most representative terms are selected as labels.
+        parent_terms: The top k terms of the parent node.
         node_id: The id of the root node.
         cos: If true, use the cosine similarity, else use the repr
             score.
@@ -104,12 +107,14 @@ def get_top_k_terms(path_out: str,
     """
     path_concept_terms = os.path.join(path_out, 'concept_terms/')
     term_scores = load_scores(path_concept_terms, node_id, cos=cos)
+    clus_terms = load_clus_terms(path_concept_terms, node_id)
+    clus_terms_scores = {tid: term_scores[tid] for tid in clus_terms}
+    # {term_id: (term, score)}
     if label_score:
-        label_scores = ls.score(term_scores, taxonomy)
+        label_scores = ls.score(clus_terms_scores, parent_terms)
     else:
         label_scores = term_scores
-    clus_terms = load_clus_terms(path_concept_terms, node_id)
-    concept_term_scores = []
+    concept_term_scores = []  # List of tuples.
     for term_id in clus_terms:
         score = label_scores[term_id][1]
         concept_term_scores.append((term_id, score))
