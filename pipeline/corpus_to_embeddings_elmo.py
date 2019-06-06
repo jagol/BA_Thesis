@@ -61,7 +61,7 @@ def parallel_embed_terms(path: str, fnames: List[str], start_nums, level: str):
     Args:
         path: Path to output directory.
         fnames: List of names of input files.
-        start_nums: Sarting numbers of doc id for each file.
+        start_nums: Starting numbers of doc id for each file.
         level: 't' if tokens, 'l' if lemmas.
     Return:
         The paths to the outputted files.

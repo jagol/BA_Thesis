@@ -88,8 +88,14 @@ def generate_taxonomy() -> None:
             path_out, 'processed_corpus/pp_lemma_corpus.txt')
         path_base_corpus_ids = os.path.join(
             path_out, 'processed_corpus/lemma_idx_corpus.txt')
-        path_embeddings_global = os.path.join(
-            path_out, 'embeddings/embs_lemma_global_{}.vec'.format(emb_type))
+        if emb_type == 'GloVe' or emb_type == 'Word2Vec':
+            path_embeddings_global = os.path.join(
+                path_out, 'embeddings/embs_lemma_global_{}.vec'.format(
+                    emb_type))
+        else:
+            path_embeddings_global = os.path.join(
+                path_out, 'embeddings/embs_lemma_global_{}.pickle'.format(
+                    emb_type))
     else:
         path_term_ids = os.path.join(
             path_out, 'processed_corpus/token_terms_idxs.txt')
@@ -104,8 +110,14 @@ def generate_taxonomy() -> None:
             path_out, 'processed_corpus/pp_token_corpus.txt')
         path_base_corpus_ids = os.path.join(
             path_out, 'processed_corpus/token_idx_corpus.txt')
-        path_embeddings_global = os.path.join(
-            path_out, 'embeddings/embs_token_global_{}.vec'.format(emb_type))
+        if emb_type == 'GloVe' or emb_type == 'Word2Vec':
+            path_embeddings_global = os.path.join(
+                path_out, 'embeddings/embs_token_global_{}.vec'.format(
+                    emb_type))
+        else:
+            path_embeddings_global = os.path.join(
+                path_out, 'embeddings/embs_token_{}_avg.pickle'.format(
+                    emb_type))
 
     # path_dl = os.path.join(path_out, 'frequencies/dl.json')
     path_taxonomy = os.path.join(path_out, 'hierarchy/taxonomy.csv')
@@ -122,7 +134,7 @@ def generate_taxonomy() -> None:
         idx_to_term = {int(k): v for k, v in idx_to_term_str.items()}
     print('Load global embeddings...')
     term_ids_to_embs_global = Embeddings.load_term_embeddings(
-        term_ids, path_embeddings_global, {}, idx_to_term)
+        term_ids, path_embeddings_global, idx_to_term)
 
     print('Load base corpus...')
     base_corpus = get_base_corpus(path_base_corpus)
@@ -229,8 +241,7 @@ def rec_find_children(term_ids_local: Set[int],
                                           term_ids_local, cur_corpus)
         print('Get term embeddings...')
         term_ids_to_embs_local = Embeddings.load_term_embeddings(
-            term_ids_local, emb_path_local, term_ids_to_embs_global,
-            idx_to_term)
+            term_ids_local, emb_path_local, idx_to_term)
         # {id: embedding}
     else:
         term_ids_to_embs_local = term_ids_to_embs_global
@@ -245,6 +256,9 @@ def rec_find_children(term_ids_local: Set[int],
 
         print('Cluster terms...')
         clusters = perform_clustering(term_ids_to_embs_local)
+        if len(clusters) == 0:
+            print('Stopping clustering because of no clusters entries!')
+            break
         # Dict[int, Set[int]]
         cluster_sizes = [len(clus) for label, clus in clusters.items()]
         print('Cluster_sizes: {}'.format(cluster_sizes))
@@ -279,7 +293,8 @@ def rec_find_children(term_ids_local: Set[int],
         # else:
         #     gen_terms_clus = []
         clusters, gen_terms_clus = separate_gen_terms(clusters, term_scores,
-                                                      threshold, level)
+                                                      threshold, level,
+                                                      emb_type)
         general_terms.extend(gen_terms_clus)
         print('Terms pushed up: {}'.format(len(gen_terms_clus)))
         len_gtc = len(gen_terms_clus)
@@ -461,7 +476,8 @@ def write_term_scores(path_out: str,
 def separate_gen_terms(clusters: Dict[int, Set[int]],
                        term_scores: Dict[int, Tuple[float, float, float]],
                        threshold: float,
-                       level
+                       level,
+                       emb_type: str
                        ) -> Tuple[Dict[int, Set[int]],
                                   List[Tuple[int, float]]]:
     """Remove general terms and unpopular terms from clusters.
@@ -476,6 +492,7 @@ def separate_gen_terms(clusters: Dict[int, Set[int]],
         threshold: The representativeness-threshold at which terms are
             pushed up.
         level: The current taxonomy level.
+        emb_type: The embedding type.
     Return:
         proc_cluster: Same as the input variable 'clusters', but with
             terms removed.
@@ -487,12 +504,30 @@ def separate_gen_terms(clusters: Dict[int, Set[int]],
     # Get general terms und repr thresh.
     # if level == 0:
     #     threshold = 0.25
+    # thresh_dict = {
+    #     0: 0.15,
+    #     1: 0.3,
+    #     2: 0.4,
+    #     3: 0.5,
+    #     4: 0.6
+    # }
+    # threshold = thresh_dict[level]
+    print('Actual threshold: {}'.format(threshold))
     for label, clus in clusters.items():
         for term_id in clus:
             score = term_scores[term_id][2]
             if score < threshold:
                 concept_terms.append(term_id)
                 concept_terms_scores.append((term_id, score))
+    if emb_type == 'ELMo':
+        if not concept_terms:
+            for label, clus in clusters.items():
+                clus_term_scores = [(term_id, term_scores[term_id][2])
+                                    for term_id in clus]
+                sorted_terms = sorted(clus_term_scores, key=lambda x: x[1])
+                clus_concept_term = sorted_terms[0]
+                concept_terms.append(clus_concept_term[0])
+                concept_terms_scores.append(clus_concept_term)
 
     # Remove general terms from clusters.
     concept_terms_set = set(concept_terms)

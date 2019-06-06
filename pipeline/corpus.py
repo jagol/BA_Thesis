@@ -5,6 +5,7 @@ from collections import defaultdict
 from utility_functions import get_config
 from numpy import mean
 import numpy as np
+import pdb
 
 
 doc_distr_type = DefaultDict[int, Union[Tuple[int, int], int]]
@@ -44,6 +45,9 @@ class Corpus:
             elif emb_type == 'GloVe':
                 path_doc_embs = os.path.join(
                     path_out, 'embeddings/doc_embs_token_GloVe.pickle')
+            elif emb_type == 'ELMo':
+                path_doc_embs = os.path.join(
+                    path_out, 'embeddings/doc_embs_token_ELMo.txt')
             else:
                 raise Exception('Error! Embedding type not recognized.')
         else:
@@ -55,7 +59,18 @@ class Corpus:
                     path_out, 'embeddings/doc_embs_lemma_GloVe.pickle')
             else:
                 raise Exception('Error! Embedding type not recognized.')
-        doc_embeddings = pickle.load(open(path_doc_embs, 'rb'))
+        if path_doc_embs.endswith('.pickle'):
+            doc_embeddings = pickle.load(open(path_doc_embs, 'rb'))
+        elif path_doc_embs.endswith('.txt'):
+            num_docs = 1889656
+            doc_embeddings = np.empty(num_docs, 1024)
+            with open(path_doc_embs, 'r', encoding='utf8') as f:
+                for i, line in enumerate(f):
+                    emb_str = line.split(',')
+                    emb = np.array([float(f) for f in emb_str])
+                    doc_embeddings[i] = emb
+        else:
+            raise Exception('Error! File type for embedding not known.')
         return doc_embeddings
 
     @staticmethod
@@ -115,38 +130,41 @@ class Corpus:
         use_retrieval_based_on_tfidf = False
         use_retrieval_based_on_emb_imp = False
 
-        # Subcorpora for scoring and embedding training.
-        sca_scoring = {}
-        sca_emb = {}
+        # # Subcorpora for scoring and embedding training.
+        # sca_scoring = {}
+        # sca_emb = {}
 
-        sca_tfidf = cls.get_subcorpora_tfidf(clusters, term_distr)
+        sca_scoring = cls.get_subcorpora_tfidf(clusters, term_distr)
         # {label: list of doc-ids ordered by strength descending}
 
         # clus_terms = cls.get_k_most_center_terms(clus_centers, clusters,
         #                                          term_ids_to_embs_local, 100)
         # # {clus-l: set of term-ids}
         # sca_emb_imp = cls.get_relevant_docs(clus_terms, df)
-        sca_emb_imp = cls.get_relevant_docs_iter(cluster_centers, clusters,
-                                                 term_ids_to_embs_local, df, m)
+        sca_emb = cls.get_relevant_docs_iter(cluster_centers, clusters,
+                                             term_ids_to_embs_local, df, m)
         # {label: list of doc-ids}
-        for label in sca_tfidf:
-            if len(sca_tfidf[label]) < m:
+        for label in sca_scoring:
+            if len(sca_scoring[label]) < m:
                 use_retrieval_based_on_tfidf = True
-            if len(sca_emb_imp[label]) < m:
+            if len(sca_emb[label]) < m:
                 use_retrieval_based_on_emb_imp = True
 
         if not cls.expand_emb:
             use_retrieval_based_on_emb_imp = False
 
+        # *** Avoid retrieval based extraction if ELMo embeddings!
+        # use_retrieval_based_on_tfidf = False
+        # use_retrieval_based_on_emb_imp = False
         if use_retrieval_based_on_tfidf or use_retrieval_based_on_emb_imp:
             sca_retr = cls.get_subcorpora_retrieval(cluster_centers, path_out)
             # {label: list of doc-ids ordered by strength descending}
 
             if use_retrieval_based_on_tfidf:
-                sca_scoring = cls.extend_sc(sca_tfidf, sca_retr)
+                sca_scoring = cls.extend_sc(sca_scoring, sca_retr)
 
             if use_retrieval_based_on_emb_imp:
-                sca_emb = cls.extend_sc(sca_emb_imp, sca_retr)
+                sca_emb = cls.extend_sc(sca_emb, sca_retr)
 
         # Reduce to m docs per cluster and convert to set.
         sca_scoring = cls.reduce_to_m(sca_scoring, m)
@@ -380,7 +398,10 @@ class Corpus:
         Return:
             A tuple of the form: (label, strength).
         """
-        strongest_score = max(doc_membership)
+        try:
+            strongest_score = max(doc_membership)
+        except ValueError:
+            pdb.set_trace()
         label = list(doc_membership).index(strongest_score)
         return label, strongest_score
 
