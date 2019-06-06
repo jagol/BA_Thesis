@@ -13,9 +13,12 @@ latex/
 *.idea/
 */__pycache__/
 pipeline/corpora/
-pipeline/
+pipeline/raw_corpora/
 glove/
 relation_extraction_and_universal_schemas/
 code/other_scripts/.ipynb_checkpoints/
 .ipynb_checkpoints/
 evaluation/
+pipeline/other_scripts/elmo*
+pipeline/other_scripts/europarl*
+pipeline/other_scripts/test_corpus_to_embeddings_elmo.txt
