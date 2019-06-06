@@ -7,3 +7,10 @@ code/pipeline/preprocessed_corpus/
 code/pipeline/raw_corpus/
 code/pipeline/temp/
 code/taxogen/
+papers/
+notes/
+latex/
+*.idea/
+*/__pycache__/
+pipeline/corpora/
+pipeline/
