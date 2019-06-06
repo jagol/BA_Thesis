@@ -1,1 +1,9 @@
 code/pipeline/glove/
+code/pipeline/glove_github/
+code/pipeline/.idea/
+code/pipeline/output/
+code/pipeline/preprocessed_corpora/
+code/pipeline/preprocessed_corpus/
+code/pipeline/raw_corpus/
+code/pipeline/temp/
+code/taxogen/
