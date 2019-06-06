@@ -14,3 +14,7 @@ latex/
 */__pycache__/
 pipeline/corpora/
 pipeline/
+glove/
+relation_extraction_and_universal_schemas/
+code/other_scripts/.ipynb_checkpoints/
+.ipynb_checkpoints/
