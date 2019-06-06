@@ -265,6 +265,13 @@ class LingPreprocessor(TextProcessingUnit):
             corpus_as_str += '\n'
         return corpus_as_str
 
+    @staticmethod
+    def get_num_words(pp_doc: List[List[Tuple[str, str, str, str]]]):
+        num_words = 0
+        for sent in pp_doc:
+            num_words += len(sent)
+        return num_words
+
     def _update_cmd_counter(self) -> None:
         """Update the information on the command line."""
         if self._docs_processed == self._upper_bound:
@@ -346,19 +353,11 @@ class DBLPLingPreprocessor(LingPreprocessor):
                         content = content.strip(' ')
                         yield content
 
-
     def is_more_than_space(self, content: str) -> bool:
         """Check if content contains more than only whitespace."""
         if re.search(self._more_than_white_space_pattern, content):
             return True
         return False
-
-
-    def get_num_words(self, pp_doc: List[List[Tuple[str, str, str, str]]]):
-        num_words = 0
-        for sent in pp_doc:
-            num_words += len(sent)
-        return num_words
 
 
 class SPLingPreprocessor(LingPreprocessor):
@@ -387,14 +386,14 @@ class SPLingPreprocessor(LingPreprocessor):
 
 
 def main():
-    from utility_functions import get_config, get_cmd_args, prep_output_dir
+    from utility_functions import get_config, get_cmd_args  # , prep_output_dir
     config = get_config()
     args = get_cmd_args()
     path_in = config['paths'][args.location][args.corpus]['path_in']
     path_out = config['paths'][args.location][args.corpus]['path_out']
     path_lang_model = config['paths'][args.location]['path_lang_model']
     # prep_output_dir(path_out)
-    max_docs = 10000
+    max_docs = None
     # prep_output_dir(path_out)
     if args.corpus == 'dblp':
         dp = DBLPLingPreprocessor(

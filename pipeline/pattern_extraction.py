@@ -35,17 +35,17 @@ class PatternExtractor:
         self.path_out_corpus = os.path.join(path, 'processed_corpus')
         self.path_out_hierarchy = os.path.join(path, 'hierarchy')
         self.path_out_pp_tokens = os.path.join(
-            self.path_out_corpus, 'pp_token_corpus.txt')
+            self.path_out_corpus, 'pp_token_corpus_non_tg.txt')
         self.path_out_pp_lemmas = os.path.join(
-            self.path_out_corpus, 'pp_lemma_corpus.txt')
+            self.path_out_corpus, 'pp_lemma_corpus_non_tg.txt')
         self.path_hierarchy_rels_tokens = os.path.join(
-            self.path_out_hierarchy, 'hierarchical_relations_tokens.json')
+            self.path_out_hierarchy, 'hierarchical_relations_tokens_non_tg.json')
         self.path_hierarchy_rels_lemmas = os.path.join(
-            self.path_out_hierarchy, 'hierarchical_relations_lemmas.json')
+            self.path_out_hierarchy, 'hierarchical_relations_lemmas_non_tg.json')
         self.path_token_terms = os.path.join(
-            self.path_out_corpus, 'token_terms.txt')
+            self.path_out_corpus, 'token_terms_non_tg.txt')
         self.path_lemma_terms = os.path.join(
-            self.path_out_corpus, 'lemma_terms.txt')
+            self.path_out_corpus, 'lemma_terms_non_tg.txt')
 
         self.hierarch_rels_tokens = {}    # {hypernym: list of hyponyms}
         self.hierarch_rels_lemmas = {}

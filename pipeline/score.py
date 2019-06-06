@@ -5,6 +5,7 @@ import numpy as np
 from utility_functions import get_config
 import pdb
 
+
 """Compute term-candidate scores."""
 """
 - prepare pseudo docs for given terms using tfidf scores
@@ -63,6 +64,11 @@ class Scorer:
         self.cluster_centers = cluster_centers
         self.subcorpora = subcorpora
         self.level = level
+        if self.clusters.keys() != self.subcorpora.keys():
+            print('WARNING! Cluster and subcorpora do not correspond!')
+            print('Cluster keys: ', self.clusters.keys())
+            print('Subcorpora keys: ', self.subcorpora.keys())
+            pdb.set_trace()
         # self.tf_in_pd = self.get_tf_in_pd()
         # self.df_in_pd = self.ge_df_in_pd()
 
@@ -312,11 +318,7 @@ class Scorer:
             # [pop1, pop2, pop3, pop4, pop5]
 
             for label in self.clusters:
-                try:
-                    subcorp = self.subcorpora[label]
-                except KeyError:
-                    pdb.set_trace()
-
+                subcorp = self.subcorpora[label]
                 for doc_id in df[term_id]:
                     if doc_id in subcorp:
                         df_t_Dk_clus[label] += 1
@@ -476,7 +478,10 @@ class Scorer:
                 tf = tf_scores_pd[term_id][label]
                 df = df_in_pd[term_id][label]
                 # idf = idf_scores_pd[term_id]
-                df_factor = log(1 + df, 2) / log(1 + max_df[term_id], 2)
+                try:
+                    df_factor = log(1 + df, 2) / log(1 + max_df[term_id], 2)
+                except ZeroDivisionError:
+                    df_factor = log(1 + df, 2) / log(2 + max_df[term_id], 2)
                 len_pd = len_pds[label]
                 # bm25 = idf*(tf*(k1 + 1)) / (tf + k1*(1 - b + b*
                 # (len_pd/avgdl)))
@@ -587,7 +592,6 @@ class Scorer:
             bm25_scores_sum[term_id] = 0
             for label in bm25_scores[term_id]:
                 bm25_scores_sum[term_id] += exp(bm25_scores[term_id][label])
-            # bm25_scores_sum[term_id] = sum(bm25_scores[term_id].values())
         return bm25_scores_sum
 
     def get_len_pseudo_docs(self,
@@ -632,15 +636,6 @@ class Scorer:
         Return:
             {term_id: {label: tf}}
         """
-        # tf_in_pd = {}
-        # for label, sc in self.subcorpora.items():
-        #     for doc_id in sc:
-        #         for term_id in term_distr[doc_id]:
-        #             if term_id in self.clusters_inv:
-        #                 if term_id not in tf_in_pd:
-        #                     tf_in_pd[term_id] = {0: 0, 1: 0, 2: 0,
-        #                                          3: 0, 4: 0}
-        #                     tf_in_pd[term_id][label] += term_distr[doc_id][term_id][0]
         tf_in_pd = {}
         for tid in self.clusters_inv:
             tf_in_pd[tid] = {}
