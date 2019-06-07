@@ -212,7 +212,8 @@ class Scorer:
             Form: {term-id: array of popularity per cluster}
         """
         pop_scores_raw = {}  # {term_id: [pop1, pop2, pop3, pop4, pop5]}
-        tf_Dk_clus = {}  # {label: total number of tokens in Dk}
+        tf_Dk_clus = {k: 0 for k in self.clusters}
+        # {label: total number of tokens in Dk}
 
         # Calc tf_Dk.
         for label in self.clusters:
@@ -231,11 +232,11 @@ class Scorer:
                     if doc_id in subcorp:
                         tf_t_Dk_clus[label] += term_distr[doc_id][term_id][0]
 
-                # Calc pop-score.
-                pop_score = np.log2(tf_t_Dk_clus + 1)  # / log(tf_Dk)
-                pop_scores_raw[term_id] = pop_score
+            # Calc pop-score.
+            pop_score = np.log2(tf_t_Dk_clus + 1)  # / log(tf_Dk)
+            pop_scores_raw[term_id] = pop_score
 
-            tf_Dk_clus[term_id] = tf_Dk_clus
+            # tf_Dk_clus[term_id] = tf_Dk_clus
 
         pop_scores = {}
         for term_id in pop_scores_raw:
@@ -243,9 +244,8 @@ class Scorer:
             # Divide each raw-pop-score by the total number of
             # occurrences of tokens in Dk (tf_Dk).
             # Equivalent to l1-norm.
-            pop_scores[term_id] = np.array([scores[label] / tf_Dk_clus[label]
-                                            for label in self.clusters])
-
+            lst = [scores[i]/tf_Dk_clus[i] for i in range(len(self.clusters))]
+            pop_scores[term_id] = np.array(lst)
         return pop_scores
 
     def get_pop_scores_df(self,
