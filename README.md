@@ -15,7 +15,7 @@ Or you can download the original corpus at
 https://dblp.uni-trier.de/faq/How+can+I+download+the+whole+dblp+dataset
 and use this repository's preprocessing.
 
-##### Download necessary python
+##### Install necessary python
 
 The pipeline was tested on python 3.6.5. Other version might also work.
 
@@ -35,7 +35,7 @@ all temporary and output files in this directory (or subdirectories).
 
 ##### If downloaded from TaxoGen repository:
 
-For the thesis I used the preprocessed corpus from the TaxoGen 
+For the results in the thesis I used the preprocessed corpus from the TaxoGen 
 repository. If you have downloaded this corpus, adjust the paths in 
 `pipeline/configs.json`.
 
