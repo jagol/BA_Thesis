@@ -8,7 +8,7 @@ from typing import Dict, Any, List, Tuple, Union
 
 """Generate evaluation files.
 
-python3 generate_eval_files.py -i ../evaluation/results/taxonomies/all_true_like_taxogen_depth_3_th_0.35_aggl_ward_eucl.csv -o ../evaluation/results/evaluations/all_true_like_taxogen_depth_3_th_0.35_aggl_ward_eucl
+python3 generate_eval_files.py -i ../evaluation/results/taxonomies/all_true_like_taxogen_depth_3_th_0.35_aggl_complete_cosine.csv -o ../evaluation/results/evaluations/all_true_like_taxogen_depth_3_th_0.35_aggl_complete_cosine
 """
 
 
@@ -93,8 +93,11 @@ class EFGenerator:
                 num_subtopics = 0
                 for i in range(1, 6):
                     try:
-                        int(row[i])
-                        num_subtopics += 1
+                        if i < len(row):
+                            int(row[i])
+                            num_subtopics += 1
+                        else:
+                            break
                     except ValueError:
                         break
                 child_ids = [int(idx) for idx in row[1:1+num_subtopics]]
