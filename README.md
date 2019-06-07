@@ -8,32 +8,36 @@
 
 `$ git clone https://github.com/jagol/BA_Thesis`
 
-##### You can download the preprocessed dblp corpus from the 
+##### Download the corpus
+You can download the preprocessed dblp corpus from the 
 TaxoGen repository: https://github.com/franticnerd/taxogen
 Or you can download the original corpus at 
 https://dblp.uni-trier.de/faq/How+can+I+download+the+whole+dblp+dataset
 and use this repository's preprocessing.
 
-##### The pipeline was tested on python 3.6.5. Other version might also work.
+##### Download necessary python
+
+The pipeline was tested on python 3.6.5. Other version might also work.
 
 To install the required packages use:
 
 `$ pip3 install -r requirements.txt`
 
-##### Download an English language model from: 
+##### Dowload spacy language model
+Download an English language model from: 
 https://spacy.io/usage/models
- and point to it in `configs.json`
+ and point to it in `pipeline/configs.json`
 
 ### Preprocessing
 
-Configure an output path in `configs.json`. The pipeline will place 
+Configure an output path in `pipeline/configs.json`. The pipeline will place 
 all temporary and output files in this directory (or subdirectories).
 
 ##### If downloaded from TaxoGen repository:
 
 For the thesis I used the preprocessed corpus from the TaxoGen 
 repository. If you have downloaded this corpus, adjust the paths in 
-`configs.json`.
+`pipeline/configs.json`.
 
 You can choose between `server` paths and `local` paths. If you filled in the 
 server paths then use: 
@@ -54,7 +58,7 @@ Note: This step will take one to two days. Better do it on a server.
 
 ### Generating the taxonomy.
 
-Use `configs.json` to configure which embeddings are used, 
+Use `pipeline/configs.json` to configure which embeddings are used, 
 which clustering algorithm is used and
 if the label score is used.
 
