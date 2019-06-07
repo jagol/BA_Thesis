@@ -1,6 +1,6 @@
 ### Installation
 
-1. Download the source code:
+##### Download the source code:
 
 `$ mkdir building_on_taxogen`
 
@@ -8,19 +8,19 @@
 
 `$ git clone https://github.com/jagol/BA_Thesis`
 
-2. You can download the preprocessed dblp corpus from the 
+##### You can download the preprocessed dblp corpus from the 
 TaxoGen repository: https://github.com/franticnerd/taxogen
 Or you can download the original corpus at 
 https://dblp.uni-trier.de/faq/How+can+I+download+the+whole+dblp+dataset
 and use this repository's preprocessing.
 
-3. The pipeline was tested on python 3.6.5. Other version might also work.
+##### The pipeline was tested on python 3.6.5. Other version might also work.
 
 To install the required packages use:
 
 `$ pip3 install -r requirements.txt`
 
-4. Download an English language model from: 
+##### Download an English language model from: 
 https://spacy.io/usage/models
  and point to it in `configs.json`
 
