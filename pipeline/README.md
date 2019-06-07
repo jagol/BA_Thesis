@@ -58,17 +58,17 @@ Use `configs.json` to configure which embeddings are used,
 which clustering algorithm is used and
 if the label score is used.
 
-To generate the taxonomy, run:
+To generate the taxonomy if you configured the server paths use:
 
 `$ python3 generate_taxonomy.py -c dblp -l server`
 
-if you configured the server paths. If you configured the local paths, use:
+If you configured the local paths, use:
 
 `$ python3 generate_taxonomy.py -c dblp -l local`
 
 ### Evaluation
 
-To generate the evaluation files run:
+To generate the evaluation files use:
 
 `$ python3 generate_eval_files.py -i <path_to_output_dir>/concept_terms/tax_labels_sim.csv -o <output directory>`
 
