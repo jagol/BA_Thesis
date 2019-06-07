@@ -8,9 +8,13 @@ import numpy as np
 import pdb
 
 
+# ----------------------------------------------------------------------
+# type definitions
 doc_distr_type = DefaultDict[int, Union[Tuple[int, int], int]]
 term_distr_type = DefaultDict[int, doc_distr_type]
 # {doc-id: {term-id: (term-freq, tfidf)}} doc-length is at word-id -1
+
+# ----------------------------------------------------------------------
 
 
 class Corpus:
@@ -400,10 +404,10 @@ class Corpus:
         """
         try:
             strongest_score = max(doc_membership)
+            label = list(doc_membership).index(strongest_score)
+            return label, strongest_score
         except ValueError:
             pdb.set_trace()
-        label = list(doc_membership).index(strongest_score)
-        return label, strongest_score
 
     @classmethod
     def get_doc_topic_sims(cls,
@@ -439,6 +443,14 @@ class Corpus:
 
     @staticmethod
     def get_matrix(doc_embs):
+        """Turn doc-embeddings dict into a matrix.
+
+        Args:
+            doc_embs: dict mapping doc-id to embedding.
+        Return:
+            A matrix of numpy arrays with dimensions:
+                num_docs x embedding-dimensions
+        """
         # Get the number of dimensions.
         key = list(doc_embs.keys())[0]
         num_dimensions = len(doc_embs[key])
@@ -455,11 +467,33 @@ class Corpus:
 
     @staticmethod
     def matrix_to_dict(sim_matrix, doc_ids, topic_label, doc_topic_sims):
+        """Turn the input matrix back into a dictionary.
+
+        Args:
+            sim_matrix: Matrix with document-topic similarities.
+            doc_ids: A list of doc-ids.
+            topic_label: A label in [0,... 4].
+            doc_topic_sims: A dictionary of the form:
+                {doc-id: {topic-label: cos-sim}}
+        """
         for i in range(len(doc_ids)):
             doc_topic_sims[doc_ids[i]][topic_label] = sim_matrix[i]
 
     @staticmethod
-    def get_cosine_similarities(vector, matrix):
+    def get_cosine_similarities(vector: np.ndarray,
+                                matrix: np.ndarray
+                                ) -> np.ndarray:
+        """Get the cosine similarities between vector and the matrix rows.
+
+        Args:
+            vector: A vector, in this case a topic-embedding.
+            matrix: A 2-D numpy array, in this case a list of
+                doc-embeddings.
+        Return:
+            An array of with one element per row in the input matrix.
+            For each row row the array contains the cos-sim to the
+            input vector.
+        """
         vector_norm = np.linalg.norm(vector)
         matrix_norm = np.linalg.norm(matrix, axis=1)
         return (matrix @ vector) / (matrix_norm * vector_norm)

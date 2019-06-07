@@ -1,34 +1,54 @@
 {
-  "server": {
-    "preprocessing": {
-      "path_in": "",
-      "path_out": "",
-      "path_lang_model": "",
-      "encoding": "utf8"
-    },
-    "term_extraction": {
-      "path_in": "",
-      "path_out": ""
-    },
-    "tax_relation_extraction": {
-      "path_in": "",
-      "path_out": ""
-    }
+  "compound_counts": false,
+  "lemmatized": false,
+  "pop_df_version": true,
+  "pop_sum_version": true,
+  "pop_no_denominator": true,
+  "pop_scores": true,
+  "con_scores": true,
+  "l1_normalize": true,
+  "kl_divergence": true,
+  "label_score": true,
+  "threshold": 0.0005,
+  "max_iter": 5,
+  "max_depth": 3,
+  "clustering": {
+    "type": "sphericalkmeans",
+    "linkage": "complete",
+    "affinity": "cosine",
+    "n_clusters": 5
   },
-  "local": {
-    "preprocessing": {
-      "path_in": "./raw_corpus/",
-      "path_out": "./preprocessed_corpus/",
-      "path_lang_model": "en_core_web_sm",
-      "encoding": "utf8"
+  "embeddings": "Word2Vec",
+  "paths": {
+    "server": {
+      "path_lang_model": "/mnt/storage/clwork/users/jgoldz/local_storages/harlie/models/en_core_web_sm-2.0.0",
+      "sp": {
+        "path_in": "???",
+        "path_out": "/mnt/storage/clwork/users/jgoldz/local_storages/harlie/output/sp/"
+      },
+      "dblp": {
+        "path_in": "/mnt/storage/harlie/users/jgoldz/raw_corpora/dblp/dblp.xml.gz",
+        "path_out": "/mnt/storage/harlie/users/jgoldz/output/dblp",
+        "path_papers": "/mnt/storage/harlie/users/jgoldz/raw_corpora/dblp/papers.txt",
+        "path_keywords": "/mnt/storage/harlie/users/jgoldz/raw_corpora/dblp/keywords.txt",
+        "path_keyword_cnt": "/mnt/storage/harlie/users/jgoldz/raw_corpora/dblp/keyword_cnt.txt",
+        "path_index": "/mnt/storage/harlie/users/jgoldz/raw_corpora/dblp/index.txt"
+      }
     },
-    "term_extraction": {
-      "path_in": "./preprocessed_corpus/",
-      "path_out": "."
-    },
-    "tax_relation_extraction": {
-      "path_in": "./preprocessed_corpus/",
-      "path_out": "."
+    "local": {
+      "path_lang_model": "/usr/local/lib/python3.6/dist-packages/en_core_web_sm/en_core_web_sm-2.0.0",
+      "sp": {
+        "path_in": "./raw_corpora/sp/paper_abstracts/",
+        "path_out": "./output/sp/"
+      },
+      "dblp": {
+        "path_in": "./raw_corpora/dblp/dblp.xml.gz",
+        "path_out": "./output/dblp/",
+        "path_papers": "./raw_corpora/dblp/papers.txt",
+        "path_keywords": "./raw_corpora/dblp/keywords.txt",
+        "path_keyword_cnt": "./raw_corpora/dblp/keyword_cnt.txt",
+        "path_index": "./raw_corpora/dblp/index.txt"
+      }
     }
   }
 }

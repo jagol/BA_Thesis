@@ -1,7 +1,6 @@
 from typing import *
 
 from sklearn.cluster import AgglomerativeClustering, k_means
-from scipy.spatial.distance import cosine
 from spherecluster import SphericalKMeans
 
 from utility_functions import get_clus_config
@@ -58,9 +57,14 @@ class Clustering:
         return {'labels': self.cluster.labels_, 'density': self.compactness}
 
     def _get_n(self):
+        """Get the output number of clusters.
+
+        Use knee method or comparable.
+        """
         raise NotImplementedError
 
     def _calc_density(self):
+        """Compute the cluster density if possible."""
         if self.clus_type == 'kmeans' or self.clus_type == 'sphericalkmeans':
             return self.cluster.inertia_
         else:

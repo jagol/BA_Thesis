@@ -1,12 +1,6 @@
 import json
-import pickle
 import tensorflow as tf
 import tensorflow_hub as hub
-# import matplotlib.pyplot as plt
-# import numpy as np
-# from sklearn.manifold import TSNE
-# from tensorflow.examples.tutorials.mnist import input_data
-# from tensorflow.contrib.tensorboard.plugins import projector
 
 
 def get_text_input(path):
@@ -81,8 +75,6 @@ def main():
     path = './preprocessed_corpus/500.json'
     tokenized_sents = get_text_input(path)
     print(len(tokenized_sents))
-    # print(get_sents_length(tokenized_sents))
-    # print([len(sent) for sent in format_sents_tf(tokenized_sents, 150)])
     get_embeddings(tokenized_sents, 500)
     print('Done')
 

@@ -11,6 +11,12 @@ from embeddings import ElmoE
 from utility_functions import get_docs, split_corpus
 
 
+"""
+Use this script to extract elmo embedding for a list of given terms in 
+a corpus.
+"""
+
+
 output = mp.Queue()
 
 
@@ -269,72 +275,5 @@ def merge_dicts(fpaths: List[str], path_out: str) -> None:
         pickle.dump(out_dict, f)
 
 
-# def embed_docs(path_in: str, path_out: str) -> None:
-#     """Create elmo embeddings for given corpus.
-#
-#     Args:
-#         path_in: Path to input file.
-#         path_out: Path to output file.
-#     """
-#     elmo = ElmoE()
-#     docs_embs = []
-#     with open(path_out, 'w', encoding='utf8') as f:
-#         for i, doc in enumerate(get_docs(path_in)):
-#             doc_embs = []
-#             print('processing {}'.format(i))
-#             for sent in doc:
-#                 embs = elmo.get_embeddings(sent)
-#                 embs = [list(emb) for emb in embs]
-#                 print(embs)
-#                 doc_embs.append(embs)
-#             docs_embs.append(doc_embs)
-#
-#             if i % 500 == 0:
-#                 docs_str = docs_to_string(docs_embs)
-#                 f.write(docs_str)
-#                 docs_embs = []
-#
-#             if i >= 10:
-#                 break
-#         # s = json.dumps(dict(enumerate(docs_embs)))
-#         # docs_str = docs_to_string(docs_embs)
-#         # f.write(s)
-#
-#     output.put('Done')
-#
-#
-# def docs_to_string(docs: List[List[List[List[float]]]]) -> str:
-#     """Return all documents in documents as one string."""
-#     corpus_as_str = ''
-#     for doc in docs:
-#         for sent in doc:
-#             sent_str = ''
-#             for emb in sent:
-#                 # emb_str = array2string(emb, max_line_width = 1000) + '\t'
-#                 emb_str = str(emb)
-#                 sent_str += emb_str
-#             line = sent_str + '\n'
-#             corpus_as_str += line
-#         corpus_as_str += '\n'
-#     return corpus_as_str
-
-
 if __name__ == '__main__':
-    # embed_corpus_terms(
-    # 'mnt/storage/harlie/users/jgoldz/output/dblp/', 'l', 5)
     embed_corpus_terms('/mnt/storage/harlie/users/jgoldz/output/dblp', 't', 22)
-    # embed_corpus_terms('./output/dblp', 't', 3)
-    # elmo = ElmoE()
-    # sent = ["This", "is", "an", "example", "."]
-    # embs = elmo.get_embeddings(sent)
-    # print(embs)
-    # print(len(embs))
-    # print(type(embs))
-    # print(len(embs[0]))
-    # print(type(embs[0]))
-    # print(30*'-')
-    # x = [list(emb) for emb in embs]
-    # print(len(x))
-    # print(type(x))
-    # print(len(x[0]))
-    # print(type(x[0]))

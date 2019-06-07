@@ -3,7 +3,6 @@ import pickle
 from collections import defaultdict
 from typing import Dict, List, Set, Any, DefaultDict
 import numpy as np
-import pdb
 
 
 def add_embs(fpath: str,
@@ -36,7 +35,13 @@ def add_embs(fpath: str,
 
 
 def get_subsets(set_in: Set[Any], n: int) -> List[Set[Any]]:
-    """Split a set into n evenly sized subsets."""
+    """Split a set into n evenly sized subsets.
+
+    Args:
+        set_in: The input set.
+    Return:
+        A list of evenly sized output sets.
+    """
     set_as_array = np.array(list(set_in))
     sub_arrays = np.array_split(set_as_array, n)
     return [set(s) for s in sub_arrays]
@@ -172,97 +177,3 @@ if __name__ == '__main__':
     path_emb_dir = '/mnt/storage/harlie/users/jgoldz/output/dblp/embeddings/'
     path_out_dir = '/mnt/storage/harlie/users/jgoldz/output/dblp/embeddings/'
     main(path_emb_dir, path_out_dir)
-
-
-# import sqlite3
-# import pdb
-
-
-# def calc_avg_elmo_embs(path_in: str, path_out: str) -> None:
-#     """Calculate average elmo embeddings over documents and sentences.
-#
-#     Store results in the elmo-database.
-#
-#     Args:
-#         path_in: Path to a directory containing pickle files. These
-#             pickle files contain dictionaries of the form:
-#             {term_id: {doc_id: list of embeddings}}
-#         path_out: Path to a pickle file to which the averaged embeddings
-#             are written to in the form:
-#             {term_id: {doc_id: list of embeddings}}
-#     """
-#     fpaths_in = [os.path.join(path_in, fname)
-# for fname in os.listdir(path_in)]
-#     fpaths_in = [fp for fp in fpaths_in if '.txt.split.emb.json' in fp]
-#     path_term_ids = ('/mnt/storage/harlie/users/jgoldz/output/dblp/'
-#                      'processed_corpus/token_terms_idxs.txt')
-#     term_ids = []
-#     with open(path_term_ids, 'r', encoding='utf8') as f:
-#         for line in f:
-#             term_ids.append(int(line.strip('\n')))
-#     term_ids = set(term_ids)
-#     term_ids_subsets = get_subsets(term_ids, 10)
-#     num_files = len(fpaths_in)
-#     # os.system('rm /mnt/storage/harlie/users/jgoldz/output/dblp/embeddings/'
-#     #           'elmo_embs.db')
-#     # os.system('touch /mnt/storage/harlie/users/jgoldz/output/dblp/'
-#     #           'embeddings/elmo_embs.db')
-#     # conn = sqlite3.connect('/mnt/storage/harlie/users/jgoldz/output/dblp/'
-#     #                        'embeddings/elmo_embs.db')
-#     # conn.execute('CREATE TABLE ElmoEmbeddings (TermID INT, DocID INT, '
-#     #              'Embedding TEXT);')
-#     # conn.commit()
-#     avg_emb_dict = {}
-#     for i, fpath in enumerate(fpaths_in):
-#         print('Processing file {} of {}...'.format(i, num_files))
-#         print('file path:', fpath)
-#         # add_to_db(conn, fpath, term_ids)
-#         add_embs(fpath, avg_emb_dict, term_ids)
-#         if i % 20 == 0:
-#             avg_embs
-#     # conn.close()
-#     with open(path_out, 'wb') as f:
-#         pickle.dump(avg_emb_dict, f)
-
-# def add_to_db(conn, fpath: str, term_ids: Set[int]) -> None:
-#     """
-#     Add Embeddings to database.
-#
-#     Args:
-#         conn: The connection to the database.
-#         fpath: fpath: Path to a pickle file of the form:
-#             {term_id: {doc_id: list of embeddings}}
-#         term_ids: A set of term-ids. Used to check if a token belongs
-#             to terms.
-#     """
-#     sql_cmd_raw = ('INSERT INTO embeddings (termid, docid, '
-#                    'vector) VALUES ({}, {}, {});')
-#     with open(fpath, 'rb') as f:
-#         new_embs = pickle.load(f)
-#     print('Length of dictionary:', len(new_embs))
-#     for term_id in new_embs:
-#         if term_id not in term_ids:
-#             # Then it is not a relevant term.
-#             continue
-#         for doc_id in new_embs[term_id]:
-#             avg_emb = mean(new_embs[term_id][doc_id], 0)
-#             avg_emb_str = ','.join([str(i) for i in avg_emb])
-#             sql_cmd = sql_cmd_raw.format(term_id, doc_id, repr(avg_emb_str))
-#             try:
-#                 conn.execute(sql_cmd)
-#             except:
-#                 pdb.set_trace()
-#     conn.commit()
-
-# """
-# CREATE TABLE terms (id INT PRIMARY KEY);
-# CREATE TABLE documents (id INT PRIMARY KEY);
-# CREATE TABLE embeddings (
-#   termid INT,
-#   docid INT,
-#   vector TEXT,
-#   FOREIGN KEY (termid) references terms(id),
-#   FOREIGN KEY(docid) references documents(id),
-#   PRIMARY KEY (termid, docid)
-# );
-# """

@@ -95,7 +95,7 @@ def count_num_non_empty_lines(f):
     return i
 
 
-# Test consistency between corpus and term pattern files.
+# ---------- Test consistency between corpus and pattern files ---------
 
 def test_term_pattern_files(path_out):
     """Test if extracted terms and patterns are consistent."""
@@ -145,7 +145,7 @@ def _test_all_words_in_hierarch_rels_in_terms(path_terms: str,
                     'The hyponym {} is not in the terms-file.'.format(hypo))
 
 
-# Test consistency between corpus and indexing files.
+# ---------- Test consistency between corpus and indexing files --------
 
 def test_indexing_files(path_out: str) -> None:
     """Test consistency of indexing files."""
@@ -273,9 +273,9 @@ def test_frequency_files(path_out: str) -> None:
     path_tf_lemmas = os.path.join(path_out, 'frequencies/tf_lemmas.json')
     path_tfidf_tokens = os.path.join(path_out, 'frequencies/tfidf_tokens.json')
     path_tfidf_lemmas = os.path.join(path_out, 'frequencies/tfidf_lemmas.json')
-    path_dl =  os.path.join(path_out, 'frequencies/dl.json')
-    path_df_tokens = os.path.join(path_out, 'frequencies/df_tokens.json')
-    path_df_lemmas = os.path.join(path_out, 'frequencies/df_lemmas.json')
+    path_dl = os.path.join(path_out, 'frequencies/dl.json')
+    # path_df_tokens = os.path.join(path_out, 'frequencies/df_tokens.json')
+    # path_df_lemmas = os.path.join(path_out, 'frequencies/df_lemmas.json')
     path_ling_pp_corpus = os.path.join(path_out,
                                        'processed_corpus/ling_pp_corpus.txt')
     path_token_idxs = os.path.join(path_out, 'token_terms_idxs.txt')
@@ -293,7 +293,7 @@ def test_frequency_files(path_out: str) -> None:
     test_tf_values_tfidf_values(path_tf_lemmas, path_tfidf_lemmas)
 
 
-def test_tf_has_all_doc_ids(path_tf: str, num_docs: str) -> None:
+def test_tf_has_all_doc_ids(path_tf: str, num_docs: int) -> None:
     """Test if the tf-file contains all doc-ids."""
     with open(path_tf, 'r', encoding='utf8') as f:
         tf = json.load(f)
@@ -357,11 +357,12 @@ def test_tf_values_tfidf_values(path_tf: str, path_tfidf: str) -> None:
             raise Exception(msg.format(doc_id))
 
 
-# Test consistency between terms and embeddings.
+# ---------- Test consistency between terms and embeddings. ----------
 
 def test_embedding_files(path_out):
     test_all_token_terms_have_embeddings(path_out)
     test_all_lemma_terms_have_embeddings(path_out)
+
 
 def test_all_token_terms_have_embeddings(path_out: str) -> None:
     """Test if all token terms have embeddings."""
@@ -398,7 +399,9 @@ def test_all_terms_have_embeddings(path_terms: str,
             separated by space.
     """
     terms = load_terms(path_terms)
-    embeddings = Embeddings.load_term_embeddings(terms, path_embeddings, term_ids_to_embs_global={})
+    idx_to_term = json.load('<intput here correct path>')
+    embeddings = Embeddings.load_term_embeddings(terms, path_embeddings,
+                                                 idx_to_term)
     embedded_terms = set(embeddings)
     not_in_et = []
     for t in terms:
@@ -415,17 +418,16 @@ def test_all_terms_have_embeddings(path_terms: str,
         raise Exception(msg1 + msg2 + msg3)
 
 
-def load_terms(path_terms: str) -> Set[str]:
+def load_terms(path_terms: str) -> Set[int]:
     terms = set()
     with open(path_terms, 'r', encoding='utf8') as f:
         for line in f:
-            terms.add(line.strip('\n'))
+            terms.add(int(line.strip('\n')))
     return terms
 
 
 if __name__ == '__main__':
     from utility_functions import get_config, get_cmd_args
-
     config = get_config()
     args = get_cmd_args()
     path = config['paths'][args.location][args.corpus]['path_out']
