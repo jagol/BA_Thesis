@@ -138,14 +138,6 @@ class Indexer:
             for sent in doc:
                 for word in sent:
                     if word not in word_to_idx:
-                        # if word in terms:
-                        #     idx = int('00'+str(i))
-                        #     print(30*'-')
-                        #     print(i, idx)
-                        #     word_to_idx[word] = idx
-                        #     idx_to_word[idx] = word
-                        #     i += 1
-                        # else:
                         word_to_idx[word] = i
                         idx_to_word[i] = word
                         i += 1

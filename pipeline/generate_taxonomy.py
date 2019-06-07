@@ -14,32 +14,23 @@ from utility_functions import get_cmd_args, get_config, get_num_docs, \
     get_docs, get_sim
 
 
+"""
+Script to generate a taxonomy.
+
+Execute this script on a server with at least 10G of RAM.
+Before executing configure the paths in 'configs.json' or 
+'configs_template.json'.
+
+Example call -
+For paths set for dblp corpus in server paths use:
+python3 generate_taxonomy.py -c dblp -l server
+"""
+
+
 # Define global variables.
 node_counter = 0
 idx_to_term = {}
 
-
-"""
-Insight:
-A topic is labeled by the most repr term -> for this repr choose the 
-repr score calculated when the topic terms of the parent topic were 
-found.
-
-P = Parent Topic
-C1-C5 = Child Topics
-When P is split into C1-C5 terms are pushed up to P. 
-From those which are not pushed up/remain in C, keep the scores in C.
-Then, when C is split into subtopics, from those terms which remain in C
-choose the one with highest score calculated when splitting P.
-
-Procedure:
-When term-scores are calculated for clusters, find the highest five 
-term scores for each cluster and write to file.
-
-Format:
-csv: 
-node_id, child1, ... child5, mostreprterm1, ... mostreprterm10
-"""
 
 # {doc-id: {word-id: (term-freq, tfidf)}} doc-length is at word-id -1
 doc_distr_type = DefaultDict[int, Union[Tuple[int, int], int]]

@@ -664,10 +664,6 @@ def identity_function(x):
     return x
 
 
-def build_lemma_occurence_index():
-    pass
-
-
 if __name__ == '__main__':
     from utility_functions import get_corpus_config
     corpus, config = get_corpus_config('preprocessing')

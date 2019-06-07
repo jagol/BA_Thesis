@@ -193,24 +193,6 @@ class HearstHypernymExtractor(HypernymExtractor):
                     rels = cls._get_matches(sent, match)
                     for rel in rels:
                         hyp_rels.append(rel)
-        # keywords = ['including', 'and other', 'such as']
-        # pr = False
-        # tokens = [word[0] for word in sent]
-        # if 'including' in tokens:
-        #     pr = True
-        # elif 'and' in tokens and 'other' in tokens:
-        #     pr = True
-        # elif 'such' in tokens and 'as' in tokens:
-        #     pr = True
-        # elif 'especially' in tokens:
-        #     pr = True
-        # if pr:
-        #     print(30*'-')
-        #     print('sent:', sent)
-        #     print('poses words:', pw)
-        #     print(hyp_rels)
-        #     print(30*'-')
-
         return hyp_rels
 
     @classmethod
@@ -250,44 +232,6 @@ class HearstHypernymExtractor(HypernymExtractor):
                 index = int(re.search(pattern, pos).group(2))
                 indices.append(index)
         return indices
-
-
-# def test() -> None:
-#     """Needs lemmas for test to work."""
-#     test_he = HearstHypernymExtractor('.', '.')
-#
-#     sent1 = [['Works', 'NN'], ['such', 'G'], ['as', 'G'], ['Brennan', 'NNP'],
-#              [',', ','], ['Joyce', 'NNP'], ['or', 'G'], ['Galandi', 'NNP']]
-#     sent2 = [['Works', 'NN'], ['by', 'G'], ['such', 'G'], ['Authors', 'NNS'],
-#              ['as', 'G'], ['Brennan', 'NNP'], [',', ','], ['Joyce', 'NNP'],
-#              ['or', 'G'], ['Galandi', 'NNP']]
-#     sent3_4 = [['Bruises', 'NN'], [',', ','], ['broken', 'JJS'],
-#                ['bones', 'NNS'], ['or', 'G'], ['other', 'G'],
-#                ['Injuries', 'NNP']]
-#     sent5 = [['All', 'PDT'], ['common', 'JJ'], ['Law', 'NN'],
-#              ['Countries', 'NNS'], ['especially', 'G'], ['England', 'NN'],
-#              ['and', 'G'], ['Canada', 'NNP']]
-#
-#     sents = [sent1, sent2, sent3_4, sent5]
-#
-#     for i in range(len(sents)):
-#         print(sents[i])
-#         print(test_he._get_hypernyms(sents[i]))
-#         print(30 * '-')
-#
-# class DivClustHypernymExtractor(HypernymExtractor):
-#     """Extract hypernym-relations using hierarchical clustering."""
-#
-#     def extract_hypernyms(self) -> None:
-#         """Wrapper method to extract the hypernym-relations.
-#
-#         Before this method can be called, there must be examples for
-#         hypernym-relations to train the classifier.
-#         """
-#         rels = {}  # rels_type
-#
-#         with open(fpath, 'w', encoding='utf8') as f:
-#             json.dump(rels, f, ensure_ascii=False)
 
 
 if __name__ == '__main__':

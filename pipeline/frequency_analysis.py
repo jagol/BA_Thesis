@@ -5,7 +5,6 @@ from typing import *
 from numpy import mean
 from math import log
 from utility_functions import get_docs, get_num_docs
-# from text_processing_unit import TextProcessingUnit
 
 
 class FreqAnalyzer:
@@ -83,6 +82,7 @@ class FreqAnalyzer:
                             tf_doc[term_idx] += 1
                         else:
                             tf_doc[term_idx] = 1
+                        # *** Code for compound counting ***
                         # # add counts for all terms contained
                         # for tc_idx in contains[term_idx]:
                         #     if tc_idx in tf_doc:
@@ -95,12 +95,7 @@ class FreqAnalyzer:
                         # tf[doc_id][lemma_idx] += 1
                         # tf_doc = tf[doc_idx]
                         # tf_doc[lemma_idx]
-            # self._docs_processed += 1
-            # self._update_cmd_counter()
-            # if self._docs_processed % self._file_write_threshhold == 0:
-            #     msg = '{} documents processed, writing to file...'
-            #     print(msg.format(self._docs_processed), end='\r')
-            #     mode = self._get_write_mode()
+                        # ***
         with open(path_out, 'w', encoding='utf8') as f:
             json.dump(tf, f)
 
@@ -172,10 +167,11 @@ class FreqAnalyzer:
                 if term_idx in term_idxs:
                     df[term_idx].append(i)
 
+                    # *** Code for compound counting ***
                     # # add contained words to df
                     # for tc_idx in contains[term_idx]:
                     #     df[str(tc_idx)].append(i)
-
+                    # ***
             self._docs_processed += 1
             self._update_cmd_counter()
 

@@ -140,9 +140,6 @@ def main():
         doc_embedder.embed_docs()
         print('Done')
 
-    # # train hyponym projector
-    # hp = HyponymProjector()
-    # hp.train()
     end_time = time.time()
     time_used = end_time - start_time
     print('Time used: {}'.format(time_used))
