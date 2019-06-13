@@ -25,18 +25,74 @@ def main():
     ls = LabelScorer(config, args)
 
     # Run labeling with repr score as metric.
+    print('Run labeling with repr score as metric...')
     path_tax_frep = os.path.join(path_out, 'concept_terms/tax_labels_repr.csv')
     tax_label_file = open(path_tax_frep, 'w', encoding='utf8')
     csv_writer = csv.writer(tax_label_file, delimiter=',')
     rec_find_labels(path_out, taxonomy, 10, [], 0, csv_writer, cos=False,
-                    label_score=False)
+                    label_score=False, hypo_score=False, incl_score=False)
 
     # Run labeling with cosine similarity as metric.
+    print('Run labeling with sim score as metric...')
     path_tax_fsim = os.path.join(path_out, 'concept_terms/tax_labels_sim.csv')
     tax_label_file = open(path_tax_fsim, 'w', encoding='utf8')
     csv_writer = csv.writer(tax_label_file, delimiter=',')
     rec_find_labels(path_out, taxonomy, 10, [], 0, csv_writer, cos=True,
-                    label_score=False)
+                    label_score=False, hypo_score=False, incl_score=False)
+
+    # All ls.
+    print('Run labeling with label score as metric...')
+    path_tax_fsim = os.path.join(path_out, 'concept_terms/tax_labels_ls.csv')
+    tax_label_file = open(path_tax_fsim, 'w', encoding='utf8')
+    csv_writer = csv.writer(tax_label_file, delimiter=',')
+    rec_find_labels(path_out, taxonomy, 10, [], 0, csv_writer, cos=True,
+                    label_score=True, hypo_score=True, incl_score=True)
+
+    # No cos.
+    print('Run labeling with label score but without cos score as metric...')
+    path_tax_fsim = os.path.join(
+        path_out, 'concept_terms/tax_labels_ls_no_cos.csv')
+    tax_label_file = open(path_tax_fsim, 'w', encoding='utf8')
+    csv_writer = csv.writer(tax_label_file, delimiter=',')
+    rec_find_labels(path_out, taxonomy, 10, [], 0, csv_writer, cos=False,
+                    label_score=True, hypo_score=True, incl_score=True)
+
+    # No hypo.
+    print('Run labeling with label score but without hypo score as metric...')
+    path_tax_fsim = os.path.join(
+        path_out, 'concept_terms/tax_labels_ls_no_hypo.csv')
+    tax_label_file = open(path_tax_fsim, 'w', encoding='utf8')
+    csv_writer = csv.writer(tax_label_file, delimiter=',')
+    rec_find_labels(path_out, taxonomy, 10, [], 0, csv_writer, cos=True,
+                    label_score=True, hypo_score=False, incl_score=True)
+
+    # No incl.
+    print('Run labeling with label score but without incl score as metric...')
+    path_tax_fsim = os.path.join(
+        path_out, 'concept_terms/tax_labels_ls_no_incl.csv')
+    tax_label_file = open(path_tax_fsim, 'w', encoding='utf8')
+    csv_writer = csv.writer(tax_label_file, delimiter=',')
+    rec_find_labels(path_out, taxonomy, 10, [], 0, csv_writer, cos=True,
+                    label_score=True, hypo_score=True, incl_score=False)
+
+    # Only hypo
+    print('Run labeling with label score but only hypo...')
+    path_tax_fsim = os.path.join(
+        path_out, 'concept_terms/tax_labels_ls_only_hypo.csv')
+    tax_label_file = open(path_tax_fsim, 'w', encoding='utf8')
+    csv_writer = csv.writer(tax_label_file, delimiter=',')
+    rec_find_labels(path_out, taxonomy, 10, [], 0, csv_writer, cos=False,
+                    label_score=True, hypo_score=True, incl_score=False)
+
+    # Only incl
+    print('Run labeling with label score but only incl score...')
+    path_tax_fsim = os.path.join(
+        path_out, 'concept_terms/tax_labels_ls_only_incl.csv')
+    tax_label_file = open(path_tax_fsim, 'w', encoding='utf8')
+    csv_writer = csv.writer(tax_label_file, delimiter=',')
+    rec_find_labels(path_out, taxonomy, 10, [], 0, csv_writer, cos=False,
+                    label_score=True, hypo_score=False, incl_score=True)
+    print('Done')
 
 
 def rec_find_labels(path_out: str,
@@ -46,7 +102,9 @@ def rec_find_labels(path_out: str,
                     node_id: int,
                     csv_writer: Any,
                     cos: bool,
-                    label_score: bool
+                    label_score: bool,
+                    hypo_score: bool,
+                    incl_score: bool,
                     ) -> None:
     """Find the most representative labels for each cluster.
 
@@ -61,23 +119,34 @@ def rec_find_labels(path_out: str,
             score.
         label_score: If true, use the label score to find the top labels
             of a topic.
+        hypo_score: If true, use hypo-score.
+        incl_score: If true, use incl-score.
     """
     child_ids = taxonomy.get(node_id)
     if not child_ids:
         return
-
+    if node_id > 5 and not top_parent_terms:
+        return
+    # print(top_parent_terms)
     if node_id != 0:
         top_k_terms = get_top_k_terms(path_out, top_k, top_parent_terms,
-                                      node_id, cos, label_score)
-        child_ids_as_dict = {i: chid for i, chid in enumerate(child_ids)}
-        write_tax_to_file(node_id, child_ids_as_dict, top_k_terms, csv_writer)
+                                      node_id, cos, label_score, hypo_score,
+                                      incl_score)
+        if not top_k_terms:
+            write_tax_to_file(node_id, {}, top_k_terms,
+                              csv_writer, only_id=True)
+        else:
+            child_ids_as_dict = {i: chid for i, chid in enumerate(child_ids)}
+            write_tax_to_file(node_id, child_ids_as_dict, top_k_terms,
+                              csv_writer)
     else:
         top_k_terms = top_parent_terms
 
     for child_id in child_ids:
-        print(node_id, child_id)
+        # print(node_id, child_id)
         rec_find_labels(path_out, taxonomy, top_k, top_k_terms, child_id,
-                        csv_writer, cos, label_score=False)
+                        csv_writer, cos, label_score=label_score,
+                        hypo_score=hypo_score, incl_score=incl_score)
 
 
 def get_top_k_terms(path_out: str,
@@ -85,7 +154,9 @@ def get_top_k_terms(path_out: str,
                     parent_terms: List[Tuple[int, float]],
                     node_id: int,
                     cos: bool,
-                    label_score: bool
+                    label_score: bool,
+                    hypo_score: bool,
+                    incl_score: bool
                     ) -> List[Tuple[int, float]]:
     """Get the top k terms.
 
@@ -96,22 +167,29 @@ def get_top_k_terms(path_out: str,
     Args:
         path_out: The path to the output directory.
         top_k: The k most representative terms are selected as labels.
-        parent_terms: The top k terms of the parent node.
+        parent_terms: The top k terms of the parent node in the form:
+            [(term_id, score), ...]
         node_id: The id of the root node.
         cos: If true, use the cosine similarity, else use the repr
             score.
         label_score: If true, use the label score to find the top labels
             of a topic.
+        hypo_score: If true use hypo-score.
+        incl_score: If true, use incl-score.
     Return:
         A list of tuples of the form. (term_id, score).
     """
     path_concept_terms = os.path.join(path_out, 'concept_terms/')
     term_scores = load_scores(path_concept_terms, node_id, cos=cos)
     clus_terms = load_clus_terms(path_concept_terms, node_id)
+    if not clus_terms:
+        return []
     clus_terms_scores = {tid: term_scores[tid] for tid in clus_terms}
     # {term_id: (term, score)}
-    if label_score:
-        label_scores = ls.score(clus_terms_scores, parent_terms)
+    if label_score and node_id not in [1, 2, 3, 4, 5]:
+        # Check that not in level one.
+        label_scores = ls.score(clus_terms_scores, parent_terms, cos,
+                                hypo_score, incl_score)
     else:
         label_scores = term_scores
     concept_term_scores = []  # List of tuples.

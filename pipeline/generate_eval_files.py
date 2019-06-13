@@ -87,7 +87,7 @@ class EFGenerator:
             reader = csv.reader(f)
             for row in reader:
                 node_id = int(row[0])
-                if node_id > 643:  # stop at depth 4
+                if node_id > 780:  # stop at depth 4
                     continue
                 # get num subtopics
                 num_subtopics = 0

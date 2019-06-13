@@ -131,7 +131,10 @@ class Evaluator:
             for chid2 in child_ids:
                 if chid2 in self.taxonomy:
                     if len(self.taxonomy[chid2]['terms']) > 0:
-                        tax_terms.append(self.taxonomy[chid2]['terms'][0][1])
+                        try:
+                            tax_terms.append(self.taxonomy[chid2]['terms'][0][1])
+                        except IndexError:
+                            continue
         taxonomy_terms = set(tax_terms)
         common = taxonomy_terms.intersection(taxogen_terms)
         similarity = len(common) / len(taxogen_terms)
