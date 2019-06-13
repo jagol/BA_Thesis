@@ -493,8 +493,8 @@ def separate_gen_terms(clusters: Dict[int, Set[int]],
     concept_terms = []  # [term_id1, ...]
     concept_terms_scores = []  # [(term_id, score), ...]
     # Get general terms und repr thresh.
-    # if level == 0:
-    #     threshold = 0.25
+    if level == 0:
+        threshold = 0.25
     # thresh_dict = {
     #     0: 0.15,
     #     1: 0.3,

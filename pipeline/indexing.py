@@ -21,53 +21,98 @@ class Indexer:
     - 'idx_to_lemma.json': Maps each index to it's lemma.
     """
 
-    def __init__(self, path: str) -> None:
+    def __init__(self, path: str, tg: bool) -> None:
         """Initialize an indexer obejct.
 
         Args:
             path: The path to the output directory.
         """
-        self.path = os.path.join(path, 'processed_corpus')
-        self.path_in_tokens = os.path.join(self.path, 'pp_token_corpus.txt')
-        self.path_in_lemmas = os.path.join(self.path, 'pp_lemma_corpus.txt')
-        self.path_out_corpus = os.path.join(path, 'processed_corpus')
-        self.path_out_idx_tokens = os.path.join(
-            self.path_out_corpus, 'token_idx_corpus.txt')
-        self.path_out_idx_lemmas = os.path.join(
-            self.path_out_corpus, 'lemma_idx_corpus.txt')
-        self.path_out_indexing = os.path.join(path, 'indexing')
-        self.path_token_to_idx = os.path.join(
-            self.path_out_indexing, 'token_to_idx.json')
-        self.path_lemma_to_idx = os.path.join(
-            self.path_out_indexing, 'lemma_to_idx.json')
-        self.path_idx_to_token = os.path.join(
-            self.path_out_indexing, 'idx_to_token.json')
-        self.path_idx_to_lemma = os.path.join(
-            self.path_out_indexing, 'idx_to_lemma.json')
+        if tg:
+            self.path = os.path.join(path, 'processed_corpus')
+            self.path_in_tokens = os.path.join(self.path, 'pp_token_corpus.txt')
+            self.path_in_lemmas = os.path.join(self.path, 'pp_lemma_corpus.txt')
+            self.path_out_corpus = os.path.join(path, 'processed_corpus')
+            self.path_out_idx_tokens = os.path.join(
+                self.path_out_corpus, 'token_idx_corpus.txt')
+            self.path_out_idx_lemmas = os.path.join(
+                self.path_out_corpus, 'lemma_idx_corpus.txt')
+            self.path_out_indexing = os.path.join(path, 'indexing')
+            self.path_token_to_idx = os.path.join(
+                self.path_out_indexing, 'token_to_idx.json')
+            self.path_lemma_to_idx = os.path.join(
+                self.path_out_indexing, 'lemma_to_idx.json')
+            self.path_idx_to_token = os.path.join(
+                self.path_out_indexing, 'idx_to_token.json')
+            self.path_idx_to_lemma = os.path.join(
+                self.path_out_indexing, 'idx_to_lemma.json')
 
-        self.path_token_terms = os.path.join(
-            self.path_out_corpus, 'token_terms.txt')
-        self.path_lemma_terms = os.path.join(
-            self.path_out_corpus, 'lemma_terms.txt')
+            self.path_token_terms = os.path.join(
+                self.path_out_corpus, 'token_terms.txt')
+            self.path_lemma_terms = os.path.join(
+                self.path_out_corpus, 'lemma_terms.txt')
 
-        self.path_idx_token_terms = os.path.join(
-            self.path_out_corpus, 'token_terms_idxs.txt')
-        self.path_idx_lemma_terms = os.path.join(
-            self.path_out_corpus, 'lemma_terms_idxs.txt')
+            self.path_idx_token_terms = os.path.join(
+                self.path_out_corpus, 'token_terms_idxs.txt')
+            self.path_idx_lemma_terms = os.path.join(
+                self.path_out_corpus, 'lemma_terms_idxs.txt')
 
-        self.path_token_contains = os.path.join(
-            self.path_out_corpus, 'token_contains.json')
-        self.path_lemma_contains = os.path.join(
-            self.path_out_corpus, 'lemma_contains.json')
+            self.path_token_contains = os.path.join(
+                self.path_out_corpus, 'token_contains.json')
+            self.path_lemma_contains = os.path.join(
+                self.path_out_corpus, 'lemma_contains.json')
 
-        self.path_hierarch_rels_tokens = os.path.join(
-            path, 'hierarchy/hierarchical_relations_tokens.json')
-        self.path_hierarch_rels_lemmas = os.path.join(
-            path, 'hierarchy/hierarchical_relations_lemmas.json')
-        self.path_hierarch_rels_tokens_idx = os.path.join(
-            path, 'hierarchy/hierarch_rels_tokens_idx.json')
-        self.path_hierarch_rels_lemmas_idx = os.path.join(
-            path, 'hierarchy/hierarch_rels_lemmas_idx.json')
+            self.path_hierarch_rels_tokens = os.path.join(
+                path, 'hierarchy/hierarchical_relations_tokens.json')
+            self.path_hierarch_rels_lemmas = os.path.join(
+                path, 'hierarchy/hierarchical_relations_lemmas.json')
+            self.path_hierarch_rels_tokens_idx = os.path.join(
+                path, 'hierarchy/hierarch_rels_tokens_idx.json')
+            self.path_hierarch_rels_lemmas_idx = os.path.join(
+                path, 'hierarchy/hierarch_rels_lemmas_idx.json')
+        else:
+            self.path = os.path.join(path, 'processed_corpus')
+            self.path_in_tokens = os.path.join(self.path,
+                                               'pp_token_corpus_non_tg.txt')
+            self.path_in_lemmas = os.path.join(self.path,
+                                               'pp_lemma_corpus_non_tg.txt')
+            self.path_out_corpus = os.path.join(path, 'processed_corpus')
+            self.path_out_idx_tokens = os.path.join(
+                self.path_out_corpus, 'token_idx_corpus_non_tg.txt')
+            self.path_out_idx_lemmas = os.path.join(
+                self.path_out_corpus, 'lemma_idx_corpus_non_tg.txt')
+            self.path_out_indexing = os.path.join(path, 'indexing')
+            self.path_token_to_idx = os.path.join(
+                self.path_out_indexing, 'token_to_idx_non_tg.json')
+            self.path_lemma_to_idx = os.path.join(
+                self.path_out_indexing, 'lemma_to_idx_non_tg.json')
+            self.path_idx_to_token = os.path.join(
+                self.path_out_indexing, 'idx_to_token_non_tg.json')
+            self.path_idx_to_lemma = os.path.join(
+                self.path_out_indexing, 'idx_to_lemma_non_tg.json')
+
+            self.path_token_terms = os.path.join(
+                self.path_out_corpus, 'token_terms_non_tg.txt')
+            self.path_lemma_terms = os.path.join(
+                self.path_out_corpus, 'lemma_terms_non_tg.txt')
+
+            self.path_idx_token_terms = os.path.join(
+                self.path_out_corpus, 'token_terms_idxs_non_tg.txt')
+            self.path_idx_lemma_terms = os.path.join(
+                self.path_out_corpus, 'lemma_terms_idxs_non_tg.txt')
+
+            self.path_token_contains = os.path.join(
+                self.path_out_corpus, 'token_contains_non_tg.json')
+            self.path_lemma_contains = os.path.join(
+                self.path_out_corpus, 'lemma_contains_non_tg.json')
+
+            self.path_hierarch_rels_tokens = os.path.join(
+                path, 'hierarchy/hierarchical_relations_tokens_non_tg.json')
+            self.path_hierarch_rels_lemmas = os.path.join(
+                path, 'hierarchy/hierarchical_relations_lemmas_non_tg.json')
+            self.path_hierarch_rels_tokens_idx = os.path.join(
+                path, 'hierarchy/hierarch_rels_tokens_idx_non_tg.json')
+            self.path_hierarch_rels_lemmas_idx = os.path.join(
+                path, 'hierarchy/hierarch_rels_lemmas_idx_non_tg.json')
 
         self._file_write_threshhold = 10000
         self._docs_processed = 0
@@ -383,13 +428,13 @@ def main():
     config = get_config()
     args = get_cmd_args()
     path = config['paths'][args.location][args.corpus]['path_out']
-    idxer = Indexer(path)
-    idxer.index_tokens()
-    idxer.index_lemmas()
-    idxer.build_token_contains()
-    idxer.build_lemma_contains()
+    idxer = Indexer(path, False)  # true for tg-processing
+    # idxer.index_tokens()
+    # idxer.index_lemmas()
+    # idxer.build_token_contains()
+    # idxer.build_lemma_contains()
     idxer.hierarch_rels_to_token_idx()
-    idxer.hierarch_rels_to_lemma_idx()
+    # idxer.hierarch_rels_to_lemma_idx()
 
 
 if __name__ == '__main__':

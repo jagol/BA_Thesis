@@ -1,0 +1,54 @@
+{
+  "compound_counts": false,
+  "lemmatized": false,
+  "pop_df_version": true,
+  "pop_sum_version": true,
+  "pop_no_denominator": true,
+  "pop_scores": true,
+  "con_scores": true,
+  "l1_normalize": true,
+  "kl_divergence": true,
+  "label_score": true,
+  "threshold": 0.35,
+  "max_iter": 5,
+  "max_depth": 3,
+  "clustering": {
+    "type": "sphericalkmeans",
+    "linkage": "complete",
+    "affinity": "cosine",
+    "n_clusters": 5
+  },
+  "embeddings": "Word2Vec",
+  "paths": {
+    "server": {
+      "path_lang_model": "*/en_core_web_sm-2.0.0",
+      "sp": {
+        "path_in": "???",
+        "path_out": "*"
+      },
+      "dblp": {
+        "path_in": "*/dblp.xml.gz",
+        "path_out": "*",
+        "path_papers": "*/dblp/papers.txt",
+        "path_keywords": "*/dblp/keywords.txt",
+        "path_keyword_cnt": "*/dblp/keyword_cnt.txt",
+        "path_index": "*/dblp/index.txt"
+      }
+    },
+    "local": {
+      "path_lang_model": "*/en_core_web_sm-2.0.0",
+      "sp": {
+        "path_in": "./raw_corpora/sp/paper_abstracts/",
+        "path_out": "./output/sp/"
+      },
+      "dblp": {
+        "path_in": "./raw_corpora/dblp/dblp.xml.gz",
+        "path_out": "./output/dblp/",
+        "path_papers": "./raw_corpora/dblp/papers.txt",
+        "path_keywords": "./raw_corpora/dblp/keywords.txt",
+        "path_keyword_cnt": "./raw_corpora/dblp/keyword_cnt.txt",
+        "path_index": "./raw_corpora/dblp/index.txt"
+      }
+    }
+  }
+}
